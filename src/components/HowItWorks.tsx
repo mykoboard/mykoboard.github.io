@@ -8,7 +8,7 @@ export const HowItWorks = () => {
             How It Works
           </h2>
           <p className="text-slate-600 max-w-2xl mx-auto">
-            Getting started with MyKoBoard is simple and secure
+            Getting started with MykoBoard is simple and secure
           </p>
         </div>
 
