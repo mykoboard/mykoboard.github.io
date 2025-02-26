@@ -1,7 +1,9 @@
 
 import { Globe, Wallet, Network } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export const Hero = () => {
+  const navigate = useNavigate();
   return (
     <section className="min-h-screen flex items-center justify-center section">
       <div className="container">
@@ -21,9 +23,11 @@ export const Hero = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
-            <button className="px-8 py-4 bg-mint-500 text-white rounded-lg hover:bg-mint-600 transition-colors">
+   
+            <button className="px-8 py-4 bg-mint-500 text-white rounded-lg hover:bg-mint-600 transition-colors" onClick={() => navigate("/")}>
               Start Playing
-            </button>
+            </button>    
+
             <button className="px-8 py-4 glass rounded-lg hover:bg-white/80 transition-colors">
               Learn More
             </button>
