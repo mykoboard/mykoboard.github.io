@@ -24,7 +24,7 @@ export const Hero = () => {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
    
-            <button className="px-8 py-4 bg-mint-500 text-white rounded-lg hover:bg-mint-600 transition-colors" onClick={() => navigate("/")}>
+            <button className="px-8 py-4 bg-mint-500 text-white rounded-lg hover:bg-mint-600 transition-colors" onClick={() => navigate("/lobby")}>
               Start Playing
             </button>    
 
