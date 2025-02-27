@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { Header } from "@/components/Header";
 import { Clipboard } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 import { Connection, ConnectionStatus } from "../lib/webrtc";
 
 function PeerConnection({ connection,  onOfferChange, onAnswerChange,  onToggleDetails }) {
@@ -59,8 +60,8 @@ function PeerConnection({ connection,  onOfferChange, onAnswerChange,  onToggleD
 }
 
 export default function WebRTCConnection() {
-  const [playerName, setPlayerName] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(true);
+ 
+  
   const [connections, setConnections] = useState(new Map());
  
   const [expandedConnections, setExpandedConnections] = useState(new Map());
@@ -73,7 +74,7 @@ export default function WebRTCConnection() {
     
     const connection = new Connection(updateConnection);
     connection.openDataChannel();
-    connection.prepareOfferSingal(playerName);
+    connection.prepareOfferSingal(localStorage.getItem("playerName"));
     connection.status = ConnectionStatus.new;
     updateConnection(connection);
   };
@@ -92,7 +93,7 @@ export default function WebRTCConnection() {
       return;
     }
 
-    await connection.acceptOffer(offer, playerName, );
+    await connection.acceptOffer(offer, localStorage.getItem("playerName"), );
     connection.status = ConnectionStatus.answerered;
 
     updateConnection(connection);
@@ -114,26 +115,9 @@ export default function WebRTCConnection() {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      {/* Modal for setting player name */}
-      <Dialog open={isModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Enter Your Player Name</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              placeholder="Enter your name"
-            />
-            <Button onClick={() => setIsModalOpen(!playerName)}>Save</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Display Player Name */}
-      {playerName && <div className="text-xl font-semibold">Player: {playerName}</div>}
+    <div className="p-6">
+      <Header  pageTitle="Game board"/>
+     
 
       {/* Peer Connections List */}
       <div className="space-y-4">
