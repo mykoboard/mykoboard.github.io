@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { logger } from './logger';
 
 export enum ConnectionStatus {
   new = "new",
@@ -19,6 +20,8 @@ export class Connection {
   iceCandidates: RTCIceCandidate[]
   status: ConnectionStatus
   signal: Signal
+  private messageListeners: ((data: any) => void)[] = []
+  onClose?: () => void
   private updateView: (connection: Connection) => void
 
 
@@ -40,10 +43,14 @@ export class Connection {
     };
 
     this.peerConnection.onconnectionstatechange = (event) => {
-      if (this.peerConnection.connectionState == "connected") {
-        console.log(this.id + ': Connection established');
+      const state = this.peerConnection.connectionState;
+      console.log(this.id + ': Connection state changed to ' + state);
+
+      if (state === "connected") {
         this.status = ConnectionStatus.connected;
-        this.updateView(this)
+        this.updateView(this);
+      } else if (state === "disconnected" || state === "failed" || state === "closed") {
+        this.close();
       }
     }
 
@@ -63,24 +70,30 @@ export class Connection {
   openDataChannel() {
     this.dataChannel = this.peerConnection.createDataChannel('gameData');
 
-    this.dataChannel.onopen = (e) => console.log(this.id + ' Data channel state is: ' + this.dataChannel.readyState);
-    this.dataChannel.onclose = (e) => console.log(this.id + ' Data channel state is: ' + this.dataChannel.readyState);
-    this.dataChannel.onerror = (e) => console.log(this.id + ' Error ', e);
-    this.dataChannel.onmessage = (e) => console.log(this.id + ': Received Message: ' + e.data);
+    this.dataChannel.onopen = (e) => logger.info(this.id + ' Data channel state is: ' + this.dataChannel.readyState);
+    this.dataChannel.onclose = (e) => logger.info(this.id + ' Data channel state is: ' + this.dataChannel.readyState);
+    this.dataChannel.onerror = (e) => logger.error(this.id + ' Error ', e);
+    this.dataChannel.onmessage = (e) => {
+      logger.netIn(this.id, e.data);
+      this.messageListeners.forEach(listener => listener(e.data));
+    };
   }
 
   setDataChannelCallback() {
     this.peerConnection.ondatachannel = (event) => {
-      console.log('Receive Channel Callback', event);
+      logger.info('Receive Channel Callback', event);
       this.dataChannel = event.channel;
-      this.dataChannel.onmessage = (e) => console.log(this.id + ': Received Message: ' + e.data);
+      this.dataChannel.onmessage = (e) => {
+        logger.netIn(this.id, e.data);
+        this.messageListeners.forEach(listener => listener(e.data));
+      };
       this.dataChannel.onopen = (e) => {
         const readyState = this.dataChannel.readyState;
-        console.log(this.id + ': Data channel state is: ' + readyState);
+        logger.info(this.id + ': Data channel state is: ' + readyState);
 
         if (readyState == "open") {
-          console.log(this.id + ': Sending ping');
-          this.dataChannel.send('Ping');
+          logger.info(this.id + ': Sending ping');
+          this.send('Ping');
         }
       };
 
@@ -106,7 +119,18 @@ export class Connection {
   }
 
   async send(text: string) {
-    await this.dataChannel.send(text);
+    if (this.dataChannel && this.dataChannel.readyState === 'open') {
+      logger.netOut(this.id, text);
+      await this.dataChannel.send(text);
+    }
+  }
+
+  addMessageListener(listener: (data: any) => void) {
+    this.messageListeners.push(listener);
+  }
+
+  removeMessageListener(listener: (data: any) => void) {
+    this.messageListeners = this.messageListeners.filter(l => l !== listener);
   }
 
   async acceptOffer(offerSignal: string, acceptingPlayerName: string) {
@@ -160,6 +184,7 @@ export class Connection {
     }
     this.peerConnection.close();
     this.status = ConnectionStatus.closed;
+    this.onClose?.();
     this.updateView(this);
   }
 

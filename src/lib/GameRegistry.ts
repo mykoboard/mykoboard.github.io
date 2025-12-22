@@ -14,7 +14,7 @@ export const games: GameMetadata[] = [
         name: "Tic-Tac-Toe",
         image: "/img/games/tic-tac-to/card.webp",
         description: "Classic strategy game for two players. Get three in a row to win!",
-        component: React.lazy(() => import('../components/games/TicTacToe')),
+        component: React.lazy(() => import('../components/games/tictactoe/TicTacToe')),
     },
 ];
 

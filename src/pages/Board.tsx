@@ -1,14 +1,15 @@
-import { useState, Suspense, useMemo } from "react";
+import { useState, Suspense, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Header } from "@/components/Header";
-import { Clipboard, UserPlus, LogIn, CheckCircle2 } from "lucide-react";
+import { Clipboard, UserPlus, LogIn, CheckCircle2, UserMinus } from "lucide-react";
 import { Connection, ConnectionStatus } from "../lib/webrtc";
 import { getGameById } from "../lib/GameRegistry";
+import { Ledger } from "../lib/ledger";
 
-function SignalingStep({ connection, onOfferChange, onAnswerChange }: any) {
+function SignalingStep({ connection, onOfferChange, onAnswerChange, onCancel }: any) {
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = (text: string) => {
@@ -108,23 +109,62 @@ function SignalingStep({ connection, onOfferChange, onAnswerChange }: any) {
           </div>
         </Card>
       )}
+
+      {onCancel && (
+        <div className="flex justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onCancel(connection)}
+            className="text-xs text-gray-400 hover:text-red-500"
+          >
+            Cancel Invite
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
 
-function PlayerList({ players }: { players: string[] }) {
+interface PlayerInfo {
+  id: string;
+  name: string;
+  status: 'lobby' | 'game';
+  isConnected: boolean;
+  isLocal: boolean;
+}
+
+function PlayerList({ players, onRemove }: { players: PlayerInfo[], onRemove?: (id: string) => void }) {
   return (
     <Card className="p-6 bg-white shadow-sm border-primary/10">
       <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-4 flex items-center gap-2">
         <UserPlus className="w-4 h-4" />
-        Connected Players ({players.length})
+        Players ({players.length})
       </h3>
       <div className="space-y-3">
-        {players.map((name, i) => (
-          <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50 border border-slate-100 animate-in fade-in slide-in-from-left-2 transition-all">
-            <div className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
-            <span className="text-sm font-medium text-slate-700">{name}</span>
-            {i === 0 && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded ml-auto">You</span>}
+        {players.map((player) => (
+          <div key={player.id} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50 border border-slate-100 animate-in fade-in slide-in-from-left-2 transition-all">
+            <div className={`h-2 w-2 rounded-full ${player.isConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]'}`}></div>
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-slate-700">{player.name} {player.isLocal && "(You)"}</span>
+              <span className="text-[10px] text-slate-400 uppercase tracking-tighter">{player.status}</span>
+            </div>
+            {!player.isConnected && (
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-[10px] text-rose-500 font-bold">Offline</span>
+                {onRemove && !player.isLocal && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
+                    onClick={() => onRemove(player.id)}
+                    title="Remove player"
+                  >
+                    <UserMinus className="w-3 h-3" />
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         ))}
         {players.length === 0 && (
@@ -135,28 +175,66 @@ function PlayerList({ players }: { players: string[] }) {
   );
 }
 
+import { useMachine } from "@xstate/react";
+import { lobbyMachine } from "../machines/lobbyMachine";
+import { createLobbyMessage, isLobbyMessage } from "../lib/network";
+
+// ... (SignalingStep and PlayerList remain the same)
+
 export default function Board() {
   const { gameId, boardId } = useParams();
   const game = useMemo(() => getGameById(gameId || ""), [gameId]);
 
-  const [connections, setConnections] = useState(new Map());
-  const [isInitiator, setIsInitiator] = useState(false);
+  const [state, send] = useMachine(lobbyMachine, {
+    input: {
+      playerName: localStorage.getItem("playerName") || "Anonymous"
+    }
+  });
+
+  const { connections, isInitiator, isGameStarted } = state.context;
+  const view = state.matches('room.game') ? 'game' as const : 'lobby' as const;
 
   const updateConnection = (connection: Connection) => {
-    setConnections(new Map(connections.set(connection.id, connection)));
+    // Use multi-listener pattern for room lifecycle
+    const handleLobbyMessage = (data: string) => {
+      try {
+        const msg = JSON.parse(data);
+        if (!isLobbyMessage(msg)) return;
+
+        if (msg.type === 'START_GAME') send({ type: 'START_GAME' });
+        if (msg.type === 'GAME_STARTED') send({ type: 'GAME_STARTED' });
+        if (msg.type === 'SYNC_PLAYER_STATUS') {
+          send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: msg.payload });
+        }
+        if (msg.type === 'SYNC_LEDGER') {
+          send({ type: 'SYNC_LEDGER', ledger: msg.payload });
+        }
+      } catch (e) { }
+    };
+
+    connection.addMessageListener(handleLobbyMessage);
+
+    // If already connected, sync our status immediately
+    if (connection.status === ConnectionStatus.connected) {
+      connection.send(JSON.stringify(createLobbyMessage('SYNC_PLAYER_STATUS', view)));
+    }
+
+    send({ type: 'UPDATE_CONNECTION', connection });
   };
 
   const addInitiatorConnection = () => {
-    setIsInitiator(true);
+    send({ type: 'HOST' });
     const connection = new Connection(updateConnection);
+    connection.onClose = () => send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
     connection.openDataChannel();
-    connection.prepareOfferSignal(localStorage.getItem("playerName") || "Host");
+    connection.prepareOfferSignal(state.context.playerName);
     updateConnection(connection);
   };
 
   const connectWithOffer = () => {
-    setIsInitiator(false);
+    send({ type: 'JOIN' });
     const connection = new Connection(updateConnection);
+    connection.onClose = () => send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
     connection.status = ConnectionStatus.readyToAccept;
     connection.setDataChannelCallback();
     updateConnection(connection);
@@ -165,7 +243,7 @@ export default function Board() {
   const updateOffer = async (connection: Connection, offer: string) => {
     if (!(connection instanceof Connection) || !offer) return;
     try {
-      await connection.acceptOffer(offer, localStorage.getItem("playerName") || "Guest");
+      await connection.acceptOffer(offer, state.context.playerName);
     } catch (e) {
       console.error("Failed to accept offer", e);
     }
@@ -181,20 +259,65 @@ export default function Board() {
     }
   };
 
+  const startGame = () => {
+    send({ type: 'START_GAME' });
+  };
+
+  const backToLobby = () => {
+    send({ type: 'BACK_TO_LOBBY' });
+  };
+
   const connectionList = Array.from(connections.values());
   const connectedPeers = connectionList.filter(c => c.status === ConnectionStatus.connected);
-  const pendingSignaling = connectionList.filter(c => c.status !== ConnectionStatus.connected);
-  const isConnected = connectedPeers.length > 0;
+  const pendingSignaling = connectionList.filter(c => c.status !== ConnectionStatus.connected && c.status !== ConnectionStatus.closed);
+  const isConnected = state.matches('room');
+
+  // Broadcast local status when view changes
+  useEffect(() => {
+    if (isConnected) {
+      connectedPeers.forEach(c => {
+        c.send(JSON.stringify(createLobbyMessage('SYNC_PLAYER_STATUS', view)));
+      });
+    }
+  }, [view, isConnected, connectedPeers.length]);
+
+  const playerInfos: PlayerInfo[] = [
+    {
+      id: 'local',
+      name: state.context.playerName,
+      status: view,
+      isConnected: true,
+      isLocal: true
+    },
+    ...connectionList.map(c => ({
+      id: c.id,
+      name: c.remotePlayerName || "Anonymous",
+      status: state.context.playerStatuses.get(c.id) || 'lobby',
+      isConnected: c.status === ConnectionStatus.connected,
+      isLocal: false
+    }))
+  ];
 
   const playerNames = [
-    localStorage.getItem("playerName") || "Host",
+    state.context.playerName,
     ...connectedPeers.map(c => c.remotePlayerName || "Anonymous")
   ];
 
-  const leaveGame = () => {
-    connectionList.forEach(c => c.close());
-    setConnections(new Map());
-    setIsInitiator(false);
+  const closeSession = () => {
+    send({ type: 'CLOSE_SESSION' });
+  };
+
+  const onAddLedger = async (action: { type: string, payload: any }) => {
+    if (!isInitiator) return;
+    const ledger = Ledger.fromEntries(state.context.ledger);
+    await ledger.addEntry(action);
+    const updatedLedger = ledger.getEntries();
+
+    send({ type: 'SYNC_LEDGER', ledger: updatedLedger });
+
+    connectedPeers.forEach(c => {
+      c.send(JSON.stringify(createLobbyMessage('SYNC_LEDGER', updatedLedger)));
+    });
   };
 
   if (!game) {
@@ -207,15 +330,14 @@ export default function Board() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="max-w-4xl mx-auto p-6 space-y-8">
         <div className="flex items-center justify-between">
-          <Header pageTitle={isConnected ? game.name : "Lobby"} />
-          {connectionList.length > 0 && (
+          <Header pageTitle={isConnected ? (view === 'game' ? game.name : "Room Lobby") : "Lobby Setup"} />
+          {connectionList.length > 0 && view === 'game' && (
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              onClick={leaveGame}
-              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+              onClick={backToLobby}
             >
-              Leave Game
+              Back to Lobby
             </Button>
           )}
         </div>
@@ -273,6 +395,7 @@ export default function Board() {
                       connection={conn}
                       onOfferChange={updateOffer}
                       onAnswerChange={updateAnswer}
+                      onCancel={(c) => c.close()}
                     />
                   ))}
                 </div>
@@ -280,20 +403,99 @@ export default function Board() {
             </div>
 
             {/* Right Column: Player List */}
-            <PlayerList players={playerNames} />
+            <PlayerList
+              players={playerInfos}
+              onRemove={(id) => send({ type: 'REMOVE_PLAYER', playerId: id })}
+            />
           </div>
         )}
 
-        {isConnected && (
+        {isConnected && view === 'lobby' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 space-y-6">
+              <Card className="p-8 text-center space-y-6 border-2 border-primary/10 bg-white/50 backdrop-blur-sm">
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold text-slate-800">Room Lobby</h2>
+                  <p className="text-slate-500">Wait for all players to join before starting the game.</p>
+                </div>
+
+                {isInitiator ? (
+                  <Button
+                    onClick={startGame}
+                    size="lg"
+                    className={`w-full max-w-xs h-12 text-lg shadow-lg transition-all ${isGameStarted
+                      ? "bg-green-600 hover:bg-green-700 text-white shadow-green-200"
+                      : "hover:shadow-primary/20"
+                      }`}
+                  >
+                    {isGameStarted ? "Return to Game" : "Start Game"}
+                  </Button>
+                ) : (
+                  isGameStarted ? (
+                    <Button
+                      onClick={() => send({ type: 'GAME_STARTED' })}
+                      size="lg"
+                      className="w-full max-w-xs h-12 text-lg shadow-lg bg-green-600 hover:bg-green-700 text-white shadow-green-200"
+                    >
+                      Return to Game
+                    </Button>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                      <p className="text-sm font-medium text-slate-600 animate-pulse text-primary">Waiting for Host to start...</p>
+                    </div>
+                  )
+                )}
+              </Card>
+
+              {/* Still allow hosting more players from the lobby */}
+              {isInitiator && (
+                <div className="space-y-4">
+                  <Button
+                    onClick={addInitiatorConnection}
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-dashed"
+                  >
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Invite More Players
+                  </Button>
+
+                  {pendingSignaling.map((conn) => (
+                    <SignalingStep
+                      key={conn.id}
+                      connection={conn}
+                      onOfferChange={updateOffer}
+                      onAnswerChange={updateAnswer}
+                      onCancel={(c) => c.close()}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            <PlayerList
+              players={playerInfos}
+              onRemove={(id) => send({ type: 'REMOVE_PLAYER', playerId: id })}
+            />
+          </div>
+        )}
+
+        {isConnected && view === 'game' && (
           <div className="animate-in fade-in slide-in-from-top-4 duration-700 space-y-8">
             <Suspense fallback={<div className="text-center p-20 animate-pulse">Loading Game...</div>}>
               <GameComponent
-                connection={connectedPeers[0]} // Still passing first for now
+                connections={connectedPeers}
+                playerNames={playerInfos.map(p => p.name)}
                 isInitiator={isInitiator}
+                ledger={state.context.ledger}
+                onAddLedger={onAddLedger}
               />
             </Suspense>
 
-            <PlayerList players={playerNames} />
+            <PlayerList
+              players={playerInfos}
+              onRemove={(id) => send({ type: 'REMOVE_PLAYER', playerId: id })}
+            />
           </div>
         )}
       </div>
