@@ -4,8 +4,8 @@ export enum ConnectionStatus {
   new = "new",
   started = "started",
   readyToAccept = "readyToAccept",
-  accepted = "accpeted",
-  answerered = "answered",
+  accepted = "accepted",
+  answered = "answered",
   connected = "established",
   closed = "closed"
 };
@@ -18,28 +18,45 @@ export class Connection {
   iceCandidates: RTCIceCandidate[]
   status: ConnectionStatus
   signal: Signal
+  private updateView: (connection: Connection) => void
 
 
-  constructor(updateView) {
+  constructor(updateView: (connection: Connection) => void) {
     this.id = uuidv4();
+    this.updateView = updateView;
     this.peerConnection = new RTCPeerConnection(configuration);
     this.iceCandidates = [];
 
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
         this.iceCandidates.push(event.candidate);
+        // Update view when new ICE candidates are gathered if we are in started or answered status
+        if (this.status === ConnectionStatus.started || this.status === ConnectionStatus.answered) {
+          this.updateSignal();
+          this.updateView(this);
+        }
       }
     };
 
     this.peerConnection.onconnectionstatechange = (event) => {
-
       if (this.peerConnection.connectionState == "connected") {
         console.log(this.id + ': Connection established');
         this.status = ConnectionStatus.connected;
-        updateView(this)
+        this.updateView(this)
       }
     }
 
+  }
+
+  private updateSignal() {
+    if (this.peerConnection.localDescription) {
+      this.signal = new Signal(
+        this.id,
+        this.peerConnection.localDescription,
+        this.playerName,
+        this.iceCandidates
+      );
+    }
   }
 
   openDataChannel() {
@@ -59,13 +76,13 @@ export class Connection {
       this.dataChannel.onopen = (e) => {
         const readyState = this.dataChannel.readyState;
         console.log(this.id + ': Data channel state is: ' + readyState);
-  
+
         if (readyState == "open") {
           console.log(this.id + ': Sending ping');
           this.dataChannel.send('Ping');
         }
       };
-  
+
       this.dataChannel.onclose = (e) => {
         const readyState = this.dataChannel.readyState;
         console.log(this.id + ': Data channel state is: ' + readyState);
@@ -73,19 +90,16 @@ export class Connection {
     }
   }
 
-  prepareOfferSingal(playerName: string) {
+  prepareOfferSignal(playerName: string) {
+    this.playerName = playerName;
     this.status = ConnectionStatus.new;
 
     this.peerConnection.createOffer().then((offer) => {
       this.peerConnection.setLocalDescription(offer);
 
       this.status = ConnectionStatus.started;
-      this.signal = new Signal(
-        this.id,
-        offer,
-        playerName,
-        this.iceCandidates
-      );
+      this.updateSignal();
+      this.updateView(this);
     }, this.onCreateSessionDescriptionError);
 
   }
@@ -98,9 +112,9 @@ export class Connection {
     const signal = Signal.fromString(offerSignal);
 
 
-    this.playerName = signal.playerName;
+    this.playerName = acceptingPlayerName; // This is the name of the player accepting the offer
 
-    this.peerConnection.setRemoteDescription(signal.session);
+    await this.peerConnection.setRemoteDescription(signal.session);
 
     signal.iceCandidates.forEach((candidate) => {
       console.log(this.id + ': adding ice candidates');
@@ -111,14 +125,11 @@ export class Connection {
 
       this.peerConnection.setLocalDescription(answer);
 
-      this.signal = new Signal(
-        this.id,
-        answer,
-        acceptingPlayerName,
-        this.iceCandidates
-      );
+      this.status = ConnectionStatus.answered;
+      this.updateSignal();
+      this.updateView(this);
 
-      console.log(this.id + ': Answer singal generated ', this.signal);
+      console.log(this.id + ': Answer signal generated ', this.signal);
     }, this.onCreateSessionDescriptionError);
 
   }
@@ -127,11 +138,12 @@ export class Connection {
     console.log('Failed to create session description: ' + error.toString());
   }
 
-  acceptAnswer(answerSignal: string) {
+  async acceptAnswer(answerSignal: string) {
     const connectionSignal = Signal.fromString(answerSignal);
 
-    this.peerConnection.setRemoteDescription(connectionSignal.session);
-    this.playerName = connectionSignal.playerName;
+    await this.peerConnection.setRemoteDescription(connectionSignal.session);
+    // Note: we don't necessarily update playerName here if we want to keep the initiator's name for them
+    // but we should probably store the remote player's name.
 
     connectionSignal.iceCandidates.forEach((candidate) => {
       console.log(this.id + ': adding ice candidates');
