@@ -13,7 +13,8 @@ export enum ConnectionStatus {
 export class Connection {
   id: string
   peerConnection: RTCPeerConnection
-  playerName: string
+  localPlayerName: string
+  remotePlayerName: string
   dataChannel: RTCDataChannel
   iceCandidates: RTCIceCandidate[]
   status: ConnectionStatus
@@ -48,12 +49,12 @@ export class Connection {
 
   }
 
-  private updateSignal() {
+  private updateSignal(playerName?: string) {
     if (this.peerConnection.localDescription) {
       this.signal = new Signal(
         this.id,
         this.peerConnection.localDescription,
-        this.playerName,
+        playerName || this.localPlayerName,
         this.iceCandidates
       );
     }
@@ -91,7 +92,7 @@ export class Connection {
   }
 
   prepareOfferSignal(playerName: string) {
-    this.playerName = playerName;
+    this.localPlayerName = playerName;
     this.status = ConnectionStatus.new;
 
     this.peerConnection.createOffer().then((offer) => {
@@ -111,8 +112,10 @@ export class Connection {
   async acceptOffer(offerSignal: string, acceptingPlayerName: string) {
     const signal = Signal.fromString(offerSignal);
 
-
-    this.playerName = acceptingPlayerName; // This is the name of the player accepting the offer
+    // Store Host's name
+    this.remotePlayerName = signal.playerName;
+    // Store our name (Guest)
+    this.localPlayerName = acceptingPlayerName;
 
     await this.peerConnection.setRemoteDescription(signal.session);
 
@@ -122,16 +125,14 @@ export class Connection {
     });
 
     await this.peerConnection.createAnswer().then((answer) => {
-
       this.peerConnection.setLocalDescription(answer);
-
       this.status = ConnectionStatus.answered;
+      // When generating the answer, we include our own name (the guest) in the signal
       this.updateSignal();
       this.updateView(this);
 
       console.log(this.id + ': Answer signal generated ', this.signal);
     }, this.onCreateSessionDescriptionError);
-
   }
 
   onCreateSessionDescriptionError(error) {
@@ -142,13 +143,24 @@ export class Connection {
     const connectionSignal = Signal.fromString(answerSignal);
 
     await this.peerConnection.setRemoteDescription(connectionSignal.session);
-    // Note: we don't necessarily update playerName here if we want to keep the initiator's name for them
-    // but we should probably store the remote player's name.
+    // Store Guest's name
+    this.remotePlayerName = connectionSignal.playerName;
 
     connectionSignal.iceCandidates.forEach((candidate) => {
       console.log(this.id + ': adding ice candidates');
       this.peerConnection.addIceCandidate(candidate);
     });
+
+    this.updateView(this);
+  }
+
+  close() {
+    if (this.dataChannel) {
+      this.dataChannel.close();
+    }
+    this.peerConnection.close();
+    this.status = ConnectionStatus.closed;
+    this.updateView(this);
   }
 
 }
@@ -204,7 +216,7 @@ export async function acceptAnswer(answer: string) {
   const connectionSignal = Signal.fromString(answer);
   const pearConnection = peerConnections[connectionSignal.connectionId];
   pearConnection.peerConnection.setRemoteDescription(connectionSignal.session);
-  pearConnection.playerName = connectionSignal.playerName;
+  pearConnection.remotePlayerName = connectionSignal.playerName;
 }
 
 

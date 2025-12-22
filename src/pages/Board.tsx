@@ -19,10 +19,10 @@ function SignalingStep({ connection, onOfferChange, onAnswerChange }: any) {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       {connection.status === ConnectionStatus.new && (
-        <Card className="p-6 border-2 border-dashed border-primary/20 bg-primary/5 flex flex-col items-center justify-center space-y-4 py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <Card className="p-4 border-2 border-dashed border-primary/20 bg-primary/5 flex items-center justify-center space-x-4">
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
           <p className="text-sm text-gray-500">Generating invite signal...</p>
         </Card>
       )}
@@ -43,35 +43,35 @@ function SignalingStep({ connection, onOfferChange, onAnswerChange }: any) {
       )}
 
       {connection.status === ConnectionStatus.started && (
-        <Card className="p-6 border-2 border-primary/20 bg-white">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <UserPlus className="w-5 h-5 text-primary" />
-            Share this Invite
+        <Card className="p-6 border-2 border-primary/20 bg-white shadow-sm hover:shadow-md transition-shadow">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-gray-700">
+            <UserPlus className="w-4 h-4 text-primary" />
+            Active Invite
           </h3>
           <div className="space-y-4">
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 relative group min-h-[80px] flex items-center">
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 relative group min-h-[60px] flex items-center">
               {connection.signal ? (
                 <>
-                  <div className="text-xs font-mono break-all line-clamp-3 text-gray-600 pr-10">
+                  <div className="text-[10px] font-mono break-all line-clamp-2 text-gray-500 pr-8">
                     {connection.signal.toString()}
                   </div>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="icon"
-                    className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={() => copyToClipboard(connection.signal.toString())}
                   >
-                    {copied ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Clipboard className="w-4 h-4" />}
+                    {copied ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Clipboard className="w-3 h-3 text-gray-400" />}
                   </Button>
                 </>
               ) : (
                 <div className="text-xs text-gray-400 italic">Gathering connection details...</div>
               )}
             </div>
-            <p className="text-sm text-gray-500">Wait for your friend to paste this invite and provide their answer below.</p>
+            <p className="text-xs text-gray-500">Share this invite with a friend. Once they join, their answer will appear here automatically.</p>
             <Input
-              placeholder="Paste friend's answer here..."
-              className="font-mono text-xs"
+              placeholder="Friend's answer will appear here..."
+              className="font-mono text-[10px] h-8"
               onChange={(e) => onAnswerChange(connection, e.target.value)}
             />
           </div>
@@ -79,36 +79,59 @@ function SignalingStep({ connection, onOfferChange, onAnswerChange }: any) {
       )}
 
       {connection.status === ConnectionStatus.answered && (
-        <Card className="p-6 border-2 border-primary/20 bg-white">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-green-500" />
+        <Card className="p-6 border-2 border-primary/20 bg-white shadow-sm">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-green-600">
+            <CheckCircle2 className="w-4 h-4" />
             Answer Generated
           </h3>
-          <div className="space-y-4">
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 relative group min-h-[80px] flex items-center">
+          <div className="space-y-3">
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 relative group min-h-[60px] flex items-center">
               {connection.signal ? (
                 <>
-                  <div className="text-xs font-mono break-all line-clamp-3 text-gray-600 pr-10">
+                  <div className="text-[10px] font-mono break-all line-clamp-2 text-gray-500 pr-8">
                     {connection.signal.toString()}
                   </div>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="icon"
-                    className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-1 right-1 h-7 w-7"
                     onClick={() => copyToClipboard(connection.signal.toString())}
                   >
-                    {copied ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Clipboard className="w-4 h-4" />}
+                    {copied ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Clipboard className="w-3 h-3 text-gray-400" />}
                   </Button>
                 </>
               ) : (
                 <div className="text-xs text-gray-400 italic">Finalizing answer...</div>
               )}
             </div>
-            <p className="text-sm text-green-600">Send this answer back to your friend to complete the connection.</p>
+            <p className="text-xs text-green-600 font-medium">Send this answer back to your friend to complete the connection.</p>
           </div>
         </Card>
       )}
     </div>
+  );
+}
+
+function PlayerList({ players }: { players: string[] }) {
+  return (
+    <Card className="p-6 bg-white shadow-sm border-primary/10">
+      <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-4 flex items-center gap-2">
+        <UserPlus className="w-4 h-4" />
+        Connected Players ({players.length})
+      </h3>
+      <div className="space-y-3">
+        {players.map((name, i) => (
+          <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50 border border-slate-100 animate-in fade-in slide-in-from-left-2 transition-all">
+            <div className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
+            <span className="text-sm font-medium text-slate-700">{name}</span>
+            {i === 0 && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded ml-auto">You</span>}
+          </div>
+        ))}
+        {players.length === 0 && (
+          <p className="text-xs text-slate-400 italic text-center py-4">Waiting for players to join...</p>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -158,8 +181,21 @@ export default function Board() {
     }
   };
 
-  const activeConnection = Array.from(connections.values())[0];
-  const isConnected = activeConnection?.status === ConnectionStatus.connected;
+  const connectionList = Array.from(connections.values());
+  const connectedPeers = connectionList.filter(c => c.status === ConnectionStatus.connected);
+  const pendingSignaling = connectionList.filter(c => c.status !== ConnectionStatus.connected);
+  const isConnected = connectedPeers.length > 0;
+
+  const playerNames = [
+    localStorage.getItem("playerName") || "Host",
+    ...connectedPeers.map(c => c.remotePlayerName || "Anonymous")
+  ];
+
+  const leaveGame = () => {
+    connectionList.forEach(c => c.close());
+    setConnections(new Map());
+    setIsInitiator(false);
+  };
 
   if (!game) {
     return <div className="p-10 text-center">Game not found</div>;
@@ -170,54 +206,94 @@ export default function Board() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="max-w-4xl mx-auto p-6 space-y-8">
-        <Header pageTitle={isConnected ? game.name : "Lobby"} />
+        <div className="flex items-center justify-between">
+          <Header pageTitle={isConnected ? game.name : "Lobby"} />
+          {connectionList.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={leaveGame}
+              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+            >
+              Leave Game
+            </Button>
+          )}
+        </div>
 
-        {!activeConnection && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-12 animate-in fade-in zoom-in duration-500">
-            <Card className="p-8 flex flex-col items-center text-center space-y-6 hover:shadow-xl transition-shadow border-2 border-primary/10">
-              <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center">
-                <UserPlus className="w-8 h-8 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold">Host a Game</h2>
-                <p className="text-gray-500 mt-2">Create a new session and invite a friend.</p>
-              </div>
-              <Button onClick={addInitiatorConnection} size="lg" className="w-full">
-                Create Session
-              </Button>
-            </Card>
+        {!isConnected && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+            {/* Left Column: Actions */}
+            <div className="space-y-6 md:col-span-2">
+              {!connectionList.length ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Card className="p-6 flex flex-col items-center text-center space-y-4 hover:shadow-lg transition-all border-2 border-primary/10">
+                    <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
+                      <UserPlus className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold">Host a Game</h2>
+                      <p className="text-xs text-gray-500 mt-1">Start a session and invite friends.</p>
+                    </div>
+                    <Button onClick={addInitiatorConnection} className="w-full">
+                      Create Session
+                    </Button>
+                  </Card>
 
-            <Card className="p-8 flex flex-col items-center text-center space-y-6 hover:shadow-xl transition-shadow border-2 border-primary/10">
-              <div className="h-16 w-16 bg-secondary/20 rounded-full flex items-center justify-center">
-                <LogIn className="w-8 h-8 text-secondary-foreground" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold">Join a Game</h2>
-                <p className="text-gray-500 mt-2">Paste an invite string to enter a friend's session.</p>
-              </div>
-              <Button onClick={connectWithOffer} size="lg" variant="secondary" className="w-full">
-                Join Session
-              </Button>
-            </Card>
+                  <Card className="p-6 flex flex-col items-center text-center space-y-4 hover:shadow-lg transition-all border-2 border-primary/10">
+                    <div className="h-12 w-12 bg-secondary/20 rounded-full flex items-center justify-center">
+                      <LogIn className="w-6 h-6 text-secondary-foreground" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold">Join a Game</h2>
+                      <p className="text-xs text-gray-500 mt-1">Use an invite string from a friend.</p>
+                    </div>
+                    <Button onClick={connectWithOffer} variant="secondary" className="w-full">
+                      Join Session
+                    </Button>
+                  </Card>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Host can generate more invites */}
+                  {isInitiator && (
+                    <Button
+                      onClick={addInitiatorConnection}
+                      variant="outline"
+                      size="sm"
+                      className="w-full border-dashed"
+                    >
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Generate Another Invite
+                    </Button>
+                  )}
+
+                  {pendingSignaling.map((conn) => (
+                    <SignalingStep
+                      key={conn.id}
+                      connection={conn}
+                      onOfferChange={updateOffer}
+                      onAnswerChange={updateAnswer}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Player List */}
+            <PlayerList players={playerNames} />
           </div>
         )}
 
-        {activeConnection && !isConnected && (
-          <SignalingStep
-            connection={activeConnection}
-            onOfferChange={updateOffer}
-            onAnswerChange={updateAnswer}
-          />
-        )}
-
         {isConnected && (
-          <div className="animate-in fade-in slide-in-from-top-4 duration-700">
+          <div className="animate-in fade-in slide-in-from-top-4 duration-700 space-y-8">
             <Suspense fallback={<div className="text-center p-20 animate-pulse">Loading Game...</div>}>
               <GameComponent
-                connection={activeConnection}
+                connection={connectedPeers[0]} // Still passing first for now
                 isInitiator={isInitiator}
               />
             </Suspense>
+
+            <PlayerList players={playerNames} />
           </div>
         )}
       </div>
