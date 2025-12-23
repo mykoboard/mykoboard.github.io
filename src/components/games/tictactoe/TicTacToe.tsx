@@ -13,9 +13,10 @@ interface TicTacToeProps {
     isInitiator: boolean;
     ledger: LedgerEntry[];
     onAddLedger?: (action: { type: string, payload: any }) => void;
+    onFinishGame?: () => void;
 }
 
-export default function TicTacToe({ connections, playerNames, isInitiator, ledger, onAddLedger }: TicTacToeProps) {
+export default function TicTacToe({ connections, playerNames, isInitiator, ledger, onAddLedger, onFinishGame }: TicTacToeProps) {
     const [state, send] = useMachine(ticTacToeMachine, {
         input: { isInitiator }
     });
@@ -79,7 +80,14 @@ export default function TicTacToe({ connections, playerNames, isInitiator, ledge
         });
 
         send({ type: 'SYNC_STATE', board: newBoard });
-    }, [ledger, send]);
+
+        // Check for finish
+        const winner = calculateWinner(newBoard);
+        const isDraw = !winner && newBoard.every(s => s !== null);
+        if (winner || isDraw) {
+            onFinishGame?.();
+        }
+    }, [ledger, send, onFinishGame]);
 
     const handleClick = (index: number) => {
         if (isInitiator) {
@@ -140,7 +148,7 @@ export default function TicTacToe({ connections, playerNames, isInitiator, ledge
                     </button>
                 ))}
             </div>
-            {(state.matches('won') || state.matches('draw')) && amIParticipant && (
+            {(state.matches('won') || state.matches('draw')) && amIParticipant && !onFinishGame && (
                 <Button onClick={handleReset} variant="outline" className="mt-4 hover:bg-primary hover:text-white transition-colors">
                     Play Again
                 </Button>

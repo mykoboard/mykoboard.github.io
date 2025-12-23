@@ -133,8 +133,8 @@ export class Connection {
     this.messageListeners = this.messageListeners.filter(l => l !== listener);
   }
 
-  async acceptOffer(offerSignal: string, acceptingPlayerName: string) {
-    const signal = Signal.fromString(offerSignal);
+  async acceptOffer(offerSignal: string | Signal, acceptingPlayerName: string) {
+    const signal = typeof offerSignal === 'string' ? Signal.fromString(offerSignal) : offerSignal;
 
     // Store Host's name
     this.remotePlayerName = signal.playerName;
@@ -163,19 +163,26 @@ export class Connection {
     console.log('Failed to create session description: ' + error.toString());
   }
 
-  async acceptAnswer(answerSignal: string) {
-    const connectionSignal = Signal.fromString(answerSignal);
+  async acceptAnswer(answerSignal: string | Signal) {
+    const connectionSignal = typeof answerSignal === 'string' ? Signal.fromString(answerSignal) : answerSignal;
+    console.log(this.id + ': Accepting answer signal from ' + connectionSignal.playerName);
 
-    await this.peerConnection.setRemoteDescription(connectionSignal.session);
-    // Store Guest's name
-    this.remotePlayerName = connectionSignal.playerName;
+    try {
+      await this.peerConnection.setRemoteDescription(connectionSignal.session);
+      // Store Guest's name
+      this.remotePlayerName = connectionSignal.playerName;
 
-    connectionSignal.iceCandidates.forEach((candidate) => {
-      console.log(this.id + ': adding ice candidates');
-      this.peerConnection.addIceCandidate(candidate);
-    });
+      if (connectionSignal.iceCandidates) {
+        console.log(this.id + `: Adding ${connectionSignal.iceCandidates.length} ICE candidates from answer`);
+        connectionSignal.iceCandidates.forEach((candidate) => {
+          this.peerConnection.addIceCandidate(candidate).catch(e => console.error("Error adding ICE candidate:", e));
+        });
+      }
 
-    this.updateView(this);
+      this.updateView(this);
+    } catch (e) {
+      console.error(this.id + ": Failed to set remote description from answer", e);
+    }
   }
 
   close() {

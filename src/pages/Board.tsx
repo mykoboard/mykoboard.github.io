@@ -1,4 +1,4 @@
-import { useState, Suspense, useMemo, useEffect } from "react";
+import { useState, Suspense, useMemo, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -179,6 +179,10 @@ import { useMachine } from "@xstate/react";
 import { lobbyMachine } from "../machines/lobbyMachine";
 import { createLobbyMessage, isLobbyMessage } from "../lib/network";
 import { SecureWallet } from "../lib/wallet";
+import { SignalingService } from "../lib/signaling";
+import { SessionManager } from "../lib/sessions";
+import { GameSession } from "../lib/db";
+import { Globe, ArrowLeft, MousePointer2, ExternalLink, Search, History } from "lucide-react";
 
 // ... (SignalingStep and PlayerList remain the same)
 
@@ -192,8 +196,36 @@ export default function Board() {
     }
   });
 
+  const [signalingMode, setSignalingMode] = useState<'manual' | 'server' | null>(null);
+  const [isServerConnecting, setIsServerConnecting] = useState(false);
+
   const { connections, isInitiator, isGameStarted } = state.context;
-  const view = state.matches('room.game') ? 'game' as const : 'lobby' as const;
+  const view = (state.matches('room.game') || state.matches('room.finished')) ? 'game' as const : 'lobby' as const;
+
+  const connectionList = useMemo(() => Array.from(connections.values()), [connections]);
+  const connectedPeers = useMemo(() => connectionList.filter(c => c.status === ConnectionStatus.connected), [connectionList]);
+  const pendingSignaling = useMemo(() => connectionList.filter(c => c.status !== ConnectionStatus.connected && c.status !== ConnectionStatus.closed), [connectionList]);
+  const isConnected = state.matches('room');
+
+  const playerInfos = useMemo(() => [
+    {
+      id: 'local',
+      name: state.context.playerName,
+      status: view,
+      isConnected: true,
+      isLocal: true,
+      isHost: isInitiator
+    },
+    ...connectionList.map(c => ({
+      id: c.id,
+      name: c.remotePlayerName || "Anonymous",
+      status: state.context.playerStatuses.get(c.id) || 'lobby',
+      isConnected: c.status === ConnectionStatus.connected,
+      isLocal: false,
+      isHost: false // For now assume only local can be host if they initiated. 
+      // Actually in P2P initiator is host.
+    }))
+  ], [state.context.playerName, view, connectionList, state.context.playerStatuses, isInitiator]);
 
   const updateConnection = (connection: Connection) => {
     // Use multi-listener pattern for room lifecycle
@@ -237,6 +269,141 @@ export default function Board() {
     send({ type: 'UPDATE_CONNECTION', connection });
   };
 
+  const [signalingClient, setSignalingClient] = useState<SignalingService | null>(null);
+  const [availableOffers, setAvailableOffers] = useState<any[]>([]);
+  const [activeSessions, setActiveSessions] = useState<GameSession[]>([]);
+
+  useEffect(() => {
+    const loadSessions = async () => {
+      const sessions = await SessionManager.getSessions();
+      setActiveSessions(sessions);
+    };
+    loadSessions();
+  }, [state.value]);
+
+  // Load existing session data for current board
+  useEffect(() => {
+    if (boardId) {
+      const restoreSession = async () => {
+        const session = await SessionManager.getSession(boardId);
+        if (session && session.ledger.length > 0 && state.context.ledger.length === 0) {
+          send({ type: 'LOAD_LEDGER', ledger: session.ledger });
+        }
+      };
+      restoreSession();
+    }
+  }, [boardId]); // Only on mount/boardId change
+
+  // Save session when entering room
+  useEffect(() => {
+    if (state.matches('room') && gameId && boardId) {
+      SessionManager.saveSession({
+        gameId,
+        boardId,
+        playerName: state.context.playerName,
+        gameName: game.name,
+        lastPlayed: Date.now(),
+        status: (state.matches('room.finished') || state.matches('room.finished')) ? 'finished' : 'active',
+        ledger: state.context.ledger,
+        participants: playerInfos.map(p => ({
+          name: p.name,
+          isYou: p.isLocal,
+          isHost: p.isHost
+        }))
+      });
+    }
+  }, [state.value, gameId, boardId, game.name, state.context.playerName, state.context.ledger, playerInfos]);
+
+  // Sync ledger to DB on changes
+  useEffect(() => {
+    if (state.matches('room') && boardId && state.context.ledger.length > 0) {
+      SessionManager.updateLedger(boardId, state.context.ledger);
+    }
+  }, [state.context.ledger, boardId, state.matches('room')]);
+
+  // Ref to hold the latest connections and status for the signaling callback
+  const signalingHandlerRef = useRef<(msg: any) => void>(undefined);
+
+  useEffect(() => {
+    signalingHandlerRef.current = (msg: any) => {
+      console.log("Signaling message received (handler ref):", msg);
+      if (msg.type === 'offerList') {
+        setAvailableOffers(msg.offers || []);
+      }
+      if (msg.type === 'answer') {
+        const connectionList = Array.from(state.context.connections.values());
+        console.log("Processing answer via signaling. Active connections list size:", connectionList.length);
+        const pendingConn = connectionList.find(c => c.status === ConnectionStatus.started);
+
+        if (pendingConn) {
+          // INTERCEPT for host approval
+          if (signalingMode === 'server') {
+            console.log("Host approval required for:", msg.peerName);
+            send({
+              type: 'REQUEST_JOIN',
+              connectionId: msg.from,
+              peerName: msg.peerName || "Anonymous Guest",
+              answer: msg.answer,
+              connection: pendingConn
+            });
+          } else {
+            console.log("Manual mode: Accepting answer immediately.");
+            pendingConn.acceptAnswer(msg.answer);
+            updateConnection(pendingConn);
+          }
+        } else {
+          console.warn("Received answer but no local connection is in 'started' status to receive it.");
+        }
+      }
+    };
+  }, [state.context.connections, state.context.playerName]);
+
+  // Initialize Signaling Server (Delayed)
+  useEffect(() => {
+    // Only connect if we are in server mode AND we are in one of the active lobby states
+    // IMPORTANT: Host MUST stay connected in 'room' state so they can deleteOffer when starting
+    const isActiveLobby = state.matches('hosting') || state.matches('lobby') || state.matches('joining') || state.matches('approving');
+    const isHostInRoom = state.matches('room') && isInitiator;
+    const shouldConnect = signalingMode === 'server' && (isActiveLobby || isHostInRoom);
+
+    if (shouldConnect && !signalingClient) {
+      const initSignaling = async () => {
+        setIsServerConnecting(true);
+        try {
+          const wallet = SecureWallet.getInstance();
+          const identity = await wallet.getIdentity();
+          if (!identity) return;
+
+          const discoveryId = `lobby_${gameId}`;
+          const client = new SignalingService(
+            discoveryId,
+            identity.name,
+            (msg) => signalingHandlerRef.current?.(msg)
+          );
+
+          await client.connect(identity.subscriptionToken);
+          setSignalingClient(client);
+          client.requestOffers(); // Initial fetch
+        } catch (e) {
+          console.error("Signaling connection failed", e);
+        } finally {
+          setIsServerConnecting(false);
+        }
+      };
+      initSignaling();
+    }
+
+    // Disconnect only if we shouldn't be connected anymore
+    if (!shouldConnect && signalingClient) {
+      signalingClient.disconnect();
+      setSignalingClient(null);
+    }
+
+    return () => {
+      // Cleanup handled by the condition above or component unmount
+    };
+  }, [signalingMode, boardId, state.value]);
+
   const addInitiatorConnection = () => {
     send({ type: 'HOST' });
     const connection = new Connection(updateConnection);
@@ -244,6 +411,20 @@ export default function Board() {
     connection.openDataChannel();
     connection.prepareOfferSignal(state.context.playerName);
     updateConnection(connection);
+
+    // If in server mode, also broadcast the offer
+    if (signalingMode === 'server' && signalingClient) {
+      // Ensure we are registered first
+      signalingClient.register();
+
+      // We wait for the signal to be ready
+      const checkSignal = setInterval(() => {
+        if (connection.signal) {
+          signalingClient.sendOffer(connection.signal);
+          clearInterval(checkSignal);
+        }
+      }, 500);
+    }
   };
 
   const connectWithOffer = () => {
@@ -275,51 +456,31 @@ export default function Board() {
   };
 
   const startGame = () => {
+    console.log("Starting game. Cleanup signaling?", signalingMode === 'server', "Initiator?", isInitiator);
+    if (signalingMode === 'server' && signalingClient && isInitiator) {
+      signalingClient.deleteOffer();
+    }
     send({ type: 'START_GAME' });
   };
 
   const backToLobby = () => {
+    if (isInitiator && signalingMode === 'server' && signalingClient) {
+      signalingClient.deleteOffer();
+    }
     send({ type: 'BACK_TO_LOBBY' });
   };
 
-  const connectionList = Array.from(connections.values());
-  const connectedPeers = connectionList.filter(c => c.status === ConnectionStatus.connected);
-  const pendingSignaling = connectionList.filter(c => c.status !== ConnectionStatus.connected && c.status !== ConnectionStatus.closed);
-  const isConnected = state.matches('room');
-
-  // Broadcast local status when view changes
-  useEffect(() => {
-    if (isConnected) {
-      connectedPeers.forEach(c => {
-        c.send(JSON.stringify(createLobbyMessage('SYNC_PLAYER_STATUS', view)));
-      });
-    }
-  }, [view, isConnected, connectedPeers.length]);
-
-  const playerInfos: PlayerInfo[] = [
-    {
-      id: 'local',
-      name: state.context.playerName,
-      status: view,
-      isConnected: true,
-      isLocal: true
-    },
-    ...connectionList.map(c => ({
-      id: c.id,
-      name: c.remotePlayerName || "Anonymous",
-      status: state.context.playerStatuses.get(c.id) || 'lobby',
-      isConnected: c.status === ConnectionStatus.connected,
-      isLocal: false
-    }))
-  ];
-
-  const playerNames = [
-    state.context.playerName,
-    ...connectedPeers.map(c => c.remotePlayerName || "Anonymous")
-  ];
+  const playerNames = playerInfos.map(p => p.name);
 
   const closeSession = () => {
     send({ type: 'CLOSE_SESSION' });
+  };
+
+  const onFinishGame = () => {
+    send({ type: 'FINISH_GAME' });
+    if (boardId) {
+      SessionManager.updateStatus(boardId, 'finished');
+    }
   };
 
   const onAddLedger = async (action: { type: string, payload: any }) => {
@@ -360,8 +521,8 @@ export default function Board() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="max-w-4xl mx-auto p-6 space-y-8">
         <div className="flex items-center justify-between">
-          <Header pageTitle={isConnected ? (view === 'game' ? game.name : "Room Lobby") : "Lobby Setup"} />
-          {connectionList.length > 0 && view === 'game' && (
+          <Header pageTitle={isConnected ? ((state.matches('room.game') || state.matches('room.finished')) ? game.name : "Room Lobby") : "Lobby Setup"} />
+          {(state.matches('room.game') || state.matches('room.finished')) && (
             <Button
               variant="outline"
               size="sm"
@@ -372,11 +533,96 @@ export default function Board() {
           )}
         </div>
 
-        {!isConnected && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+        {/* Setup Phase: Selection */}
+        {!isConnected && !signalingMode && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in zoom-in-95 duration-300">
+            <Card className="p-8 flex flex-col items-center text-center space-y-6 hover:shadow-xl transition-all border-2 border-primary/5 group cursor-pointer" onClick={() => setSignalingMode('manual')}>
+              <div className="h-20 w-20 bg-primary/5 rounded-3xl flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                <MousePointer2 className="w-10 h-10 text-primary" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold">Manual Invite</h2>
+                <p className="text-sm text-slate-500">Copy-paste signaling strings. 100% Private & Serverless.</p>
+              </div>
+              <Button variant="outline" className="w-full rounded-xl">Private Mode</Button>
+            </Card>
+
+            <Card
+              className="p-8 flex flex-col items-center text-center space-y-6 hover:shadow-xl transition-all border-2 border-primary/5 group cursor-pointer relative overflow-hidden"
+              onClick={() => {
+                setSignalingMode('server');
+                send({ type: 'GOTO_LOBBY' });
+              }}
+            >
+              <div className="absolute top-3 right-3 px-2 py-0.5 bg-yellow-400 text-[10px] font-bold rounded-full uppercase tracking-tighter">Alpha</div>
+              <div className="h-20 w-20 bg-blue-50 rounded-3xl flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                <Globe className="w-10 h-10 text-blue-500" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold">Global Online</h2>
+                <p className="text-sm text-slate-500">Seamless connection via global signaling server.</p>
+              </div>
+              <Button variant="outline" className="w-full rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50">Experimental Mode</Button>
+            </Card>
+          </div>
+        )}
+
+        {!isConnected && signalingMode && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start relative">
+            {/* Host Approval Overlay */}
+            {state.matches('approving') && state.context.pendingGuest && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+                <Card className="p-8 w-full max-w-md shadow-2xl border-2 border-primary/20 space-y-6">
+                  <div className="flex flex-col items-center text-center space-y-4">
+                    <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center">
+                      <UserPlus className="w-8 h-8 text-primary animate-bounce" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900">Join Request</h2>
+                      <p className="text-slate-500 mt-1">
+                        <span className="font-bold text-primary">{state.context.pendingGuest.name}</span> wants to join your game.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => send({ type: 'REJECT_GUEST' })}
+                      className="border-rose-200 text-rose-600 hover:bg-rose-50"
+                    >
+                      Decline
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        send({ type: 'ACCEPT_GUEST' });
+                        // Update the connection view after acceptance
+                        if (state.context.pendingGuest) {
+                          updateConnection(state.context.pendingGuest.connection);
+                        }
+                      }}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      Accept Player
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+            )}
+
             {/* Left Column: Actions */}
             <div className="space-y-6 md:col-span-2">
-              {!connectionList.length ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mb-2 text-slate-400 hover:text-slate-600"
+                onClick={() => setSignalingMode(null)}
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Change Mode
+              </Button>
+
+              {state.matches('idle') && signalingMode === 'manual' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Card className="p-6 flex flex-col items-center text-center space-y-4 hover:shadow-lg transition-all border-2 border-primary/10">
                     <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -384,7 +630,9 @@ export default function Board() {
                     </div>
                     <div>
                       <h2 className="text-lg font-bold">Host a Game</h2>
-                      <p className="text-xs text-gray-500 mt-1">Start a session and invite friends.</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {signalingMode === 'manual' ? "Start a session and share invite string." : "Posting lobby to global server..."}
+                      </p>
                     </div>
                     <Button onClick={addInitiatorConnection} className="w-full">
                       Create Session
@@ -397,7 +645,9 @@ export default function Board() {
                     </div>
                     <div>
                       <h2 className="text-lg font-bold">Join a Game</h2>
-                      <p className="text-xs text-gray-500 mt-1">Use an invite string from a friend.</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {signalingMode === 'manual' ? "Use an invite string from a friend." : "Join automatically via Board ID."}
+                      </p>
                     </div>
                     <Button onClick={connectWithOffer} variant="secondary" className="w-full">
                       Join Session
@@ -406,28 +656,176 @@ export default function Board() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Host can generate more invites */}
-                  {isInitiator && (
-                    <Button
-                      onClick={addInitiatorConnection}
-                      variant="outline"
-                      size="sm"
-                      className="w-full border-dashed"
-                    >
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      Generate Another Invite
-                    </Button>
-                  )}
+                  {signalingMode === 'manual' ? (
+                    <>
+                      {/* Host can generate more invites */}
+                      {isInitiator && (
+                        <Button
+                          onClick={addInitiatorConnection}
+                          variant="outline"
+                          size="sm"
+                          className="w-full border-dashed"
+                        >
+                          <UserPlus className="w-4 h-4 mr-2" />
+                          Generate Another Invite
+                        </Button>
+                      )}
 
-                  {pendingSignaling.map((conn) => (
-                    <SignalingStep
-                      key={conn.id}
-                      connection={conn}
-                      onOfferChange={updateOffer}
-                      onAnswerChange={updateAnswer}
-                      onCancel={(c) => c.close()}
-                    />
-                  ))}
+                      {pendingSignaling.map((conn) => (
+                        <SignalingStep
+                          key={conn.id}
+                          connection={conn}
+                          onOfferChange={updateOffer}
+                          onAnswerChange={updateAnswer}
+                          onCancel={(c) => c.close()}
+                        />
+                      ))}
+                    </>
+                  ) : (
+                    <div className="space-y-4">
+                      {state.matches('hosting') || (state.matches('room') && isInitiator) ? (
+                        <Card className="p-8 text-center space-y-4 bg-blue-50/30 border-2 border-dashed border-blue-200">
+                          <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
+                            <Globe className={`w-6 h-6 text-blue-500 animate-pulse`} />
+                          </div>
+                          <div>
+                            <h3 className="font-bold">Broadcasting Lobby...</h3>
+                            <p className="text-sm text-slate-500">Other players can now see your game in the discovery list.</p>
+                            {!signalingClient?.isConnected && <p className="text-[10px] text-red-500 mt-2">Signaling Server Offline</p>}
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={backToLobby}>
+                            Cancel & Back to Discovery
+                          </Button>
+                        </Card>
+                      ) : state.matches('joining') ? (
+                        <Card className="p-8 text-center space-y-4 bg-secondary/10 border-2 border-dashed">
+                          <div className="h-12 w-12 bg-secondary/20 rounded-full flex items-center justify-center mx-auto animate-spin">
+                            <LogIn className="w-6 h-6 text-secondary-foreground" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold">Joining Game...</h3>
+                            <p className="text-sm text-slate-500">Establishing WebRTC connection with host.</p>
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => send({ type: 'BACK_TO_LOBBY' })}>
+                            Cancel
+                          </Button>
+                        </Card>
+                      ) : (
+                        <div className="grid gap-3">
+                          {/* Active Sessions Section */}
+                          {activeSessions.length > 0 && (
+                            <div className="space-y-3 mb-6">
+                              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
+                                <History className="w-3 h-3" />
+                                Your Recent Matches
+                              </h3>
+                              <div className="grid gap-2">
+                                {activeSessions.map((session) => (
+                                  <Card
+                                    key={session.boardId}
+                                    className={`p-3 border-l-4 ${session.boardId === boardId ? 'border-l-primary' : 'border-l-slate-200'} ${session.status === 'finished' ? 'opacity-75' : ''} hover:border-l-primary transition-all cursor-pointer group flex items-center justify-between bg-white shadow-sm`}
+                                    onClick={() => {
+                                      if (session.boardId !== boardId) {
+                                        window.location.href = `/games/lobby/${session.gameId}/${session.boardId}`;
+                                      } else {
+                                        // If already on this board, just resume the UI state
+                                        send({ type: 'RESUME' });
+                                      }
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className={`h-8 w-8 ${session.status === 'finished' ? 'bg-green-50' : 'bg-slate-100'} rounded-lg flex items-center justify-center`}>
+                                        {session.status === 'finished' ? (
+                                          <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                        ) : (
+                                          <History className="w-4 h-4 text-slate-400 group-hover:text-primary transition-colors" />
+                                        )}
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <p className="text-xs font-bold text-slate-700">{session.gameName}</p>
+                                          {session.status === 'finished' && (
+                                            <span className="text-[8px] bg-green-100 text-green-600 px-1 rounded uppercase font-bold">Finished</span>
+                                          )}
+                                        </div>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {session.participants?.map((p, i) => (
+                                            <span key={i} className={`text-[8px] px-1 rounded-sm border ${p.isYou ? 'bg-primary/10 border-primary/20 text-primary font-bold' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
+                                              {p.isYou ? 'You' : p.name}{p.isHost && ' 👑'}
+                                            </span>
+                                          ))}
+                                        </div>
+                                        <p className="text-[9px] text-slate-400 mt-1">Board: {session.boardId.slice(0, 8)}... • {new Date(session.lastPlayed).toLocaleTimeString()}</p>
+                                      </div>
+                                    </div>
+                                    <ExternalLink className="w-3 h-3 text-slate-300 group-hover:text-primary transition-colors" />
+                                  </Card>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-bold text-slate-500 uppercase flex items-center gap-2">
+                              <Globe className="w-4 h-4" />
+                              Available Lobbies
+                            </h3>
+                            <div className="flex gap-2">
+                              <Button variant="outline" size="sm" onClick={() => signalingClient?.requestOffers()} className="h-7 text-[10px]">
+                                Refresh List
+                              </Button>
+                              <Button variant="secondary" size="sm" onClick={addInitiatorConnection} className="h-7 text-[10px]">
+                                Host My Own
+                              </Button>
+                            </div>
+                          </div>
+                          {isServerConnecting && (
+                            <div className="text-center py-4 space-y-2">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mx-auto"></div>
+                              <p className="text-[10px] text-slate-400 font-mono">Searching network...</p>
+                            </div>
+                          )}
+                          {!isServerConnecting && availableOffers.length === 0 ? (
+                            <Card className="p-12 text-center border-dashed bg-white/50">
+                              <div className="h-12 w-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Search className="w-6 h-6 text-slate-300" />
+                              </div>
+                              <p className="text-sm text-slate-400">No active lobbies found for this game.</p>
+                              <Button variant="link" size="sm" onClick={addInitiatorConnection} className="mt-2 text-primary">Be the first to host!</Button>
+                            </Card>
+                          ) : (
+                            availableOffers.map((offer) => (
+                              <Card key={offer.connectionId} className="p-4 flex items-center justify-between hover:border-primary/50 transition-colors bg-white shadow-sm border-2">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center font-bold text-primary">
+                                    {offer.peerName?.[0] || "?"}
+                                  </div>
+                                  <div>
+                                    <p className="font-bold">{offer.peerName}</p>
+                                    <p className="text-[10px] text-slate-400 font-mono">Status: Waiting for Peers</p>
+                                  </div>
+                                </div>
+                                <Button size="sm" onClick={async () => {
+                                  send({ type: 'JOIN' });
+                                  const conn = new Connection(updateConnection);
+                                  conn.setDataChannelCallback();
+                                  await conn.acceptOffer(offer.offer, state.context.playerName);
+                                  updateConnection(conn);
+
+                                  const checkSignal = setInterval(() => {
+                                    if (conn.signal) {
+                                      signalingClient?.sendAnswer(offer.connectionId, conn.signal);
+                                      clearInterval(checkSignal);
+                                    }
+                                  }, 500);
+                                }}>Join Game</Button>
+                              </Card>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -519,6 +917,7 @@ export default function Board() {
                 isInitiator={isInitiator}
                 ledger={state.context.ledger}
                 onAddLedger={onAddLedger}
+                onFinishGame={onFinishGame}
               />
             </Suspense>
 
@@ -529,7 +928,7 @@ export default function Board() {
           </div>
         )}
       </div>
-    </div>
+    </div >
   );
 }
 

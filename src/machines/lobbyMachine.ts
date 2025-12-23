@@ -10,11 +10,13 @@ interface LobbyContext {
     isGameStarted: boolean;
     playerName: string;
     ledger: LedgerEntry[];
+    pendingGuest: { id: string; name: string; answer: any; connection: Connection } | null;
 }
 
 type LobbyEvent =
     | { type: 'HOST' }
     | { type: 'JOIN' }
+    | { type: 'GOTO_LOBBY' }
     | { type: 'UPDATE_CONNECTION'; connection: Connection }
     | { type: 'SET_PLAYER_STATUS'; playerId: string; status: 'lobby' | 'game' }
     | { type: 'START_GAME' }
@@ -24,7 +26,13 @@ type LobbyEvent =
     | { type: 'REMOVE_PLAYER'; playerId: string }
     | { type: 'ADD_TO_LEDGER'; action: { type: string, payload: any } }
     | { type: 'SYNC_LEDGER'; ledger: LedgerEntry[] }
-    | { type: 'PEER_DISCONNECTED'; connectionId: string };
+    | { type: 'PEER_DISCONNECTED'; connectionId: string }
+    | { type: 'REQUEST_JOIN'; connectionId: string; peerName: string; answer: any; connection: Connection }
+    | { type: 'ACCEPT_GUEST' }
+    | { type: 'REJECT_GUEST' }
+    | { type: 'RESUME' }
+    | { type: 'FINISH_GAME' }
+    | { type: 'LOAD_LEDGER'; ledger: LedgerEntry[] };
 
 export const lobbyMachine = createMachine({
     types: {} as {
@@ -41,6 +49,7 @@ export const lobbyMachine = createMachine({
         isGameStarted: false,
         playerName: input.playerName,
         ledger: [],
+        pendingGuest: null,
     }),
     on: {
         UPDATE_CONNECTION: {
@@ -57,6 +66,9 @@ export const lobbyMachine = createMachine({
         },
         SYNC_LEDGER: {
             actions: 'syncLedger'
+        },
+        LOAD_LEDGER: {
+            actions: assign({ ledger: ({ event }) => event.ledger })
         }
     },
     states: {
@@ -69,12 +81,41 @@ export const lobbyMachine = createMachine({
                 JOIN: {
                     target: 'joining',
                     actions: assign({ isInitiator: false })
-                }
+                },
+                GOTO_LOBBY: 'lobby'
+            }
+        },
+        lobby: {
+            on: {
+                HOST: {
+                    target: 'hosting',
+                    actions: assign({ isInitiator: true })
+                },
+                JOIN: {
+                    target: 'joining',
+                    actions: assign({ isInitiator: false })
+                },
+                RESUME: 'room.lobby'
             }
         },
         hosting: {
             on: {
-                CLOSE_SESSION: 'idle'
+                CLOSE_SESSION: 'idle',
+                BACK_TO_LOBBY: {
+                    target: 'lobby',
+                    actions: 'closeAllConnections'
+                },
+                REQUEST_JOIN: {
+                    target: 'approving',
+                    actions: assign({
+                        pendingGuest: ({ event }) => ({
+                            id: event.connectionId,
+                            name: event.peerName,
+                            answer: event.answer,
+                            connection: event.connection
+                        })
+                    })
+                }
             },
             always: [
                 {
@@ -83,9 +124,30 @@ export const lobbyMachine = createMachine({
                 }
             ]
         },
+        approving: {
+            on: {
+                ACCEPT_GUEST: {
+                    target: 'room',
+                    actions: ['acceptGuest', 'clearPendingGuest']
+                },
+                REJECT_GUEST: {
+                    target: 'hosting',
+                    actions: ['rejectGuest', 'clearPendingGuest']
+                },
+                CLOSE_SESSION: 'idle',
+                BACK_TO_LOBBY: {
+                    target: 'lobby',
+                    actions: ['closeAllConnections', 'clearPendingGuest']
+                }
+            }
+        },
         joining: {
             on: {
-                CLOSE_SESSION: 'idle'
+                CLOSE_SESSION: 'idle',
+                BACK_TO_LOBBY: {
+                    target: 'lobby',
+                    actions: 'closeAllConnections'
+                }
             },
             always: [
                 {
@@ -98,6 +160,12 @@ export const lobbyMachine = createMachine({
             initial: 'lobby',
             states: {
                 lobby: {
+                    always: [
+                        {
+                            target: 'game',
+                            guard: ({ context }) => context.isGameStarted
+                        }
+                    ],
                     on: {
                         START_GAME: {
                             target: 'game',
@@ -111,7 +179,19 @@ export const lobbyMachine = createMachine({
                 },
                 game: {
                     on: {
-                        BACK_TO_LOBBY: 'lobby'
+                        BACK_TO_LOBBY: {
+                            target: '#lobby.lobby'
+                        },
+                        FINISH_GAME: {
+                            target: 'finished'
+                        }
+                    }
+                },
+                finished: {
+                    on: {
+                        BACK_TO_LOBBY: {
+                            target: '#lobby.lobby'
+                        }
                     }
                 }
             },
@@ -208,7 +288,20 @@ export const lobbyMachine = createMachine({
         },
         closeAllConnections: ({ context }) => {
             context.connections.forEach(c => c.close());
-        }
+        },
+        acceptGuest: ({ context }) => {
+            if (context.pendingGuest) {
+                console.log("Accepting guest:", context.pendingGuest.name);
+                context.pendingGuest.connection.acceptAnswer(context.pendingGuest.answer);
+            }
+        },
+        rejectGuest: ({ context }) => {
+            if (context.pendingGuest) {
+                console.log("Rejecting guest:", context.pendingGuest.name);
+                context.pendingGuest.connection.close();
+            }
+        },
+        clearPendingGuest: assign({ pendingGuest: null })
     },
     guards: {
         hasConnections: ({ context }) => {
