@@ -8,6 +8,7 @@ interface LobbyContext {
     playerStatuses: Map<string, 'lobby' | 'game'>;
     isInitiator: boolean;
     isGameStarted: boolean;
+    isGameFinished: boolean;
     playerName: string;
     ledger: LedgerEntry[];
     pendingGuest: { id: string; name: string; answer: any; connection: Connection } | null;
@@ -32,6 +33,8 @@ type LobbyEvent =
     | { type: 'REJECT_GUEST' }
     | { type: 'RESUME' }
     | { type: 'FINISH_GAME' }
+    | { type: 'GAME_RESET' }
+    | { type: 'RESET_GAME' }
     | { type: 'LOAD_LEDGER'; ledger: LedgerEntry[] };
 
 export const lobbyMachine = createMachine({
@@ -47,6 +50,7 @@ export const lobbyMachine = createMachine({
         playerStatuses: new Map<string, 'lobby' | 'game'>(),
         isInitiator: false,
         isGameStarted: false,
+        isGameFinished: false,
         playerName: input.playerName,
         ledger: [],
         pendingGuest: null,
@@ -69,44 +73,58 @@ export const lobbyMachine = createMachine({
         },
         LOAD_LEDGER: {
             actions: assign({ ledger: ({ event }) => event.ledger })
+        },
+        BACK_TO_LOBBY: {
+            target: '#lobbyDiscovery',
+            actions: ['clearPendingGuest']
+        },
+        CLOSE_SESSION: {
+            target: '#idle',
+            actions: ['closeAllConnections', 'resetGameStarted', 'clearPendingGuest']
         }
     },
     states: {
         idle: {
+            id: 'idle',
             on: {
                 HOST: {
-                    target: 'hosting',
+                    target: '#hosting',
                     actions: assign({ isInitiator: true })
                 },
                 JOIN: {
-                    target: 'joining',
+                    target: '#joining',
                     actions: assign({ isInitiator: false })
                 },
-                GOTO_LOBBY: 'lobby'
+                GOTO_LOBBY: '#lobbyDiscovery',
+                RESUME: {
+                    target: '#room',
+                    actions: 'setGameStarted'
+                }
             }
         },
         lobby: {
+            id: 'lobbyDiscovery',
             on: {
                 HOST: {
-                    target: 'hosting',
+                    target: '#hosting',
                     actions: assign({ isInitiator: true })
                 },
                 JOIN: {
-                    target: 'joining',
+                    target: '#joining',
                     actions: assign({ isInitiator: false })
                 },
-                RESUME: 'room.lobby'
+                RESUME: {
+                    target: '#room',
+                    actions: 'setGameStarted'
+                }
             }
         },
         hosting: {
+            id: 'hosting',
             on: {
-                CLOSE_SESSION: 'idle',
-                BACK_TO_LOBBY: {
-                    target: 'lobby',
-                    actions: 'closeAllConnections'
-                },
+                CLOSE_SESSION: '#idle',
                 REQUEST_JOIN: {
-                    target: 'approving',
+                    target: '#approving',
                     actions: assign({
                         pendingGuest: ({ event }) => ({
                             id: event.connectionId,
@@ -119,47 +137,42 @@ export const lobbyMachine = createMachine({
             },
             always: [
                 {
-                    target: 'room',
+                    target: '#room',
                     guard: 'hasConnections'
                 }
             ]
         },
         approving: {
+            id: 'approving',
             on: {
                 ACCEPT_GUEST: {
-                    target: 'room',
+                    target: '#room',
                     actions: ['acceptGuest', 'clearPendingGuest']
                 },
                 REJECT_GUEST: {
-                    target: 'hosting',
+                    target: '#hosting',
                     actions: ['rejectGuest', 'clearPendingGuest']
                 },
-                CLOSE_SESSION: 'idle',
-                BACK_TO_LOBBY: {
-                    target: 'lobby',
-                    actions: ['closeAllConnections', 'clearPendingGuest']
-                }
+                CLOSE_SESSION: '#idle',
             }
         },
         joining: {
+            id: 'joining',
             on: {
-                CLOSE_SESSION: 'idle',
-                BACK_TO_LOBBY: {
-                    target: 'lobby',
-                    actions: 'closeAllConnections'
-                }
+                CLOSE_SESSION: '#idle',
             },
             always: [
                 {
-                    target: 'room',
+                    target: '#room',
                     guard: 'hasConnections'
                 }
             ]
         },
         room: {
-            initial: 'lobby',
+            id: 'room',
+            initial: 'waiting',
             states: {
-                lobby: {
+                waiting: {
                     always: [
                         {
                             target: 'game',
@@ -179,37 +192,41 @@ export const lobbyMachine = createMachine({
                 },
                 game: {
                     on: {
-                        BACK_TO_LOBBY: {
-                            target: '#lobby.lobby'
-                        },
                         FINISH_GAME: {
-                            target: 'finished'
+                            target: 'finished',
+                            actions: assign({ isGameFinished: true })
                         }
                     }
                 },
                 finished: {
                     on: {
-                        BACK_TO_LOBBY: {
-                            target: '#lobby.lobby'
-                        }
                     }
                 }
             },
             on: {
                 CLOSE_SESSION: {
-                    target: 'idle',
+                    target: '#idle',
                     actions: 'closeAllConnections'
                 },
                 GAME_STARTED: {
                     target: '.game',
                     actions: 'setGameStarted'
+                },
+                GAME_RESET: {
+                    target: '.waiting',
+                    actions: 'resetGameStarted'
+                },
+                RESET_GAME: {
+                    target: '.waiting',
+                    actions: ['resetGameStarted', 'broadcastResetGame']
                 }
             }
         }
     }
 }, {
     actions: {
-        setGameStarted: assign({ isGameStarted: true }),
+        setGameStarted: assign({ isGameStarted: true, isGameFinished: false }),
+        resetGameStarted: assign({ isGameStarted: false, isGameFinished: false, ledger: [] }),
         setPlayerStatus: assign(({ context, event }) => {
             if (event.type !== 'SET_PLAYER_STATUS') return context;
             const newStatuses = new Map(context.playerStatuses);
@@ -283,6 +300,14 @@ export const lobbyMachine = createMachine({
             context.connections.forEach(c => {
                 if (c.status === ConnectionStatus.connected) {
                     c.send(JSON.stringify(createLobbyMessage('START_GAME')));
+                }
+            });
+        },
+        broadcastResetGame: ({ context }) => {
+            if (!context.isInitiator) return;
+            context.connections.forEach(c => {
+                if (c.status === ConnectionStatus.connected) {
+                    c.send(JSON.stringify(createLobbyMessage('GAME_RESET')));
                 }
             });
         },

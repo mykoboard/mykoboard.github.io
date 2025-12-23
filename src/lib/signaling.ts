@@ -10,15 +10,18 @@ export type SignalingMessage = {
     offers?: any[];
     answer?: any;
     boardId?: string;
+    gameId?: string;
 };
 
 export class SignalingService {
     private socket: WebSocket | null = null;
     private onMessageCallback: (msg: any) => void;
-    private boardId: string;
+    private gameId: string;
+    private boardId: string; // The specific session ID (optional for joiners)
     private peerName: string;
 
-    constructor(boardId: string, peerName: string, onMessage: (msg: any) => void) {
+    constructor(gameId: string, boardId: string, peerName: string, onMessage: (msg: any) => void) {
+        this.gameId = gameId;
         this.boardId = boardId;
         this.peerName = peerName;
         this.onMessageCallback = onMessage;
@@ -65,29 +68,34 @@ export class SignalingService {
         });
     }
 
-    async register() {
-        console.log("Registering peer:", this.peerName, "for board:", this.boardId);
+    async register(boardId?: string) {
+        if (boardId) this.boardId = boardId;
+        console.log("Registering peer:", this.peerName, "for game:", this.gameId, "board:", this.boardId);
         this.send({
             type: 'register',
             peerName: this.peerName,
+            gameId: this.gameId,
             boardId: this.boardId
         });
     }
 
-    sendOffer(signal: Signal) {
-        console.log("Broadcasting offer for board:", this.boardId);
+    sendOffer(signal: Signal, boardId?: string) {
+        if (boardId) this.boardId = boardId;
+        console.log("Broadcasting offer for game:", this.gameId, "board:", this.boardId);
         this.send({
             type: 'offer',
             offer: signal,
+            gameId: this.gameId,
             boardId: this.boardId
         });
     }
 
     requestOffers() {
-        console.log("Requesting active offers for board:", this.boardId);
+        console.log("Requesting active offers for game:", this.gameId);
         this.send({
             type: 'listOffers',
-            boardId: this.boardId
+            gameId: this.gameId,
+            boardId: this.boardId // Server might still use this for scope
         });
     }
 
@@ -106,9 +114,10 @@ export class SignalingService {
             console.warn("Cannot delete offer: Signaling socket is not open.");
             return;
         }
-        console.log("Deleting offer for board:", this.boardId);
+        console.log("Deleting offer for game:", this.gameId, "board:", this.boardId);
         this.send({
             type: 'deleteOffer',
+            gameId: this.gameId,
             boardId: this.boardId
         });
     }

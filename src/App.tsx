@@ -20,7 +20,8 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/games" element={<WalletGate><GameSelection /></WalletGate>} />
-          <Route path="/games/lobby/:gameId/:boardId" element={<WalletGate><Board /></WalletGate>} />
+          <Route path="/games/:gameId" element={<WalletGate><Board /></WalletGate>} />
+          <Route path="/games/:gameId/:boardId" element={<WalletGate><Board /></WalletGate>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
