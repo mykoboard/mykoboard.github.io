@@ -381,7 +381,9 @@ export default function Board() {
             (msg) => signalingHandlerRef.current?.(msg)
           );
 
-          await client.connect(identity.subscriptionToken);
+          const challenge = `SIGN_IN:${identity.subscriptionToken}`;
+          const signature = await wallet.sign(challenge);
+          await client.connect(identity.subscriptionToken, identity.publicKey, signature);
           setSignalingClient(client);
           client.requestOffers(); // Initial fetch
         } catch (e) {

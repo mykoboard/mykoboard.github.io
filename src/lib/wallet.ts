@@ -119,8 +119,9 @@ export class SecureWallet {
 
         if (!this.keyPair) throw new Error("Wallet not initialized or no identity found");
 
-        const msg = JSON.stringify(data);
-        const msgUint8 = new TextEncoder().encode(msg);
+        const msgUint8 = typeof data === 'string'
+            ? new TextEncoder().encode(data)
+            : new TextEncoder().encode(JSON.stringify(data));
 
         const signature = await window.crypto.subtle.sign(
             {
@@ -150,8 +151,9 @@ export class SecureWallet {
                 ["verify"]
             );
 
-            const msg = JSON.stringify(data);
-            const msgUint8 = new TextEncoder().encode(msg);
+            const msgUint8 = typeof data === 'string'
+                ? new TextEncoder().encode(data)
+                : new TextEncoder().encode(JSON.stringify(data));
             const signature = SecureWallet.hexToBuf(signatureHex);
 
             return await window.crypto.subtle.verify(

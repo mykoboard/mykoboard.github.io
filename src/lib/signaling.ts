@@ -24,13 +24,19 @@ export class SignalingService {
         this.onMessageCallback = onMessage;
     }
 
-    async connect(token: string) {
-        const SIGNALING_SERVER_URL = import.meta.env.VITE_SIGNALING_SERVER_URL || 'wss://pebsg4v5yk.execute-api.eu-central-1.amazonaws.com/production';
+    async connect(token: string, publicKey?: string, signature?: string) {
+        let url = import.meta.env.VITE_SIGNALING_SERVER_URL || 'wss://pebsg4v5yk.execute-api.eu-central-1.amazonaws.com/production';
+
+        const params = new URLSearchParams();
+        params.append('x-api-key', token);
+        if (publicKey) params.append('x-pubkey', publicKey);
+        if (signature) params.append('x-sig', signature);
+
+        const SIGNALING_SERVER_URL = `${url}?${params.toString()}`;
 
         return new Promise<void>((resolve, reject) => {
             console.log(`Connecting to signaling server: ${SIGNALING_SERVER_URL}`);
-            // AWS API Gateway supports passing the API Key via the 'x-api-key' query parameter
-            this.socket = new WebSocket(`${SIGNALING_SERVER_URL}?x-api-key=${token}`);
+            this.socket = new WebSocket(SIGNALING_SERVER_URL);
 
             this.socket.onopen = () => {
                 console.log("WebSocket Connection Open.");
