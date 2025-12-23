@@ -178,6 +178,7 @@ function PlayerList({ players, onRemove }: { players: PlayerInfo[], onRemove?: (
 import { useMachine } from "@xstate/react";
 import { lobbyMachine } from "../machines/lobbyMachine";
 import { createLobbyMessage, isLobbyMessage } from "../lib/network";
+import { SecureWallet } from "../lib/wallet";
 
 // ... (SignalingStep and PlayerList remain the same)
 
@@ -207,7 +208,21 @@ export default function Board() {
           send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: msg.payload });
         }
         if (msg.type === 'SYNC_LEDGER') {
-          send({ type: 'SYNC_LEDGER', ledger: msg.payload });
+          // Verify signatures of new entries
+          const verifyLedger = async () => {
+            const entries = msg.payload as any[];
+            for (const entry of entries) {
+              if (entry.signature && entry.signerPublicKey) {
+                const isValid = await SecureWallet.verify(entry.action, entry.signature, entry.signerPublicKey);
+                if (!isValid) {
+                  console.error("Invalid signature in ledger entry", entry);
+                  return; // Reject bad ledger
+                }
+              }
+            }
+            send({ type: 'SYNC_LEDGER', ledger: msg.payload });
+          };
+          verifyLedger();
         }
       } catch (e) { }
     };
@@ -309,8 +324,23 @@ export default function Board() {
 
   const onAddLedger = async (action: { type: string, payload: any }) => {
     if (!isInitiator) return;
+
+    const wallet = SecureWallet.getInstance();
+    const identity = await wallet.getIdentity();
+    if (!identity) return;
+
+    // Sign the action
+    const signature = await wallet.sign(action);
+
     const ledger = Ledger.fromEntries(state.context.ledger);
-    await ledger.addEntry(action);
+    const entry = await ledger.addEntry({
+      ...action,
+    });
+
+    // Attach signature and public key to the entry
+    entry.signature = signature;
+    entry.signerPublicKey = identity.publicKey;
+
     const updatedLedger = ledger.getEntries();
 
     send({ type: 'SYNC_LEDGER', ledger: updatedLedger });

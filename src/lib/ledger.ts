@@ -7,6 +7,8 @@ export interface LedgerEntry {
     };
     prevHash: string;
     hash: string;
+    signature?: string;
+    signerPublicKey?: string;
 }
 
 export class Ledger {
@@ -21,7 +23,8 @@ export class Ledger {
             index: entry.index,
             timestamp: entry.timestamp,
             action: entry.action,
-            prevHash: entry.prevHash
+            prevHash: entry.prevHash,
+            signerPublicKey: entry.signerPublicKey
         });
 
         const msgUint8 = new TextEncoder().encode(data);

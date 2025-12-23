@@ -12,24 +12,19 @@ export const Hero = () => {
             <Network className="w-4 h-4 text-mint-500 mr-2" />
             <span className="text-sm font-medium">Decentralized Gaming Platform</span>
           </div>
-          
+
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
             The Future of <span className="text-mint-500">Board Gaming</span> is Here
           </h1>
-          
+
           <p className="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto">
-            Connect with players worldwide through secure peer-to-peer gameplay. 
+            Connect with players worldwide through secure peer-to-peer gameplay.
             Your wallet, your rules, your gaming experience.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
-   
-            <button className="px-8 py-4 bg-mint-500 text-white rounded-lg hover:bg-mint-600 transition-colors" onClick={() => navigate("/games")}>
-              Start Playing
-            </button>    
-
-            <button className="px-8 py-4 glass rounded-lg hover:bg-white/80 transition-colors">
-              Learn More
+            <button className="px-8 py-4 bg-mint-500 text-white rounded-lg hover:bg-mint-600 transition-colors font-bold shadow-lg shadow-mint-500/20" onClick={() => navigate("/games")}>
+              Lets get started
             </button>
           </div>
         </div>
