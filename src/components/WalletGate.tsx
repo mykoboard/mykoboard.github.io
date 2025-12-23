@@ -9,6 +9,7 @@ import { toast } from "sonner";
 export function WalletGate({ children }: { children: React.ReactNode }) {
     const [isOpen, setIsOpen] = useState(false);
     const [name, setName] = useState("");
+    const [subscriptionToken, setSubscriptionToken] = useState("");
     const [isCreating, setIsCreating] = useState(false);
     const [identity, setIdentity] = useState<PlayerIdentity | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
@@ -30,15 +31,15 @@ export function WalletGate({ children }: { children: React.ReactNode }) {
     }, []);
 
     const handleCreateIdentity = async () => {
-        if (!name.trim()) {
-            toast.error("Please enter a name");
+        if (!name.trim() || !subscriptionToken.trim()) {
+            toast.error("Please enter a name and subscription token");
             return;
         }
 
         setIsCreating(true);
         try {
             const wallet = SecureWallet.getInstance();
-            const newIdentity = await wallet.createIdentity(name);
+            const newIdentity = await wallet.createIdentity(name, subscriptionToken);
 
             setIdentity(newIdentity);
             localStorage.setItem("playerName", newIdentity.name);
@@ -86,6 +87,19 @@ export function WalletGate({ children }: { children: React.ReactNode }) {
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 className="h-12 text-lg rounded-xl border-slate-200 focus:ring-primary shadow-sm"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-sm font-medium text-slate-700 ml-1">
+                                <Sparkles className="w-4 h-4 text-yellow-500" />
+                                Subscription Token
+                            </div>
+                            <Input
+                                placeholder="Paste your token here..."
+                                value={subscriptionToken}
+                                onChange={(e) => setSubscriptionToken(e.target.value)}
+                                className="h-12 text-lg rounded-xl border-slate-200 focus:ring-primary shadow-sm font-mono"
                                 onKeyDown={(e) => e.key === 'Enter' && handleCreateIdentity()}
                             />
                         </div>

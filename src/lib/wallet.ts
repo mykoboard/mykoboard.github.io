@@ -8,6 +8,7 @@ export interface PlayerIdentity {
     id: string;
     publicKey: string;
     name: string;
+    subscriptionToken: string;
 }
 
 export class SecureWallet {
@@ -63,7 +64,7 @@ export class SecureWallet {
     /**
      * Create a new identity with hardware-backed encryption (Passkeys/PRF)
      */
-    async createIdentity(name: string): Promise<PlayerIdentity> {
+    async createIdentity(name: string, subscriptionToken: string): Promise<PlayerIdentity> {
         await this.init();
 
         // 1. Generate a P-256 keypair for signing game actions
@@ -85,7 +86,8 @@ export class SecureWallet {
         const identity: PlayerIdentity = {
             id: nanoid(),
             name,
-            publicKey: publicKeyHex
+            publicKey: publicKeyHex,
+            subscriptionToken
         };
 
         this.identity = identity;
