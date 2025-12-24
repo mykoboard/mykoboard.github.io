@@ -20,9 +20,9 @@ export class SignalingService {
     private boardId: string; // The specific session ID (optional for joiners)
     private peerName: string;
 
-    constructor(gameId: string, boardId: string, peerName: string, onMessage: (msg: any) => void) {
+    constructor(gameId: string, boardId: string | undefined, peerName: string, onMessage: (msg: any) => void) {
         this.gameId = gameId;
-        this.boardId = boardId;
+        this.boardId = boardId || "";
         this.peerName = peerName;
         this.onMessageCallback = onMessage;
     }
@@ -68,25 +68,14 @@ export class SignalingService {
         });
     }
 
-    async register(boardId?: string) {
-        if (boardId) this.boardId = boardId;
-        console.log("Registering peer:", this.peerName, "for game:", this.gameId, "board:", this.boardId);
-        this.send({
-            type: 'register',
-            peerName: this.peerName,
-            gameId: this.gameId,
-            boardId: this.boardId
-        });
-    }
-
-    sendOffer(signal: Signal, boardId?: string) {
-        if (boardId) this.boardId = boardId;
-        console.log("Broadcasting offer for game:", this.gameId, "board:", this.boardId);
+    sendOffer(signal: Signal, gameId: string, boardId: string, peerName: string) {
+        console.log("Broadcasting offer for game:", this.gameId, "board:", this.boardId, "peer:", peerName);
         this.send({
             type: 'offer',
             offer: signal,
             gameId: this.gameId,
-            boardId: this.boardId
+            boardId: boardId,
+            peerName: peerName
         });
     }
 
@@ -94,8 +83,7 @@ export class SignalingService {
         console.log("Requesting active offers for game:", this.gameId);
         this.send({
             type: 'listOffers',
-            gameId: this.gameId,
-            boardId: this.boardId // Server might still use this for scope
+            gameId: this.gameId
         });
     }
 
@@ -118,7 +106,7 @@ export class SignalingService {
         this.send({
             type: 'deleteOffer',
             gameId: this.gameId,
-            boardId: this.boardId
+            ...(this.boardId ? { boardId: this.boardId } : {})
         });
     }
 

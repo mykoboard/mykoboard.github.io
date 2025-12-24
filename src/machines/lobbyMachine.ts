@@ -1,7 +1,7 @@
 import { createMachine, assign } from 'xstate';
 import { Connection, ConnectionStatus } from '../lib/webrtc';
-import { createLobbyMessage, isLobbyMessage } from '../lib/network';
-import { Ledger, LedgerEntry } from '../lib/ledger';
+import { createLobbyMessage } from '../lib/network';
+import { LedgerEntry } from '../lib/ledger';
 
 interface LobbyContext {
     connections: Map<string, Connection>;
@@ -44,7 +44,7 @@ export const lobbyMachine = createMachine({
         input: { playerName: string };
     },
     id: 'lobby',
-    initial: 'idle',
+    initial: 'selection',
     context: ({ input }) => ({
         connections: new Map<string, Connection>(),
         playerStatuses: new Map<string, 'lobby' | 'game'>(),
@@ -75,43 +75,45 @@ export const lobbyMachine = createMachine({
             actions: assign({ ledger: ({ event }) => event.ledger })
         },
         BACK_TO_LOBBY: {
-            target: '#lobbyDiscovery',
-            actions: ['clearPendingGuest']
+            target: '#discovery',
+            actions: ['resetContext', 'clearPendingGuest']
         },
         CLOSE_SESSION: {
-            target: '#idle',
-            actions: ['closeAllConnections', 'resetGameStarted', 'clearPendingGuest']
+            target: '#selection',
+            actions: ['resetContext', 'closeAllConnections', 'resetGameStarted', 'clearPendingGuest']
         }
     },
     states: {
-        idle: {
-            id: 'idle',
+        // selection of manual or auto signaling
+        selection: {
+            id: 'selection',
             on: {
                 HOST: {
                     target: '#hosting',
-                    actions: assign({ isInitiator: true })
+                    actions: ['resetContext', assign({ isInitiator: true })]
                 },
                 JOIN: {
                     target: '#joining',
-                    actions: assign({ isInitiator: false })
+                    actions: ['resetContext']
                 },
-                GOTO_LOBBY: '#lobbyDiscovery',
+                GOTO_LOBBY: '#discovery',
                 RESUME: {
                     target: '#room',
                     actions: 'setGameStarted'
                 }
             }
         },
-        lobby: {
-            id: 'lobbyDiscovery',
+        // discovery of available sessions when selection is auto signaling
+        discovery: {
+            id: 'discovery',
             on: {
                 HOST: {
                     target: '#hosting',
-                    actions: assign({ isInitiator: true })
+                    actions: ['resetContext', assign({ isInitiator: true })]
                 },
                 JOIN: {
                     target: '#joining',
-                    actions: assign({ isInitiator: false })
+                    actions: ['resetContext']
                 },
                 RESUME: {
                     target: '#room',
@@ -122,7 +124,7 @@ export const lobbyMachine = createMachine({
         hosting: {
             id: 'hosting',
             on: {
-                CLOSE_SESSION: '#idle',
+                CLOSE_SESSION: '#selection',
                 REQUEST_JOIN: {
                     target: '#approving',
                     actions: assign({
@@ -153,13 +155,13 @@ export const lobbyMachine = createMachine({
                     target: '#hosting',
                     actions: ['rejectGuest', 'clearPendingGuest']
                 },
-                CLOSE_SESSION: '#idle',
+                CLOSE_SESSION: '#selection',
             }
         },
         joining: {
             id: 'joining',
             on: {
-                CLOSE_SESSION: '#idle',
+                CLOSE_SESSION: '#selection',
             },
             always: [
                 {
@@ -205,7 +207,7 @@ export const lobbyMachine = createMachine({
             },
             on: {
                 CLOSE_SESSION: {
-                    target: '#idle',
+                    target: '#selection',
                     actions: 'closeAllConnections'
                 },
                 GAME_STARTED: {
@@ -326,6 +328,15 @@ export const lobbyMachine = createMachine({
                 context.pendingGuest.connection.close();
             }
         },
+        resetContext: assign({
+            connections: new Map<string, Connection>(),
+            playerStatuses: new Map<string, 'lobby' | 'game'>(),
+            ledger: [],
+            isGameStarted: false,
+            isGameFinished: false,
+            isInitiator: false,
+            pendingGuest: null
+        }),
         clearPendingGuest: assign({ pendingGuest: null })
     },
     guards: {

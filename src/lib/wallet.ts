@@ -179,6 +179,10 @@ export class SecureWallet {
         return identity;
     }
 
+    getCurrentIdentity(): PlayerIdentity | null {
+        return this.identity;
+    }
+
     private async saveToDB(key: string, value: any): Promise<void> {
         return new Promise((resolve, reject) => {
             if (!this.db) return reject("DB not initialized");
