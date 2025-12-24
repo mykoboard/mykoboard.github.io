@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { useMachine } from "@xstate/react";
 import { lobbyMachine } from "../machines/lobbyMachine";
 import { Connection, ConnectionStatus } from "../lib/webrtc";
+import { logger } from "../lib/logger";
 import { getGameById } from "../lib/GameRegistry";
 import { Ledger } from "../lib/ledger";
 import { createLobbyMessage, isLobbyMessage } from "../lib/network";
@@ -33,7 +34,6 @@ interface GameSessionContextType {
     updateOffer: (connection: Connection, offer: string) => void;
     updateAnswer: (connection: Connection, answer: string) => void;
     startGame: () => void;
-    backToLobby: () => void;
     onFinishGame: () => void;
     onAddLedger: (action: { type: string, payload: any }) => Promise<void>;
     onJoinFromList: (offer: any) => Promise<void>;
@@ -93,6 +93,15 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
     const [state, send] = useMachine(lobbyMachine, {
         input: {
             playerName: identity?.name || "Anonymous"
+        },
+        inspect: (inspectionEvent) => {
+            if (inspectionEvent.type === '@xstate.event') {
+                logger.state('EVENT', inspectionEvent.event.type, inspectionEvent.event);
+            }
+            if (inspectionEvent.type === '@xstate.snapshot' && inspectionEvent.snapshot.status === 'active') {
+                const snapshotValue = (inspectionEvent.snapshot as any).value;
+                logger.state('STATE', JSON.stringify(snapshotValue));
+            }
         }
     });
 
@@ -105,6 +114,8 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
     const connectedPeers = useMemo(() => connectionList.filter(c => c.status === ConnectionStatus.connected), [connectionList]);
     const pendingSignaling = useMemo(() => connectionList.filter(c => c.status !== ConnectionStatus.connected && c.status !== ConnectionStatus.closed), [connectionList]);
     const isConnected = state.matches('room');
+
+    const isLeavingRef = useRef(false);
 
     const playerInfos = useMemo((): PlayerInfo[] => [
         {
@@ -126,45 +137,51 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
     ], [state.context.playerName, isGameStarted, connectionList, state.context.playerStatuses, isInitiator]);
 
     const updateConnection = (connection: Connection) => {
-        const handleLobbyMessage = (data: string) => {
-            try {
-                const msg = JSON.parse(data);
-                if (!isLobbyMessage(msg)) return;
+        if (!(connection as any)._hasListener) {
+            const handleLobbyMessage = (data: string) => {
+                try {
+                    const msg = JSON.parse(data);
+                    if (!isLobbyMessage(msg)) return;
 
-                if (msg.type === 'START_GAME') send({ type: 'START_GAME' });
-                if (msg.type === 'GAME_STARTED') send({ type: 'GAME_STARTED' });
-                if (msg.type === 'GAME_RESET') send({ type: 'GAME_RESET' });
-                if (msg.type === 'NEW_BOARD') navigate(`/games/${gameId}/${msg.payload}`);
-                if (msg.type === 'SYNC_PLAYER_STATUS') {
-                    send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: msg.payload });
-                }
-                if (msg.type === 'SYNC_LEDGER') {
-                    const verifyLedger = async () => {
-                        const entries = msg.payload as any[];
-                        for (const entry of entries) {
-                            if (entry.signature && entry.signerPublicKey) {
-                                const isValid = await SecureWallet.verify(entry.action, entry.signature, entry.signerPublicKey);
-                                if (!isValid) {
-                                    console.error("Invalid signature in ledger entry", entry);
-                                    return;
+                    if (msg.type === 'START_GAME') send({ type: 'START_GAME' });
+                    if (msg.type === 'GAME_STARTED') send({ type: 'GAME_STARTED' });
+                    if (msg.type === 'GAME_RESET') send({ type: 'GAME_RESET' });
+                    if (msg.type === 'NEW_BOARD') navigate(`/games/${gameId}/${msg.payload}`);
+                    if (msg.type === 'SYNC_PLAYER_STATUS') {
+                        send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: msg.payload });
+                    }
+                    if (msg.type === 'SYNC_LEDGER') {
+                        const verifyLedger = async () => {
+                            const entries = msg.payload as any[];
+                            for (const entry of entries) {
+                                if (entry.signature && entry.signerPublicKey) {
+                                    const isValid = await SecureWallet.verify(entry.action, entry.signature, entry.signerPublicKey);
+                                    if (!isValid) {
+                                        console.error("Invalid signature in ledger entry", entry);
+                                        return;
+                                    }
                                 }
                             }
-                        }
-                        send({ type: 'SYNC_LEDGER', ledger: msg.payload });
-                    };
-                    verifyLedger();
-                }
-            } catch (e) { }
-        };
+                            send({ type: 'SYNC_LEDGER', ledger: msg.payload });
+                        };
+                        verifyLedger();
+                    }
+                } catch (e) { }
+            };
 
-        connection.addMessageListener(handleLobbyMessage);
-        if (connection.status === ConnectionStatus.connected) {
+            connection.addMessageListener(handleLobbyMessage);
+            (connection as any)._hasListener = true;
+        }
+
+        if (connection.status === ConnectionStatus.connected && !(connection as any)._hasInitialSync) {
+            console.log(`[LOBBY] Sending initial sync to ${connection.id}`);
             connection.send(JSON.stringify(createLobbyMessage('SYNC_PLAYER_STATUS', view)));
             // If we are host and already have a session, tell the newcomer which board they should be on
             // This is critical for manual joiners who start at /manual route
             if (isInitiator && boardId && boardId !== 'manual') {
                 connection.send(JSON.stringify(createLobbyMessage('NEW_BOARD', boardId)));
             }
+            (connection as any)._hasInitialSync = true;
         }
         send({ type: 'UPDATE_CONNECTION', connection });
     };
@@ -190,20 +207,30 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
     }, [state.value]);
 
     useEffect(() => {
+        if (isLeavingRef.current) {
+            // Once we are safely in the lobby (no boardId), reset the leaving flag
+            if (!boardId) {
+                isLeavingRef.current = false;
+            }
+            return;
+        }
+
         if (boardId && boardId !== 'manual' && (state.matches('selection') || state.matches('discovery'))) {
             const restoreSession = async () => {
                 const session = await SessionManager.getSession(boardId);
-                if (session && session.ledger.length > 0 && (state.context.ledger.length === 0 || state.context.isGameStarted === false)) {
+                if (session && session.ledger.length > 0 && state.context.ledger.length === 0) {
+                    console.log(`[LOBBY] Restoring session ${boardId}, status: ${session.status}`);
                     send({ type: 'LOAD_LEDGER', ledger: session.ledger });
                     send({ type: 'RESUME' });
                     if (session.status === 'finished') {
-                        setTimeout(() => send({ type: 'FINISH_GAME' }), 0);
+                        // Use a small delay to ensure the machine has transitioned to 'room' before finishing
+                        setTimeout(() => send({ type: 'FINISH_GAME' }), 10);
                     }
                 }
             };
             restoreSession();
         }
-    }, [boardId, state.value]);
+    }, [boardId]); // Only trigger when the board ID changes
 
     useEffect(() => {
         if (state.matches('room') && gameId && boardId && boardId !== 'manual') {
@@ -309,7 +336,6 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
     }, [state.value, signalingMode, signalingClient]);
 
     const onHostAGame = () => {
-
         const newBoardId = uuidv4();
         navigate(`/games/${gameId}/${newBoardId}`, { replace: true });
 
@@ -319,7 +345,6 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         connection.onClose = () => send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
         connection.openDataChannel();
         connection.prepareOfferSignal(state.context.playerName);
-        updateConnection(connection);
 
         if (signalingMode === 'server' && signalingClient) {
             const checkSignal = setInterval(() => {
@@ -366,9 +391,6 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         send({ type: 'START_GAME' });
     };
 
-    const backToLobby = () => {
-        onBackToDiscovery();
-    };
 
     const onFinishGame = () => {
         send({ type: 'FINISH_GAME' });
@@ -401,7 +423,6 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         const conn = new Connection(updateConnection);
         conn.setDataChannelCallback();
         await conn.acceptOffer(offer.offer, state.context.playerName);
-        updateConnection(conn);
 
         const checkSignal = setInterval(() => {
             if (conn.signal) {
@@ -456,6 +477,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
 
 
     const onBackToDiscovery = () => {
+        isLeavingRef.current = true;
         send({ type: 'BACK_TO_LOBBY' });
         if (signalingMode === 'server') {
             signalingClient?.requestOffers();
@@ -483,7 +505,6 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         updateOffer,
         updateAnswer,
         startGame,
-        backToLobby,
         onFinishGame,
         onAddLedger,
         onJoinFromList,

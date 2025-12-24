@@ -31,20 +31,26 @@ export class Connection {
     this.peerConnection = new RTCPeerConnection(configuration);
     this.iceCandidates = [];
 
+    let iceTimer: any = null;
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
         this.iceCandidates.push(event.candidate);
         // Update view when new ICE candidates are gathered if we are in started or answered status
         if (this.status === ConnectionStatus.started || this.status === ConnectionStatus.answered) {
           this.updateSignal();
-          this.updateView(this);
+
+          if (iceTimer) clearTimeout(iceTimer);
+          iceTimer = setTimeout(() => {
+            this.updateView(this);
+            iceTimer = null;
+          }, 200);
         }
       }
     };
 
     this.peerConnection.onconnectionstatechange = (event) => {
       const state = this.peerConnection.connectionState;
-      console.log(this.id + ': Connection state changed to ' + state);
+      logger.info(this.id + ': Connection state changed to ' + state);
 
       if (state === "connected") {
         this.status = ConnectionStatus.connected;
@@ -104,18 +110,20 @@ export class Connection {
     }
   }
 
-  prepareOfferSignal(playerName: string) {
+  async prepareOfferSignal(playerName: string) {
     this.localPlayerName = playerName;
     this.status = ConnectionStatus.new;
 
-    this.peerConnection.createOffer().then((offer) => {
-      this.peerConnection.setLocalDescription(offer);
+    try {
+      const offer = await this.peerConnection.createOffer();
+      await this.peerConnection.setLocalDescription(offer);
 
       this.status = ConnectionStatus.started;
       this.updateSignal();
       this.updateView(this);
-    }, this.onCreateSessionDescriptionError);
-
+    } catch (e) {
+      this.onCreateSessionDescriptionError(e);
+    }
   }
 
   async send(text: string) {
@@ -144,19 +152,21 @@ export class Connection {
     await this.peerConnection.setRemoteDescription(signal.session);
 
     signal.iceCandidates.forEach((candidate) => {
-      console.log(this.id + ': adding ice candidates');
       this.peerConnection.addIceCandidate(candidate)
     });
 
-    await this.peerConnection.createAnswer().then((answer) => {
-      this.peerConnection.setLocalDescription(answer);
+    try {
+      const answer = await this.peerConnection.createAnswer();
+      await this.peerConnection.setLocalDescription(answer);
       this.status = ConnectionStatus.answered;
       // When generating the answer, we include our own name (the guest) in the signal
       this.updateSignal();
       this.updateView(this);
 
-      console.log(this.id + ': Answer signal generated ', this.signal);
-    }, this.onCreateSessionDescriptionError);
+      this.updateView(this);
+    } catch (e) {
+      this.onCreateSessionDescriptionError(e);
+    }
   }
 
   onCreateSessionDescriptionError(error) {

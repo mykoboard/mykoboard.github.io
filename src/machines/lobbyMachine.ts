@@ -1,5 +1,6 @@
 import { createMachine, assign } from 'xstate';
 import { Connection, ConnectionStatus } from '../lib/webrtc';
+import { logger } from '../lib/logger';
 import { createLobbyMessage } from '../lib/network';
 import { LedgerEntry } from '../lib/ledger';
 
@@ -57,7 +58,7 @@ export const lobbyMachine = createMachine({
     }),
     on: {
         UPDATE_CONNECTION: {
-            actions: 'updateConnection'
+            actions: ['updateConnection', 'syncConnection']
         },
         PEER_DISCONNECTED: {
             actions: 'updateConnectionStatus'
@@ -90,7 +91,7 @@ export const lobbyMachine = createMachine({
             on: {
                 HOST: {
                     target: '#hosting',
-                    actions: ['resetContext', assign({ isInitiator: true })]
+                    actions: ['resetContext', assign({ isInitiator: true, isGameFinished: false })]
                 },
                 JOIN: {
                     target: '#joining',
@@ -109,7 +110,7 @@ export const lobbyMachine = createMachine({
             on: {
                 HOST: {
                     target: '#hosting',
-                    actions: ['resetContext', assign({ isInitiator: true })]
+                    actions: ['resetContext', assign({ isInitiator: true, isGameFinished: false })]
                 },
                 JOIN: {
                     target: '#joining',
@@ -255,14 +256,19 @@ export const lobbyMachine = createMachine({
                 return context;
             }
 
-            // If host and game started, notify new peer and sync ledger
-            if (context.isInitiator && connection.status === ConnectionStatus.connected) {
-                if (context.isGameStarted) {
-                    connection.send(JSON.stringify(createLobbyMessage('GAME_STARTED')));
+            const existing = context.connections.get(connection.id);
+            if (existing) {
+                const statusChanged = (existing as any)._lastKnownStatus !== connection.status;
+                const signalChanged = (existing as any)._lastKnownSignal !== (connection.signal?.toString() || "");
+
+                if (!statusChanged && !signalChanged) {
+                    return context;
                 }
-                // Always sync ledger when someone connects (it might be empty if game hasn't started)
-                connection.send(JSON.stringify(createLobbyMessage('SYNC_LEDGER', context.ledger)));
             }
+
+            // Update tracked values for next comparison
+            (connection as any)._lastKnownStatus = connection.status;
+            (connection as any)._lastKnownSignal = connection.signal?.toString() || "";
 
             const newConnections = new Map(context.connections);
             newConnections.set(connection.id, connection);
@@ -275,6 +281,26 @@ export const lobbyMachine = createMachine({
 
             return { connections: newConnections, playerStatuses: newStatuses };
         }),
+        syncConnection: ({ context, event }) => {
+            if (event.type !== 'UPDATE_CONNECTION') return;
+
+            const connection = event.connection;
+
+            // Only sync if we are host and connection just became connected
+            if (context.isInitiator && connection.status === ConnectionStatus.connected) {
+                // Check if we already synced this connection in this session
+                // We can use a simple check on the connection object itself since it's mutable
+                if ((connection as any)._synced) return;
+                (connection as any)._synced = true;
+
+                logger.info(`[LOBBY] Syncing new connection: ${connection.id}`);
+                if (context.isGameStarted) {
+                    connection.send(JSON.stringify(createLobbyMessage('GAME_STARTED')));
+                }
+                // Always sync ledger when someone connects (it might be empty if game hasn't started)
+                connection.send(JSON.stringify(createLobbyMessage('SYNC_LEDGER', context.ledger)));
+            }
+        },
         removeConnection: assign(({ context, event }) => {
             if (event.type !== 'PEER_DISCONNECTED') return context;
             const newConnections = new Map(context.connections);

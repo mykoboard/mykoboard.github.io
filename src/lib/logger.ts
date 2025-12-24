@@ -1,12 +1,36 @@
 const DEBUG_KEY = 'debug';
 
+const isDev = import.meta.env.DEV;
+
+export type LogCategory = 'net' | 'state' | 'info' | 'error';
+
+const getInitialSettings = (): Record<LogCategory, boolean> => {
+    const defaultSettings: Record<LogCategory, boolean> = {
+        net: isDev,
+        state: isDev,
+        info: isDev,
+        error: true,
+    };
+
+    try {
+        const stored = localStorage.getItem('debug_config');
+        if (stored) {
+            return { ...defaultSettings, ...JSON.parse(stored) };
+        }
+    } catch { }
+
+    return defaultSettings;
+};
+
+const settings = getInitialSettings();
+
 export const logger = {
-    shouldLog: () => {
-        return true
+    shouldLog: (category: LogCategory) => {
+        return settings[category];
     },
 
     netIn: (peerId: string, data: string) => {
-        if (!logger.shouldLog()) return;
+        if (!logger.shouldLog('net')) return;
 
         let parsed = data;
         try {
@@ -22,7 +46,7 @@ export const logger = {
     },
 
     netOut: (peerId: string, data: string) => {
-        if (!logger.shouldLog()) return;
+        if (!logger.shouldLog('net')) return;
 
         let parsed = data;
         try {
@@ -37,14 +61,24 @@ export const logger = {
         );
     },
 
+    state: (type: 'EVENT' | 'STATE', label: string, data?: any) => {
+        if (!logger.shouldLog('state')) return;
+        const color = type === 'EVENT' ? '#f59e0b' : '#10b981';
+        console.log(
+            `%c[LOBBY-${type}] %c${label}`,
+            `color: ${color}; font-weight: bold;`,
+            'color: inherit;',
+            data || ''
+        );
+    },
+
     info: (...args: any[]) => {
-        if (!logger.shouldLog()) return;
+        if (!logger.shouldLog('info')) return;
         console.log('%c[INFO]', 'color: #8b5cf6; font-weight: bold;', ...args);
     },
 
     error: (...args: any[]) => {
-        // Errors usually should log regardless of debug mode, 
-        // but we can make it more prominent if debug is on.
+        if (!logger.shouldLog('error')) return;
         console.error('%c[ERROR]', 'color: #ef4444; font-weight: bold;', ...args);
     }
 };
