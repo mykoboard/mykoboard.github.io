@@ -12,7 +12,7 @@ import { SecureWallet, PlayerIdentity } from "../lib/wallet";
 import { SignalingService } from "../lib/signaling";
 import { SessionManager } from "../lib/sessions";
 import { GameSession } from "../lib/db";
-import { PlayerInfo } from "../components/board/Players";
+import { PlayerInfo } from "../lib/types";
 
 interface GameSessionContextType {
     identity: PlayerIdentity | null;
@@ -117,24 +117,54 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
 
     const isLeavingRef = useRef(false);
 
-    const playerInfos = useMemo((): PlayerInfo[] => [
-        {
+    const playerInfos = useMemo((): PlayerInfo[] => {
+        const currentSession = activeSessions.find(s => s.boardId === boardId);
+        const storedParticipants = currentSession?.participants || [];
+
+        const localParticipant = storedParticipants.find(p => p.isYou);
+
+        const localPlayer: PlayerInfo = {
             id: 'local',
             name: state.context.playerName,
             status: isGameStarted ? 'game' : 'lobby',
             isConnected: true,
             isLocal: true,
-            isHost: isInitiator
-        },
-        ...connectionList.map(c => ({
-            id: c.id,
-            name: c.remotePlayerName || "Anonymous",
-            status: state.context.playerStatuses.get(c.id) || 'lobby',
-            isConnected: c.status === ConnectionStatus.connected,
-            isLocal: false,
-            isHost: false
-        }))
-    ], [state.context.playerName, isGameStarted, connectionList, state.context.playerStatuses, isInitiator]);
+            isHost: localParticipant ? localParticipant.isHost : isInitiator
+        };
+
+        const infos: PlayerInfo[] = [localPlayer];
+        const processedIds = new Set(['local']);
+
+        // Add live connections
+        connectionList.forEach(c => {
+            const storedPeer = storedParticipants.find(p => p.id === c.id);
+            infos.push({
+                id: c.id,
+                name: c.remotePlayerName || storedPeer?.name || "Anonymous",
+                status: state.context.playerStatuses.get(c.id) || 'lobby',
+                isConnected: c.status === ConnectionStatus.connected,
+                isLocal: false,
+                isHost: storedPeer ? storedPeer.isHost : false
+            });
+            processedIds.add(c.id);
+        });
+
+        // Add disconnected historical participants
+        storedParticipants.forEach(p => {
+            if (!p.isYou && !processedIds.has(p.id)) {
+                infos.push({
+                    id: p.id,
+                    name: p.name,
+                    status: (currentSession?.status === 'finished' || isGameStarted) ? 'game' : 'lobby',
+                    isConnected: false,
+                    isLocal: false,
+                    isHost: p.isHost
+                });
+            }
+        });
+
+        return infos;
+    }, [state.context.playerName, isGameStarted, connectionList, state.context.playerStatuses, isInitiator, activeSessions, boardId]);
 
     const updateConnection = (connection: Connection) => {
         if (!(connection as any)._hasListener) {
@@ -243,6 +273,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
                 status: state.matches('room.finished') ? 'finished' : 'active',
                 ledger: state.context.ledger,
                 participants: playerInfos.map(p => ({
+                    id: p.id,
                     name: p.name,
                     isYou: p.isLocal,
                     isHost: p.isHost

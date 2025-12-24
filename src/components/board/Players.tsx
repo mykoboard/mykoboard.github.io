@@ -1,15 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { UserPlus, UserMinus } from "lucide-react";
-
-export interface PlayerInfo {
-    id: string;
-    name: string;
-    status: 'lobby' | 'game';
-    isConnected: boolean;
-    isLocal: boolean;
-    isHost: boolean;
-}
+import { PlayerInfo } from "../../lib/types";
 
 export function PlayerList({ players, onRemove }: { players: PlayerInfo[], onRemove?: (id: string) => void }) {
     return (

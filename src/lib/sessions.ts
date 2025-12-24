@@ -24,7 +24,18 @@ export const SessionManager = {
             const existing = await db.getGame(session.boardId);
             const status = session.status || existing?.status || 'active';
             const ledger = session.ledger || existing?.ledger || [];
-            const participants = session.participants || existing?.participants || [];
+
+            // Merge participants based on ID
+            const incomingParticipants = session.participants || [];
+            const existingParticipants = existing?.participants || [];
+
+            const participantMap = new Map();
+            // Fill with existing
+            existingParticipants.forEach(p => participantMap.set(p.id, p));
+            // Overwrite/Add with incoming
+            incomingParticipants.forEach(p => participantMap.set(p.id, p));
+
+            const participants = Array.from(participantMap.values());
 
             const fullSession: GameSession = {
                 ...session,

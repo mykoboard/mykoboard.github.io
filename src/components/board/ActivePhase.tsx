@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { Connection } from "../../lib/webrtc";
-import { PlayerInfo } from "./Players";
+import { PlayerInfo } from "../../lib/types";
 
 interface ActivePhaseProps {
     GameComponent: any;

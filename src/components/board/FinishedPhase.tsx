@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2 } from "lucide-react";
 import { Connection } from "../../lib/webrtc";
-import { PlayerInfo } from "./Players";
+import { PlayerInfo } from "../../lib/types";
 
 interface FinishedPhaseProps {
     GameComponent: any;

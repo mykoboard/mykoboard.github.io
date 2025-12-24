@@ -1,6 +1,7 @@
 import { LedgerEntry } from './ledger';
 
 export interface GameParticipant {
+    id: string;
     name: string;
     isYou: boolean;
     isHost: boolean;
