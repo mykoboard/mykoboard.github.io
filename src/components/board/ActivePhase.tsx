@@ -1,8 +1,8 @@
 import { Suspense } from "react";
-import { Connection } from "../lib/webrtc";
+import { Connection } from "../../lib/webrtc";
 import { PlayerInfo } from "./Players";
 
-interface GameActivePhaseProps {
+interface ActivePhaseProps {
     GameComponent: any;
     connectedPeers: Connection[];
     playerInfos: PlayerInfo[];
@@ -12,7 +12,7 @@ interface GameActivePhaseProps {
     onFinishGame: () => void;
 }
 
-export function GameActivePhase({
+export function ActivePhase({
     GameComponent,
     connectedPeers,
     playerInfos,
@@ -20,7 +20,7 @@ export function GameActivePhase({
     ledger,
     onAddLedger,
     onFinishGame
-}: GameActivePhaseProps) {
+}: ActivePhaseProps) {
     return (
         <Suspense fallback={<div className="text-center p-20 animate-pulse">Loading Game...</div>}>
             <div className="animate-in fade-in zoom-in-95 duration-500">

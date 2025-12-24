@@ -12,7 +12,7 @@ import { SecureWallet, PlayerIdentity } from "../lib/wallet";
 import { SignalingService } from "../lib/signaling";
 import { SessionManager } from "../lib/sessions";
 import { GameSession } from "../lib/db";
-import { PlayerInfo } from "@/components/Players";
+import { PlayerInfo } from "../components/board/Players";
 
 interface GameSessionContextType {
     identity: PlayerIdentity | null;

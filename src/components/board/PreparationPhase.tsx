@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { PlayerInfo } from "./Players";
-import { Connection, ConnectionStatus } from "../lib/webrtc";
+import { Connection, ConnectionStatus } from "../../lib/webrtc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -123,7 +123,7 @@ export function SignalingStep({ connection, onOfferChange, onAnswerChange, onCan
     );
 }
 
-interface GamePreparationPhaseProps {
+interface PreparationPhaseProps {
     state: any;
     isInitiator: boolean;
     signalingMode: 'manual' | 'server' | null;
@@ -142,7 +142,7 @@ interface GamePreparationPhaseProps {
     boardId?: string;
 }
 
-export function GamePreparationPhase({
+export function PreparationPhase({
     state,
     isInitiator,
     signalingMode,
@@ -158,7 +158,7 @@ export function GamePreparationPhase({
     onAcceptGuest,
     onRejectGuest,
     onRemovePlayer
-}: GamePreparationPhaseProps) {
+}: PreparationPhaseProps) {
     const isRoom = state.matches('room');
     const isHosting = state.matches('hosting');
     const isJoining = state.matches('joining');

@@ -2,10 +2,10 @@ import { Suspense } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2 } from "lucide-react";
-import { Connection } from "../lib/webrtc";
+import { Connection } from "../../lib/webrtc";
 import { PlayerInfo } from "./Players";
 
-interface GameFinishedPhaseProps {
+interface FinishedPhaseProps {
     GameComponent: any;
     connectedPeers: Connection[];
     playerInfos: PlayerInfo[];
@@ -14,14 +14,14 @@ interface GameFinishedPhaseProps {
     onBackToLobby: () => void;
 }
 
-export function GameFinishedPhase({
+export function FinishedPhase({
     GameComponent,
     connectedPeers,
     playerInfos,
     isInitiator,
     ledger,
     onBackToLobby
-}: GameFinishedPhaseProps) {
+}: FinishedPhaseProps) {
     return (
         <div className="space-y-6">
             <Suspense fallback={<div className="text-center p-20 animate-pulse">Finalizing Results...</div>}>
@@ -36,7 +36,6 @@ export function GameFinishedPhase({
                     />
                 </div>
             </Suspense>
-
             <Card className="p-6 border-2 border-primary/20 bg-primary/5 shadow-xl animate-in slide-in-from-bottom-4 duration-500">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
@@ -55,7 +54,6 @@ export function GameFinishedPhase({
                     </div>
                 </div>
             </Card>
-
             <div className="text-center text-slate-400 text-xs italic">
                 You can review the game board above. Click "Leave Room" to start a new match.
             </div>
