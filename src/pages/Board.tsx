@@ -9,7 +9,7 @@ import { Ledger } from "../lib/ledger";
 import { useMachine } from "@xstate/react";
 import { lobbyMachine } from "../machines/lobbyMachine";
 import { createLobbyMessage, isLobbyMessage } from "../lib/network";
-import { SecureWallet } from "../lib/wallet";
+import { SecureWallet, PlayerIdentity } from "../lib/wallet";
 import { SignalingService } from "../lib/signaling";
 import { SessionManager } from "../lib/sessions";
 import { GameSession } from "../lib/db";
@@ -21,9 +21,20 @@ export default function Board() {
   const navigate = useNavigate();
   const game = useMemo(() => getGameById(gameId || ""), [gameId]);
 
+  const [identity, setIdentity] = useState<PlayerIdentity | null>(null);
+
+  useEffect(() => {
+    const loadIdentity = async () => {
+      const wallet = SecureWallet.getInstance();
+      const id = await wallet.getIdentity();
+      setIdentity(id);
+    };
+    loadIdentity();
+  }, []);
+
   const [state, send] = useMachine(lobbyMachine, {
     input: {
-      playerName: localStorage.getItem("playerName") || "Anonymous"
+      playerName: identity?.name || "Anonymous"
     }
   });
 
@@ -399,20 +410,11 @@ export default function Board() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <div className="max-w-4xl mx-auto p-6 space-y-8">
-        <div className="flex items-center justify-between">
-          <Header pageTitle={view === 'game' ? `Game Room: ${game.name}` : "Discovery"} />
-          <div className="flex gap-2">
-            {view === 'lobby' && (
-              <Button variant="ghost" size="sm" onClick={onExitToMarket} className="text-slate-500 hover:text-slate-700">
-                Back to Games
-              </Button>
-            )}
-          </div>
-        </div>
+    <div className="min-h-screen bg-slate-50/50">
 
-        {view === 'game' ? (
+      {view === 'game' ? (
+        <div className="max-w-7xl mx-auto p-6 space-y-8">
+          <h1 className="text-2xl font-bold">{game.name}</h1>
           <GameView
             GameComponent={game.component}
             connectedPeers={connectedPeers}
@@ -436,9 +438,12 @@ export default function Board() {
             onResetGame={handlePlayAgain}
             onAcceptGuest={onAcceptGuest}
             onRejectGuest={onRejectGuest}
-            state={state}
-          />
-        ) : (
+            state={state} />
+        </div>
+      ) : (
+        <div className="max-w-7xl mx-auto p-6 space-y-8">
+          <Header />
+          <h1 className="text-2xl font-bold">{game.name}</h1>
           <GameLobby
             signalingMode={signalingMode}
             setSignalingMode={setSignalingMode}
@@ -455,8 +460,8 @@ export default function Board() {
             onDeleteSession={onDeleteSession}
             boardId={boardId}
           />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

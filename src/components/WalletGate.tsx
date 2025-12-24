@@ -20,8 +20,6 @@ export function WalletGate({ children }: { children: React.ReactNode }) {
             const id = await wallet.getIdentity();
             if (id) {
                 setIdentity(id);
-                // Sync with legacy localStorage for compatibility with existing components
-                localStorage.setItem("playerName", id.name);
             } else {
                 setIsOpen(true);
             }
@@ -42,7 +40,6 @@ export function WalletGate({ children }: { children: React.ReactNode }) {
             const newIdentity = await wallet.createIdentity(name, subscriptionToken);
 
             setIdentity(newIdentity);
-            localStorage.setItem("playerName", newIdentity.name);
 
             toast.success("Identity Secured!", {
                 description: "Your hardware-backed wallet is ready.",

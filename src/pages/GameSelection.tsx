@@ -36,8 +36,7 @@ export default function GameSelection() {
     return (
         <div className="min-h-screen bg-slate-50/50">
             <div className="max-w-7xl mx-auto p-6 space-y-8">
-                <Header pageTitle="Game Market" />
-
+                <Header />
                 <div className="relative max-w-2xl mx-auto group">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary transition-colors" />
                     <Input
