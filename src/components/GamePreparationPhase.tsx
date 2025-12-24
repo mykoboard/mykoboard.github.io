@@ -1,9 +1,127 @@
+import { useState } from "react";
 import { PlayerInfo } from "./Players";
-import { SignalingStep } from "./GameLobbyView";
-import { Connection } from "../lib/webrtc";
+import { Connection, ConnectionStatus } from "../lib/webrtc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { UserPlus, Globe, LogIn } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { UserPlus, Globe, LogIn, CheckCircle2, Clipboard } from "lucide-react";
+
+export function SignalingStep({ connection, onOfferChange, onAnswerChange, onCancel }: any) {
+    const [copied, setCopied] = useState(false);
+
+    const copyToClipboard = (text: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {connection.status === ConnectionStatus.new && (
+                <Card className="p-4 border-2 border-dashed border-primary/20 bg-primary/5 flex items-center justify-center space-x-4">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                    <p className="text-sm text-gray-500">Generating invite signal...</p>
+                </Card>
+            )}
+
+            {connection.status === ConnectionStatus.readyToAccept && (
+                <Card className="p-6 border-2 border-dashed border-primary/20 bg-primary/5">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <LogIn className="w-5 h-5 text-primary" />
+                        Paste Join Offer
+                    </h3>
+                    <p className="text-sm text-gray-500 mb-4">Paste the offer string shared by your friend below.</p>
+                    <Input
+                        placeholder="Paste offer string here..."
+                        className="font-mono text-xs"
+                        onChange={(e) => onOfferChange(connection, e.target.value)}
+                    />
+                </Card>
+            )}
+
+            {connection.status === ConnectionStatus.started && (
+                <Card className="p-6 border-2 border-primary/20 bg-white shadow-sm hover:shadow-md transition-shadow">
+                    <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-gray-700">
+                        <UserPlus className="w-4 h-4 text-primary" />
+                        Active Invite
+                    </h3>
+                    <div className="space-y-4">
+                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 relative group min-h-[60px] flex items-center">
+                            {connection.signal ? (
+                                <>
+                                    <div className="text-[10px] font-mono break-all line-clamp-2 text-gray-500 pr-8">
+                                        {connection.signal.toString()}
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute top-1 right-1 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={() => copyToClipboard(connection.signal.toString())}
+                                    >
+                                        {copied ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Clipboard className="w-3 h-3 text-gray-400" />}
+                                    </Button>
+                                </>
+                            ) : (
+                                <div className="text-xs text-gray-400 italic">Gathering connection details...</div>
+                            )}
+                        </div>
+                        <p className="text-xs text-gray-500">Share this invite with a friend. Once they join, their answer will appear here automatically.</p>
+                        <Input
+                            placeholder="Friend's answer will appear here..."
+                            className="font-mono text-[10px] h-8"
+                            onChange={(e) => onAnswerChange(connection, e.target.value)}
+                        />
+                    </div>
+                </Card>
+            )}
+
+            {connection.status === ConnectionStatus.answered && (
+                <Card className="p-6 border-2 border-primary/20 bg-white shadow-sm">
+                    <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-green-600">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Answer Generated
+                    </h3>
+                    <div className="space-y-3">
+                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 relative group min-h-[60px] flex items-center">
+                            {connection.signal ? (
+                                <>
+                                    <div className="text-[10px] font-mono break-all line-clamp-2 text-gray-500 pr-8">
+                                        {connection.signal.toString()}
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute top-1 right-1 h-7 w-7"
+                                        onClick={() => copyToClipboard(connection.signal.toString())}
+                                    >
+                                        {copied ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Clipboard className="w-3 h-3 text-gray-400" />}
+                                    </Button>
+                                </>
+                            ) : (
+                                <div className="text-xs text-gray-400 italic">Finalizing answer...</div>
+                            )}
+                        </div>
+                        <p className="text-xs text-green-600 font-medium">Send this answer back to your friend to complete the connection.</p>
+                    </div>
+                </Card>
+            )}
+
+            {onCancel && (
+                <div className="flex justify-end">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onCancel(connection)}
+                        className="text-xs text-gray-400 hover:text-red-500"
+                    >
+                        Cancel Invite
+                    </Button>
+                </div>
+            )}
+        </div>
+    );
+}
 
 interface GamePreparationPhaseProps {
     state: any;

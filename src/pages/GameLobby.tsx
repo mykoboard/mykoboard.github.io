@@ -1,9 +1,14 @@
 import { useParams } from "react-router-dom";
 import { Header } from "@/components/Header";
-import { GameLobbyView } from "@/components/GameLobbyView";
 import { useGameSession } from "../contexts/GameSessionContext";
 import { getGameById } from "../lib/GameRegistry";
 import { useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
+import { LobbyPastMatches } from "@/components/lobby/LobbyPastMatches";
+import { LobbyModeSelection } from "@/components/lobby/LobbyModeSelection";
+import { LobbyManualMode } from "@/components/lobby/LobbyManualMode";
+import { LobbyServerMode } from "@/components/lobby/LobbyServerMode";
 
 export default function GameLobby() {
     const { gameId, boardId } = useParams();
@@ -27,26 +32,66 @@ export default function GameLobby() {
     if (!game) {
         return <div className="p-10 text-center">Game not found</div>;
     }
+
     return (
         <div className="min-h-screen bg-slate-50/50">
             <div className="max-w-7xl mx-auto p-6 space-y-8">
                 <Header />
                 <h1 className="text-2xl font-bold">{game.name}</h1>
-                <GameLobbyView
-                    signalingMode={signalingMode}
-                    setSignalingMode={setSignalingMode}
-                    state={state}
-                    send={send}
-                    signalingClient={signalingClient}
-                    availableOffers={availableOffers}
-                    activeSessions={activeSessions}
-                    isServerConnecting={isServerConnecting}
-                    onHostAGame={onHostAGame}
-                    connectWithOffer={connectWithOffer}
-                    onJoinFromList={onJoinFromList}
-                    onDeleteSession={onDeleteSession}
-                    boardId={boardId}
-                />
+
+                <div className="space-y-8">
+                    <LobbyPastMatches
+                        activeSessions={activeSessions}
+                        boardId={boardId}
+                        onDeleteSession={onDeleteSession}
+                        onResume={() => send({ type: 'RESUME' })}
+                    />
+
+                    {!signalingMode && (
+                        <LobbyModeSelection
+                            onSelectManual={() => {
+                                send({ type: 'CLOSE_SESSION' });
+                                setSignalingMode('manual');
+                            }}
+                            onSelectServer={() => {
+                                send({ type: 'CLOSE_SESSION' });
+                                setSignalingMode('server');
+                                send({ type: 'GOTO_LOBBY' });
+                            }}
+                        />
+                    )}
+
+                    {signalingMode && (
+                        <div className="space-y-6">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="mb-4 text-slate-400 hover:text-primary hover:bg-primary/5 transition-all group"
+                                onClick={() => setSignalingMode(null)}
+                            >
+                                <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+                                Back to Mode Selection
+                            </Button>
+
+                            {signalingMode === 'manual' && (
+                                <LobbyManualMode
+                                    onHostAGame={onHostAGame}
+                                    connectWithOffer={connectWithOffer}
+                                />
+                            )}
+
+                            {signalingMode === 'server' && (
+                                <LobbyServerMode
+                                    isServerConnecting={isServerConnecting}
+                                    availableOffers={availableOffers}
+                                    signalingClient={signalingClient}
+                                    onHostAGame={onHostAGame}
+                                    onJoinFromList={onJoinFromList}
+                                />
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
