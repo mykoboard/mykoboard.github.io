@@ -139,6 +139,8 @@ interface PreparationPhaseProps {
     onAcceptGuest: () => void;
     onRejectGuest: () => void;
     onRemovePlayer: (id: string) => void;
+    playerCount: number;
+    maxPlayers: number;
     boardId?: string;
 }
 
@@ -157,7 +159,9 @@ export function PreparationPhase({
     onBackToLobby,
     onAcceptGuest,
     onRejectGuest,
-    onRemovePlayer
+    onRemovePlayer,
+    playerCount,
+    maxPlayers
 }: PreparationPhaseProps) {
     const isRoom = state.matches('room');
     const isHosting = state.matches('hosting');
@@ -213,7 +217,7 @@ export function PreparationPhase({
                         </h2>
                         <p className="text-sm text-slate-500">
                             {isRoom
-                                ? (isInitiator ? "Invite more players or start the game when everyone is ready." : "Waiting for the host to launch the game.")
+                                ? (isInitiator ? `Invite more players or start the game when everyone is ready. (${playerCount}/${maxPlayers})` : "Waiting for the host to launch the game.")
                                 : "Establishing secure P2P connection with peers."}
                         </p>
                     </div>

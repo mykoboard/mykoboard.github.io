@@ -77,6 +77,8 @@ export default function GameLobby() {
                                 <LobbyManualMode
                                     onHostAGame={onHostAGame}
                                     connectWithOffer={connectWithOffer}
+                                    minPlayers={game.minPlayers}
+                                    maxPlayers={game.maxPlayers}
                                 />
                             )}
 
@@ -87,6 +89,8 @@ export default function GameLobby() {
                                     signalingClient={signalingClient}
                                     onHostAGame={onHostAGame}
                                     onJoinFromList={onJoinFromList}
+                                    minPlayers={game.minPlayers}
+                                    maxPlayers={game.maxPlayers}
                                 />
                             )}
                         </div>

@@ -27,6 +27,7 @@ export function ActivePhase({
                 <GameComponent
                     connections={connectedPeers}
                     playerNames={playerInfos.map(p => p.name)}
+                    playerInfos={playerInfos}
                     isInitiator={isInitiator}
                     ledger={ledger}
                     onAddLedger={onAddLedger}

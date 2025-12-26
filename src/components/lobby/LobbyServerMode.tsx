@@ -1,14 +1,18 @@
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Globe, Search } from "lucide-react";
-import { SignalingService } from "../../lib/signaling";
+import { SignalingService, SignalingSlot } from "../../lib/signaling";
+import { PlayerCountSelector } from "./PlayerCountSelector";
 
 interface LobbyServerModeProps {
     isServerConnecting: boolean;
     availableOffers: any[];
     signalingClient: SignalingService | null;
-    onHostAGame: () => void;
-    onJoinFromList: (offer: any) => void;
+    onHostAGame: (playerCount?: number) => void;
+    onJoinFromList: (session: any, slot: any) => void;
+    minPlayers?: number;
+    maxPlayers?: number;
 }
 
 export function LobbyServerMode({
@@ -16,8 +20,12 @@ export function LobbyServerMode({
     availableOffers,
     signalingClient,
     onHostAGame,
-    onJoinFromList
+    onJoinFromList,
+    minPlayers = 2,
+    maxPlayers = 4
 }: LobbyServerModeProps) {
+    const [playerCount, setPlayerCount] = useState(maxPlayers);
+
     return (
         <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center justify-between mb-2">
@@ -25,13 +33,26 @@ export function LobbyServerMode({
                     <Globe className="w-4 h-4" />
                     Active Game Rooms
                 </h3>
-                <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => signalingClient?.requestOffers()} className="h-7 text-[10px]">
-                        Refresh List
-                    </Button>
-                    <Button variant="secondary" size="sm" onClick={onHostAGame} className="h-7 text-[10px]">
-                        Host My Own
-                    </Button>
+                <div className="flex items-center gap-4">
+                    <PlayerCountSelector
+                        value={playerCount}
+                        onChange={setPlayerCount}
+                        min={minPlayers}
+                        max={maxPlayers}
+                    />
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => signalingClient?.requestOffers()} className="h-7 text-[10px]">
+                            Refresh List
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => onHostAGame(playerCount)}
+                            className="h-7 text-[10px]"
+                        >
+                            Host My Own
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -48,34 +69,53 @@ export function LobbyServerMode({
                         <Search className="w-6 h-6 text-slate-300" />
                     </div>
                     <p className="text-sm text-slate-400">No active lobbies found for this game.</p>
-                    <Button variant="link" size="sm" onClick={onHostAGame} className="mt-2 text-primary font-bold">Be the first to host!</Button>
+                    <Button variant="link" size="sm" onClick={() => onHostAGame(playerCount)} className="mt-2 text-primary font-bold">Be the first to host!</Button>
                 </Card>
             ) : (
-                <div className="grid gap-3">
-                    {availableOffers.map((offer) => (
+                <div className="grid gap-4">
+                    {availableOffers.map((session) => (
                         <Card
-                            key={offer.connectionId}
-                            className="p-4 flex items-center justify-between hover:border-primary/40 hover:shadow-md transition-all bg-white border-2 border-slate-100 rounded-xl group cursor-pointer"
-                            onClick={() => onJoinFromList(offer)}
+                            key={session.boardId}
+                            className="p-5 flex items-center justify-between bg-white border-2 border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all"
                         >
-                            <div className="flex items-center gap-4">
-                                <div className="h-12 w-12 bg-primary/10 rounded-xl flex items-center justify-center font-bold text-primary group-hover:scale-105 transition-transform">
-                                    {offer.peerName?.[0] || "?"}
+                            <div className="flex items-center gap-5">
+                                <div className="h-14 w-14 bg-primary/10 rounded-2xl flex items-center justify-center font-bold text-primary text-xl">
+                                    {session.peerName?.[0] || "?"}
                                 </div>
-                                <div>
-                                    <p className="font-bold text-slate-800">{offer.peerName}</p>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="flex h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                                        <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Accepting Players</p>
+                                <div className="space-y-1">
+                                    <p className="font-bold text-slate-800 text-lg leading-none">{session.peerName}'s Lobby</p>
+                                    <div className="flex items-center gap-2">
+                                        <span className="flex h-2 w-2 rounded-full bg-green-500"></span>
+                                        <p className="text-xs text-slate-400 font-medium tracking-tight">
+                                            {session.slots?.filter(s => s.status === 'open').length} slots available
+                                        </p>
                                     </div>
                                 </div>
                             </div>
-                            <Button
-                                size="sm"
-                                className="rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white border-none shadow-none font-bold px-4"
-                            >
-                                Join
-                            </Button>
+
+                            <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-100">
+                                {session.slots?.map((slot, idx) => (
+                                    <div
+                                        key={slot.connectionId}
+                                        onClick={() => slot.status === 'open' && onJoinFromList(session, slot)}
+                                        className={`
+                                            h-10 w-10 rounded-full flex items-center justify-center border-2 transition-all duration-300
+                                            ${slot.status === 'open'
+                                                ? 'border-primary/40 border-dashed cursor-pointer hover:border-primary hover:bg-primary/5 hover:scale-105 shadow-sm bg-white'
+                                                : 'border-slate-200 bg-slate-200/50 cursor-not-allowed opacity-60'}
+                                        `}
+                                        title={slot.status === 'open' ? 'Join Game' : `Taken by ${slot.peerName || 'Player'}`}
+                                    >
+                                        {slot.status === 'open' ? (
+                                            <span className="text-[10px] font-bold text-primary/40">JOIN</span>
+                                        ) : (
+                                            <div className="h-5 w-5 bg-slate-300 rounded-full flex items-center justify-center text-[8px] font-bold text-white uppercase overflow-hidden">
+                                                {slot.peerName?.[0] || 'P'}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
                         </Card>
                     ))}
                 </div>

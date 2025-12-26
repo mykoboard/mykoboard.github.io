@@ -1,12 +1,21 @@
 import { Signal } from './webrtc';
 
+export type SignalingSlot = {
+    connectionId: string;
+    offer: any;
+    status: 'open' | 'taken';
+    peerName?: string;
+};
+
 export type SignalingMessage = {
     action: 'sendMessage'; // Required for AWS API Gateway routing
     type: 'register' | 'offer' | 'listOffers' | 'offerList' | 'answer' | 'deleteOffer';
     from?: string;
+    to?: string;
     target?: string;
     peerName?: string;
     offer?: any;
+    slots?: SignalingSlot[];
     offers?: any[];
     answer?: any;
     boardId?: string;
@@ -68,11 +77,11 @@ export class SignalingService {
         });
     }
 
-    sendOffer(signal: Signal, gameId: string, boardId: string, peerName: string) {
-        console.log("Broadcasting offer for game:", this.gameId, "board:", this.boardId, "peer:", peerName);
+    sendOffer(slots: SignalingSlot[], gameId: string, boardId: string, peerName: string) {
+        console.log("Broadcasting combined offer for game:", this.gameId, "board:", boardId, "slots:", slots.length);
         this.send({
             type: 'offer',
-            offer: signal,
+            slots: slots,
             gameId: this.gameId,
             boardId: boardId,
             peerName: peerName
@@ -87,11 +96,12 @@ export class SignalingService {
         });
     }
 
-    sendAnswer(targetConnectionId: string, signal: Signal) {
-        console.log("Sending answer to:", targetConnectionId);
+    sendAnswer(targetWebSocketId: string, targetP2PId: string, signal: Signal) {
+        console.log("Sending answer to host:", targetWebSocketId, "for P2P slot:", targetP2PId);
         this.send({
             type: 'answer',
-            target: targetConnectionId,
+            target: targetWebSocketId,
+            to: targetP2PId,
             answer: signal,
             peerName: this.peerName // Include name so host can approve
         });

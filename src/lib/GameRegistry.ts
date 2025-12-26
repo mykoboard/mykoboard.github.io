@@ -5,6 +5,8 @@ export interface GameMetadata {
     name: string;
     image: string;
     description: string;
+    minPlayers: number;
+    maxPlayers: number;
     component: React.LazyExoticComponent<React.ComponentType<any>>;
 }
 
@@ -14,7 +16,18 @@ export const games: GameMetadata[] = [
         name: "Tic-Tac-Toe",
         image: "/img/games/tic-tac-to/card.webp",
         description: "Classic strategy game for two players. Get three in a row to win!",
+        minPlayers: 2,
+        maxPlayers: 2,
         component: React.lazy(() => import('../components/games/tictactoe/TicTacToe')),
+    },
+    {
+        id: 'ludo',
+        name: "Ludo",
+        image: "/img/games/ludo/card.webp",
+        description: "Standard Ludo game for 2-4 players. Race your pieces to the finish!",
+        minPlayers: 2,
+        maxPlayers: 4,
+        component: React.lazy(() => import('../components/games/ludo/Ludo')),
     },
 ];
 

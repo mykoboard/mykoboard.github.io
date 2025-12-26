@@ -29,6 +29,7 @@ export function FinishedPhase({
                     <GameComponent
                         connections={connectedPeers}
                         playerNames={playerInfos.map(p => p.name)}
+                        playerInfos={playerInfos}
                         isInitiator={isInitiator}
                         ledger={ledger}
                         onAddLedger={() => { }} // Disabled in finished phase

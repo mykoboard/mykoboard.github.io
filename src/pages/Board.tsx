@@ -84,6 +84,8 @@ export default function Board() {
               onAcceptGuest={onAcceptGuest}
               onRejectGuest={onRejectGuest}
               onRemovePlayer={(id) => send({ type: 'REMOVE_PLAYER', playerId: id })}
+              playerCount={playerInfos.length}
+              maxPlayers={state.context.maxPlayers}
             />
           )}
 

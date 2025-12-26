@@ -8,7 +8,7 @@ export interface BaseMessage {
 
 export interface LobbyMessage extends BaseMessage {
     namespace: 'lobby';
-    type: 'START_GAME' | 'GAME_STARTED' | 'SYNC_PLAYER_STATUS' | 'SYNC_LEDGER' | 'GAME_RESET' | 'NEW_BOARD';
+    type: 'START_GAME' | 'GAME_STARTED' | 'SYNC_PLAYER_STATUS' | 'SYNC_LEDGER' | 'GAME_RESET' | 'NEW_BOARD' | 'SYNC_PARTICIPANTS';
 }
 
 export interface GameMessage extends BaseMessage {

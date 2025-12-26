@@ -29,14 +29,14 @@ interface GameSessionContextType {
     pendingSignaling: Connection[];
     isInitiator: boolean;
     isGameStarted: boolean;
-    onHostAGame: () => void;
+    onHostAGame: (playerCount?: number) => void;
     connectWithOffer: () => void;
     updateOffer: (connection: Connection, offer: string) => void;
     updateAnswer: (connection: Connection, answer: string) => void;
     startGame: () => void;
     onFinishGame: () => void;
     onAddLedger: (action: { type: string, payload: any }) => Promise<void>;
-    onJoinFromList: (offer: any) => Promise<void>;
+    onJoinFromList: (session: any, slot: any) => Promise<void>;
     handlePlayAgain: () => void;
     onDeleteSession: (id: string) => Promise<void>;
     onAcceptGuest: () => void;
@@ -120,6 +120,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
     const playerInfos = useMemo((): PlayerInfo[] => {
         const currentSession = activeSessions.find(s => s.boardId === boardId);
         const storedParticipants = currentSession?.participants || [];
+        const externalParticipants = state.context.externalParticipants as { id: string, name: string, isHost: boolean }[];
 
         const localParticipant = storedParticipants.find(p => p.isYou);
 
@@ -132,22 +133,72 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
             isHost: localParticipant ? localParticipant.isHost : isInitiator
         };
 
-        const infos: PlayerInfo[] = [localPlayer];
-        const processedIds = new Set(['local']);
+        const infos: PlayerInfo[] = [];
+        const processedIds = new Set<string>();
 
-        // Add live connections
-        connectionList.forEach(c => {
-            const storedPeer = storedParticipants.find(p => p.id === c.id);
-            infos.push({
-                id: c.id,
-                name: c.remotePlayerName || storedPeer?.name || "Anonymous",
-                status: state.context.playerStatuses.get(c.id) || 'lobby',
-                isConnected: c.status === ConnectionStatus.connected,
-                isLocal: false,
-                isHost: storedPeer ? storedPeer.isHost : false
+        // 1. DETERMINE THE HOST (Always index 0)
+        if (isInitiator) {
+            infos.push(localPlayer);
+            processedIds.add('local');
+        } else if (externalParticipants.length > 0) {
+            const hostData = externalParticipants.find(p => p.isHost || p.id === 'local');
+            if (hostData) {
+                const hostConnection = connectionList.find(c => c.status === ConnectionStatus.connected);
+                infos.push({
+                    id: hostConnection?.id || 'host',
+                    name: hostData.name,
+                    status: (hostConnection ? state.context.playerStatuses.get(hostConnection.id) : null) || (isGameStarted ? 'game' : 'lobby'),
+                    isConnected: !!hostConnection,
+                    isLocal: false,
+                    isHost: true
+                });
+                if (hostConnection) processedIds.add(hostConnection.id);
+            }
+        }
+
+        // 2. ADD OTHER PARTICIPANTS
+        if (isInitiator) {
+            // Host adds connections in order
+            connectionList.forEach(c => {
+                if (!processedIds.has(c.id)) {
+                    const storedPeer = storedParticipants.find(p => p.id === c.id);
+                    infos.push({
+                        id: c.id,
+                        name: c.remotePlayerName || storedPeer?.name || "Anonymous",
+                        status: state.context.playerStatuses.get(c.id) || 'lobby',
+                        isConnected: c.status === ConnectionStatus.connected,
+                        isLocal: false,
+                        isHost: false
+                    });
+                    processedIds.add(c.id);
+                }
             });
-            processedIds.add(c.id);
-        });
+        } else if (externalParticipants.length > 0) {
+            // Guest uses Host's broadcasted list for order
+            externalParticipants.forEach(p => {
+                const isHostData = p.isHost || p.id === 'local';
+                if (isHostData) return; // Already handled host
+
+                if (p.name === localPlayer.name) {
+                    // This is ME (the guest)
+                    if (!processedIds.has('local')) {
+                        infos.push(localPlayer);
+                        processedIds.add('local');
+                    }
+                } else {
+                    // This is another GUEST
+                    infos.push({
+                        id: p.id,
+                        name: p.name,
+                        status: isGameStarted ? 'game' : 'lobby',
+                        isConnected: true, // Synced guests are effectively connected via the host
+                        isLocal: false,
+                        isHost: false
+                    });
+                    processedIds.add(p.id);
+                }
+            });
+        }
 
         // Add disconnected historical participants
         storedParticipants.forEach(p => {
@@ -164,7 +215,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         });
 
         return infos;
-    }, [state.context.playerName, isGameStarted, connectionList, state.context.playerStatuses, isInitiator, activeSessions, boardId]);
+    }, [state.context.playerName, isGameStarted, connectionList, state.context.playerStatuses, isInitiator, activeSessions, boardId, state.context.externalParticipants]);
 
     const updateConnection = (connection: Connection) => {
         if (!(connection as any)._hasListener) {
@@ -179,6 +230,9 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
                     if (msg.type === 'NEW_BOARD') navigate(`/games/${gameId}/${msg.payload}`);
                     if (msg.type === 'SYNC_PLAYER_STATUS') {
                         send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: msg.payload });
+                    }
+                    if (msg.type === 'SYNC_PARTICIPANTS') {
+                        send({ type: 'SYNC_PARTICIPANTS', participants: msg.payload });
                     }
                     if (msg.type === 'SYNC_LEDGER') {
                         const verifyLedger = async () => {
@@ -216,7 +270,76 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         send({ type: 'UPDATE_CONNECTION', connection });
     };
 
-    // Broadcast player status changes
+    // Broadcast participants (Host Only)
+    useEffect(() => {
+        if (isInitiator && connectedPeers.length > 0) {
+            const participants = playerInfos.map(p => ({
+                id: p.id,
+                name: p.name,
+                isHost: p.isHost
+            }));
+
+            connectedPeers.forEach(c => {
+                if (c.status === ConnectionStatus.connected) {
+                    c.send(JSON.stringify(createLobbyMessage('SYNC_PARTICIPANTS', participants)));
+                }
+            });
+        }
+    }, [isInitiator, connectedPeers, playerInfos]);
+
+    const lastSentSlotsRef = useRef<string>("");
+    const broadcastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Broadcast combined offer (Host Only)
+    useEffect(() => {
+        if (!isInitiator || signalingMode !== 'server' || !signalingClient || !boardId) return;
+
+        // Clear existing timeout
+        if (broadcastTimeoutRef.current) clearTimeout(broadcastTimeoutRef.current);
+
+        broadcastTimeoutRef.current = setTimeout(() => {
+            const currentSlots: any[] = [];
+            const processedConnIds = new Set<string>();
+
+            // 1. Add connected players
+            connectedPeers.forEach(c => {
+                if (c.id === 'local') return;
+                currentSlots.push({
+                    connectionId: c.id,
+                    offer: c.signal,
+                    status: 'taken',
+                    peerName: c.remotePlayerName
+                });
+                processedConnIds.add(c.id);
+            });
+
+            // 2. Add pending connections (waiting for guests)
+            pendingSignaling.forEach(c => {
+                if (!processedConnIds.has(c.id) && c.signal) {
+                    currentSlots.push({
+                        connectionId: c.id,
+                        offer: c.signal,
+                        status: 'open'
+                    });
+                    processedConnIds.add(c.id);
+                }
+            });
+
+            if (currentSlots.length > 0) {
+                const slotsString = JSON.stringify(currentSlots);
+                if (slotsString !== lastSentSlotsRef.current) {
+                    console.log(`[SIGNALING] Broadcasting update with ${currentSlots.length} slots`);
+                    signalingClient.sendOffer(currentSlots, gameId!, boardId, state.context.playerName);
+                    lastSentSlotsRef.current = slotsString;
+                }
+            }
+        }, 500);
+
+        return () => {
+            if (broadcastTimeoutRef.current) clearTimeout(broadcastTimeoutRef.current);
+        };
+    }, [isInitiator, signalingMode, signalingClient, boardId, connectedPeers, pendingSignaling, state.context.playerName, gameId]);
+
     useEffect(() => {
         if (isConnected || isInitiator) {
             const currentStatus = isGameStarted ? 'game' : 'lobby';
@@ -297,8 +420,11 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
                 setAvailableOffers(msg.offers || []);
             }
             if (msg.type === 'answer') {
-                const connectionList = Array.from(state.context.connections.values());
-                const pendingConn = connectionList.find(c => c.status === ConnectionStatus.started);
+                const connectionList = Array.from(state.context.connections.values()) as Connection[];
+                // Targeted connection (multi-slot) or first available
+                const pendingConn = msg.to
+                    ? connectionList.find(c => c.id === msg.to)
+                    : connectionList.find(c => c.status === ConnectionStatus.started);
 
                 if (pendingConn) {
                     if (signalingMode === 'server') {
@@ -366,24 +492,20 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         }
     }, [state.value, signalingMode, signalingClient]);
 
-    const onHostAGame = () => {
-        const newBoardId = uuidv4();
-        navigate(`/games/${gameId}/${newBoardId}`, { replace: true });
+    const onHostAGame = (playerCount: number = 2) => {
+        let currentBoardId = boardId;
+        if (state.matches('selection') || state.matches('discovery')) {
+            currentBoardId = uuidv4();
+            navigate(`/games/${gameId}/${currentBoardId}`, { replace: true });
+            send({ type: 'HOST', maxPlayers: playerCount });
+        }
 
-        send({ type: 'HOST' });
-
-        const connection = new Connection(updateConnection);
-        connection.onClose = () => send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
-        connection.openDataChannel();
-        connection.prepareOfferSignal(state.context.playerName);
-
-        if (signalingMode === 'server' && signalingClient) {
-            const checkSignal = setInterval(() => {
-                if (connection.signal) {
-                    signalingClient.sendOffer(connection.signal, gameId, newBoardId, state.context.playerName);
-                    clearInterval(checkSignal);
-                }
-            }, 500);
+        const numOffers = playerCount - 1;
+        for (let i = 0; i < numOffers; i++) {
+            const connection = new Connection(updateConnection);
+            connection.onClose = () => send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
+            connection.openDataChannel();
+            connection.prepareOfferSignal(state.context.playerName);
         }
     };
 
@@ -449,18 +571,18 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         });
     };
 
-    const onJoinFromList = async (offer: any) => {
+    const onJoinFromList = async (session: any, slot: any) => {
         send({ type: 'JOIN' });
         const conn = new Connection(updateConnection);
         conn.setDataChannelCallback();
-        await conn.acceptOffer(offer.offer, state.context.playerName);
+        await conn.acceptOffer(slot.offer, state.context.playerName);
 
         const checkSignal = setInterval(() => {
             if (conn.signal) {
-                signalingClient?.sendAnswer(offer.connectionId, conn.signal);
+                signalingClient?.sendAnswer(session.connectionId, slot.connectionId, conn.signal);
                 clearInterval(checkSignal);
 
-                const targetBoardId = offer.sessionBoardId || offer.boardId;
+                const targetBoardId = session.sessionBoardId || session.boardId;
                 if (!boardId && targetBoardId) {
                     navigate(`/games/${gameId}/${targetBoardId}`, { replace: true });
                 }

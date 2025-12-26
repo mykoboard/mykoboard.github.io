@@ -7,16 +7,9 @@ import { ticTacToeMachine, calculateWinner, Player } from './ticTacToeMachine';
 import { createGameMessage, isGameMessage } from '../../../lib/network';
 import { LedgerEntry } from '../../../lib/ledger';
 
-interface TicTacToeProps {
-    connections: Connection[];
-    playerNames: string[];
-    isInitiator: boolean;
-    ledger: LedgerEntry[];
-    onAddLedger?: (action: { type: string, payload: any }) => void;
-    onFinishGame?: () => void;
-}
+import { GameProps } from '../../../lib/types';
 
-export default function TicTacToe({ connections, playerNames, isInitiator, ledger, onAddLedger, onFinishGame }: TicTacToeProps) {
+export default function TicTacToe({ connections, playerNames, playerInfos, isInitiator, ledger, onAddLedger, onFinishGame }: GameProps) {
     const [state, send] = useMachine(ticTacToeMachine, {
         input: { isInitiator }
     });

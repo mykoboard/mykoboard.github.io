@@ -13,10 +13,12 @@ interface LobbyContext {
     playerName: string;
     ledger: LedgerEntry[];
     pendingGuest: { id: string; name: string; answer: any; connection: Connection } | null;
+    externalParticipants: { id: string; name: string; isHost: boolean }[];
+    maxPlayers: number;
 }
 
 type LobbyEvent =
-    | { type: 'HOST' }
+    | { type: 'HOST'; maxPlayers?: number }
     | { type: 'JOIN' }
     | { type: 'GOTO_LOBBY' }
     | { type: 'UPDATE_CONNECTION'; connection: Connection }
@@ -36,6 +38,7 @@ type LobbyEvent =
     | { type: 'FINISH_GAME' }
     | { type: 'GAME_RESET' }
     | { type: 'RESET_GAME' }
+    | { type: 'SYNC_PARTICIPANTS'; participants: { id: string, name: string, isHost: boolean }[] }
     | { type: 'LOAD_LEDGER'; ledger: LedgerEntry[] };
 
 export const lobbyMachine = createMachine({
@@ -55,6 +58,8 @@ export const lobbyMachine = createMachine({
         playerName: input.playerName,
         ledger: [],
         pendingGuest: null,
+        externalParticipants: [],
+        maxPlayers: 2,
     }),
     on: {
         UPDATE_CONNECTION: {
@@ -75,6 +80,9 @@ export const lobbyMachine = createMachine({
         LOAD_LEDGER: {
             actions: assign({ ledger: ({ event }) => event.ledger })
         },
+        SYNC_PARTICIPANTS: {
+            actions: assign({ externalParticipants: ({ event }) => event.participants })
+        },
         BACK_TO_LOBBY: {
             target: '#discovery',
             actions: ['resetContext', 'clearPendingGuest']
@@ -91,7 +99,11 @@ export const lobbyMachine = createMachine({
             on: {
                 HOST: {
                     target: '#hosting',
-                    actions: ['resetContext', assign({ isInitiator: true, isGameFinished: false })]
+                    actions: ['resetContext', assign({
+                        isInitiator: true,
+                        isGameFinished: false,
+                        maxPlayers: ({ event }) => event.type === 'HOST' ? (event.maxPlayers || 2) : 2
+                    })]
                 },
                 JOIN: {
                     target: '#joining',
@@ -110,7 +122,11 @@ export const lobbyMachine = createMachine({
             on: {
                 HOST: {
                     target: '#hosting',
-                    actions: ['resetContext', assign({ isInitiator: true, isGameFinished: false })]
+                    actions: ['resetContext', assign({
+                        isInitiator: true,
+                        isGameFinished: false,
+                        maxPlayers: ({ event }) => event.type === 'HOST' ? (event.maxPlayers || 2) : 2
+                    })]
                 },
                 JOIN: {
                     target: '#joining',
@@ -211,6 +227,17 @@ export const lobbyMachine = createMachine({
                     target: '#selection',
                     actions: 'closeAllConnections'
                 },
+                REQUEST_JOIN: {
+                    target: '#approving',
+                    actions: assign({
+                        pendingGuest: ({ event }) => ({
+                            id: event.connectionId,
+                            name: event.peerName,
+                            answer: event.answer,
+                            connection: event.connection
+                        })
+                    })
+                },
                 GAME_STARTED: {
                     target: '.game',
                     actions: 'setGameStarted'
@@ -289,16 +316,18 @@ export const lobbyMachine = createMachine({
             // Only sync if we are host and connection just became connected
             if (context.isInitiator && connection.status === ConnectionStatus.connected) {
                 // Check if we already synced this connection in this session
-                // We can use a simple check on the connection object itself since it's mutable
                 if ((connection as any)._synced) return;
                 (connection as any)._synced = true;
 
                 logger.info(`[LOBBY] Syncing new connection: ${connection.id}`);
+
+                // CRITICAL: Always sync ledger first so the game state is ready
+                connection.send(JSON.stringify(createLobbyMessage('SYNC_LEDGER', context.ledger)));
+
+                // If game is already started, tell the newcomer
                 if (context.isGameStarted) {
                     connection.send(JSON.stringify(createLobbyMessage('GAME_STARTED')));
                 }
-                // Always sync ledger when someone connects (it might be empty if game hasn't started)
-                connection.send(JSON.stringify(createLobbyMessage('SYNC_LEDGER', context.ledger)));
             }
         },
         removeConnection: assign(({ context, event }) => {
@@ -361,7 +390,9 @@ export const lobbyMachine = createMachine({
             isGameStarted: false,
             isGameFinished: false,
             isInitiator: false,
-            pendingGuest: null
+            maxPlayers: 2,
+            pendingGuest: null,
+            externalParticipants: []
         }),
         clearPendingGuest: assign({ pendingGuest: null })
     },
