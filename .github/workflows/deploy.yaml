@@ -28,15 +28,11 @@ jobs:
 
       - name: Build
         run: bun run build
-        # adjust if your build command is different
-
-      # At this point we assume the build output is in `dist/`.
-      # Change `dist` below if your output folder is different (e.g. build, out, etc.)
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages       # branch to push to
-          publish_dir: ./dist            # folder with built files
+          publish_dir: ./docs            # folder with built files
           commit_message: "Deploy from ${GITHUB_SHA}"
