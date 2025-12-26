@@ -1,0 +1,42 @@
+name: Build and Deploy with Bun
+
+on:
+  push:
+    branches:
+      - main   # or whatever branch you want to deploy from
+
+permissions:
+  contents: write   # needed so the Action can push to gh-pages
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # we need full history to push another branch
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+        # adjust if your build command is different
+
+      # At this point we assume the build output is in `dist/`.
+      # Change `dist` below if your output folder is different (e.g. build, out, etc.)
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages       # branch to push to
+          publish_dir: ./dist            # folder with built files
+          commit_message: "Deploy from ${GITHUB_SHA}"
