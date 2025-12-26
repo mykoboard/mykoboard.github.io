@@ -1,51 +1,59 @@
-# How can I edit this code?
+# MyKoBoard 🎮
 
-There are several ways of editing your application.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://github.com/ellerbrock/open-source-badges/)
 
+**MyKoBoard** is a modern, peer-to-peer multiplayer board games platform built for the web. Experience classic games like Ludo and Tic-Tac-Toe with zero-latency communication and a premium interface.
 
-**Use your preferred IDE**
+## ✨ Features
 
-If you want to work locally using your own IDE, you can clone this repo and push changes.
+- **P2P Multiplayer**: Real-time gameplay powered by WebRTC.
+- **Dynamic Lobby**: Interactive slot selection and live signaling.
+- **Secure Wallet Integration**: Cryptographically verified game sessions.
+- **Mobile Responsive**: Play on any device with a modern browser.
+- **Rich Visuals**: Premium designs with glassmorphism and smooth animations.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 🚀 Getting Started
 
-Follow these steps:
+### Prerequisites
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+- Node.js (v18+)
+- npm or bun
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Local Development
 
-# Step 3: Install the necessary dependencies.
-npm i
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/mykoboard/mykoboard.github.io.git
+   cd mykoboard.github.io
+   ```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-**Edit a file directly in GitHub**
+3. **Start the dev server**
+   ```bash
+   npm run dev
+   ```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 🛠️ Tech Stack
 
-**Use GitHub Codespaces**
+- **Framework**: [React 19](https://react.dev/)
+- **Build Tool**: [Vite](https://vitejs.dev/)
+- **State Management**: [XState](https://xstate.js.org/)
+- **Networking**: [WebRTC](https://webrtc.org/)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [shadcn/ui](https://ui.shadcn.com/)
+- **Type Safety**: [TypeScript](https://www.typescriptlang.org/)
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 🤝 Contributing
 
-## What technologies are used for this project?
+We love contributions! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
-This project is built with .
+## ⚖️ License
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Distributed under the MIT License. See `LICENSE` for more information.
 
+---
+Built with ❤️ by the MyKoBoard Team.
