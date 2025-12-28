@@ -31,8 +31,13 @@ export function Header() {
                     </NavigationMenuList>
                 } />
             <div className="flex items-center space-x-2">
-                <User className="w-6 h-6" />
-                <span className="text-lg font-semibold cursor-pointer">{identity?.name}</span>
+                <User className="w-6 h-6 shrink-0" />
+                <span
+                    className="text-lg font-semibold cursor-pointer hover:text-primary transition-colors"
+                    onClick={() => navigate("/profile")}
+                >
+                    {identity?.name}
+                </span>
             </div>
         </header>
     );

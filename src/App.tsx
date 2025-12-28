@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Board from "./pages/Board";
 import GameLobby from "./pages/GameLobby";
 import GameSelection from "./pages/GameSelection";
+import UserPage from "./pages/UserPage";
 import NotFound from "./pages/NotFound";
 import { WalletGate } from "./components/WalletGate";
 import { GameSessionProvider } from "./contexts/GameSessionContext";
@@ -22,6 +23,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/games" element={<WalletGate><GameSelection /></WalletGate>} />
+          <Route path="/profile" element={<WalletGate><UserPage /></WalletGate>} />
 
           <Route
             element={

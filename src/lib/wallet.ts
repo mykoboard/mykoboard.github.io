@@ -179,6 +179,16 @@ export class SecureWallet {
         return identity;
     }
 
+    async updateSubscriptionToken(token: string): Promise<void> {
+        await this.init();
+        const identity = await this.getIdentity();
+        if (!identity) throw new Error("No identity found to update");
+
+        identity.subscriptionToken = token;
+        this.identity = identity;
+        await this.saveToDB('current_identity', identity);
+    }
+
     getCurrentIdentity(): PlayerIdentity | null {
         return this.identity;
     }
