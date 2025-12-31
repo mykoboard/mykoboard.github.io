@@ -8,12 +8,8 @@ export default defineConfig(({ mode }) => ({
     outDir: './docs',
     emptyOutDir: true, // also necessary
   },
-  server: {
-    host: "::",
-    port: 8080,
-  },
   plugins: [
-    react(),   
+    react(),
   ].filter(Boolean),
   resolve: {
     alias: {

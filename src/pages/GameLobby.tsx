@@ -5,7 +5,6 @@ import { getGameById } from "../lib/GameRegistry";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { LobbyPastMatches } from "@/components/lobby/LobbyPastMatches";
 import { LobbyModeSelection } from "@/components/lobby/LobbyModeSelection";
 import { LobbyManualMode } from "@/components/lobby/LobbyManualMode";
 import { LobbyServerMode } from "@/components/lobby/LobbyServerMode";
@@ -40,13 +39,6 @@ export default function GameLobby() {
                 <h1 className="text-2xl font-bold">{game.name}</h1>
 
                 <div className="space-y-8">
-                    <LobbyPastMatches
-                        activeSessions={activeSessions}
-                        boardId={boardId}
-                        onDeleteSession={onDeleteSession}
-                        onResume={() => send({ type: 'RESUME' })}
-                    />
-
                     {!signalingMode && (
                         <LobbyModeSelection
                             onSelectManual={() => {

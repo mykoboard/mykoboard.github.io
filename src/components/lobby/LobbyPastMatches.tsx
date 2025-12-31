@@ -9,7 +9,7 @@ interface LobbyPastMatchesProps {
     activeSessions: GameSession[];
     boardId?: string;
     onDeleteSession: (id: string) => void;
-    onResume: () => void;
+    onResume?: () => void;
 }
 
 export function LobbyPastMatches({ activeSessions, boardId, onDeleteSession, onResume }: LobbyPastMatchesProps) {
@@ -36,7 +36,7 @@ export function LobbyPastMatches({ activeSessions, boardId, onDeleteSession, onR
                         onClick={() => {
                             if (session.boardId !== boardId) {
                                 navigate(`/games/${session.gameId}/${session.boardId}`);
-                            } else {
+                            } else if (onResume) {
                                 onResume();
                             }
                         }}

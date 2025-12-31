@@ -3,13 +3,17 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SecureWallet, PlayerIdentity } from "@/lib/wallet";
-import { User, Key, Fingerprint, Sparkles, Save, Shield } from "lucide-react";
+import { User, Key, Fingerprint, Sparkles, Save, Shield, History } from "lucide-react";
 import { toast } from "sonner";
+import { SessionManager } from "@/lib/sessions";
+import { GameSession } from "@/lib/db";
+import { LobbyPastMatches } from "@/components/lobby/LobbyPastMatches";
 
 export default function UserPage() {
     const [identity, setIdentity] = useState<PlayerIdentity | null>(null);
     const [token, setToken] = useState("");
     const [isSaving, setIsSaving] = useState(false);
+    const [activeSessions, setActiveSessions] = useState<GameSession[]>([]);
 
     useEffect(() => {
         const loadIdentity = async () => {
@@ -20,8 +24,20 @@ export default function UserPage() {
                 setToken(id.subscriptionToken);
             }
         };
+        const loadSessions = async () => {
+            const sessions = await SessionManager.getSessions();
+            setActiveSessions(sessions);
+        };
         loadIdentity();
+        loadSessions();
     }, []);
+
+    const onDeleteSession = async (id: string) => {
+        await SessionManager.removeSession(id);
+        const sessions = await SessionManager.getSessions();
+        setActiveSessions(sessions);
+        toast.success("Match history deleted");
+    };
 
     const handleUpdateToken = async () => {
         if (!token.trim()) {
@@ -137,6 +153,25 @@ export default function UserPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Game History Section */}
+                    {activeSessions.length > 0 && (
+                        <div className="space-y-4 pt-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-primary/10 rounded-xl">
+                                    <History className="w-5 h-5 text-primary" />
+                                </div>
+                                <h2 className="text-2xl font-bold tracking-tight text-slate-900">Match History</h2>
+                            </div>
+
+                            <div className="max-w-2xl">
+                                <LobbyPastMatches
+                                    activeSessions={activeSessions}
+                                    onDeleteSession={onDeleteSession}
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
