@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => ({
           ? "http://localhost:5002/packages/ludo/assets/remoteEntry.js"
           : "https://mykoboard.com/packages/ludo/assets/remoteEntry.js",
       },
-      shared: ["react", "react-dom", "@xstate/react", "xstate"],
+      shared: ["react", "react-dom", "@xstate/react", "xstate", "@mykoboard/integration"],
     }),
   ].filter(Boolean),
   resolve: {

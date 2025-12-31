@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => ({
             exposes: {
                 "./Ludo": "./src/Ludo.tsx",
             },
-            shared: ["react", "react-dom", "@xstate/react", "xstate"],
+            shared: ["react", "react-dom", "@xstate/react", "xstate", "@mykoboard/integration"],
         }),
     ],
     server: {

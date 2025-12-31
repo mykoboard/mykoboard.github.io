@@ -1,13 +1,15 @@
 import React, { useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Connection } from '@/lib/webrtc';
 import { useMachine } from '@xstate/react';
 import { ticTacToeMachine, calculateWinner, Player } from './ticTacToeMachine';
-import { createGameMessage, isGameMessage } from '@/lib/network';
-import { LedgerEntry } from '@/lib/ledger';
-
-import { GameProps } from '@/lib/types';
+import {
+    createGameMessage,
+    isGameMessage,
+    LedgerEntry,
+    GameProps,
+    SimpleConnection
+} from '@mykoboard/integration';
 
 export default function TicTacToe({ connections, playerNames, playerInfos, isInitiator, ledger, onAddLedger, onFinishGame }: GameProps) {
     const [state, send] = useMachine(ticTacToeMachine, {
@@ -41,12 +43,12 @@ export default function TicTacToe({ connections, playerNames, playerInfos, isIni
             } catch (e) { }
         };
 
-        connections.forEach(c => {
+        connections.forEach((c: SimpleConnection) => {
             c.addMessageListener(handleMessage);
         });
 
         return () => {
-            connections.forEach(c => {
+            connections.forEach((c: SimpleConnection) => {
                 c.removeMessageListener(handleMessage);
             });
         };
@@ -59,7 +61,7 @@ export default function TicTacToe({ connections, playerNames, playerInfos, isIni
         const newBoard: (Player | null)[] = Array(9).fill(null);
         let movesCount = 0;
 
-        ledger.forEach(entry => {
+        ledger.forEach((entry: LedgerEntry) => {
             if (entry.action.type === 'MOVE') {
                 // Determine whose move it was based on turn count
                 // Player 1 (X) always starts
@@ -87,7 +89,7 @@ export default function TicTacToe({ connections, playerNames, playerInfos, isIni
             onAddLedger?.({ type: 'MOVE', payload: { index } });
         } else {
             // Guest sends request to host
-            connections.forEach(c => {
+            connections.forEach((c: SimpleConnection) => {
                 c.send(JSON.stringify(createGameMessage('MOVE_REQUEST', { index })));
             });
         }
@@ -97,7 +99,7 @@ export default function TicTacToe({ connections, playerNames, playerInfos, isIni
         if (isInitiator) {
             onAddLedger?.({ type: 'RESET', payload: {} });
         } else {
-            connections.forEach(c => {
+            connections.forEach((c: SimpleConnection) => {
                 c.send(JSON.stringify(createGameMessage('RESET_REQUEST')));
             });
         }

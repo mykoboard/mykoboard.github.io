@@ -1,4 +1,5 @@
 import React from 'react';
+import { GameProps } from '@mykoboard/integration';
 
 export interface GameMetadata {
     id: string;
@@ -7,7 +8,7 @@ export interface GameMetadata {
     description: string;
     minPlayers: number;
     maxPlayers: number;
-    component: React.LazyExoticComponent<React.ComponentType<any>>;
+    component: React.LazyExoticComponent<React.ComponentType<GameProps>>;
 }
 
 export const games: GameMetadata[] = [

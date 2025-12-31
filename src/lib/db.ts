@@ -1,4 +1,4 @@
-import { LedgerEntry } from './ledger';
+import { LedgerEntry } from '@mykoboard/integration';
 
 export interface GameParticipant {
     id: string;

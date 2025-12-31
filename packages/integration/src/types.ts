@@ -1,5 +1,4 @@
-import { Connection } from "./webrtc";
-import { LedgerEntry } from "./ledger";
+import { LedgerEntry } from './ledger';
 
 export interface PlayerInfo {
     id: string;
@@ -10,8 +9,15 @@ export interface PlayerInfo {
     isHost: boolean;
 }
 
+export interface SimpleConnection {
+    id: string;
+    send: (data: string) => void;
+    addMessageListener: (callback: (data: string) => void) => void;
+    removeMessageListener: (callback: (data: string) => void) => void;
+}
+
 export interface GameProps {
-    connections: Connection[];
+    connections: SimpleConnection[];
     playerNames: string[];
     playerInfos: PlayerInfo[];
     isInitiator: boolean;

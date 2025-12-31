@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PlayerInfo } from "../../lib/types";
+import { PlayerInfo } from "@mykoboard/integration";
 import { Connection, ConnectionStatus } from "../../lib/webrtc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

@@ -1,5 +1,5 @@
 import { createMachine, assign } from 'xstate';
-import { Connection } from '@/lib/webrtc';
+import { SimpleConnection } from '@mykoboard/integration';
 
 export type Player = 'X' | 'O';
 
@@ -8,7 +8,7 @@ interface GameContext {
     mySymbol: Player;
     opponentSymbol: Player;
     isInitiator: boolean;
-    connections: Connection[];
+    connections: SimpleConnection[];
 }
 
 type GameEvent =
@@ -17,7 +17,7 @@ type GameEvent =
     | { type: 'RESET' }
     | { type: 'RECEIVE_RESET' }
     | { type: 'SYNC_STATE'; board: (Player | null)[] }
-    | { type: 'UPDATE_CONNECTIONS'; connections: Connection[] };
+    | { type: 'UPDATE_CONNECTIONS'; connections: SimpleConnection[] };
 
 export const ticTacToeMachine = createMachine({
     types: {} as {

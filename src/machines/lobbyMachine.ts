@@ -1,8 +1,7 @@
 import { createMachine, assign } from 'xstate';
 import { Connection, ConnectionStatus } from '../lib/webrtc';
 import { logger } from '../lib/logger';
-import { createLobbyMessage } from '../lib/network';
-import { LedgerEntry } from '../lib/ledger';
+import { createLobbyMessage, LedgerEntry } from '@mykoboard/integration';
 
 interface LobbyContext {
     connections: Map<string, Connection>;

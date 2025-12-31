@@ -1,4 +1,5 @@
 import { createMachine, assign } from 'xstate';
+import { LedgerEntry } from '@mykoboard/integration';
 
 export type Color = 'red' | 'green' | 'yellow' | 'blue';
 
@@ -24,6 +25,7 @@ interface LudoContext {
     winners: string[]; // List of player IDs who finished
     rollsInTurn: number;
     lastRoll: number | null;
+    ledger?: LedgerEntry[];
 }
 
 type LudoEvent =
@@ -298,7 +300,7 @@ export const ludoMachine = createMachine({
     }
 });
 
-export function applyLedgerToLudoState(players: Player[], ledger: { action: { type: string, payload: any } }[]): Partial<LudoContext> {
+export function applyLedgerToLudoState(players: Player[], ledger: LedgerEntry[]): Partial<LudoContext> {
     let pieces = createLudoPieces(players);
     let currentPlayerIndex = 0;
     let diceValue: number | null = null;
@@ -315,7 +317,7 @@ export function applyLedgerToLudoState(players: Player[], ledger: { action: { ty
             const player = players[currentPlayerIndex];
             const playerPieces = pieces.filter(p => p.color === player.color);
             const allInBaseOrEnd = playerPieces.every(p => p.status === 'base' || p.status === 'finished');
-            const movable = getMovablePieces(pieces, player.color, diceValue);
+            const movable = getMovablePieces(pieces, player.color, diceValue!);
 
             if (movable.length === 0 && allInBaseOrEnd && rollsInTurn < 2 && diceValue !== 6) {
                 diceValue = null;

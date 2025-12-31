@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { UserPlus, UserMinus } from "lucide-react";
-import { PlayerInfo } from "../../lib/types";
+import { PlayerInfo } from "@mykoboard/integration";
 
 export function PlayerList({ players, onRemove }: { players: PlayerInfo[], onRemove?: (id: string) => void }) {
     return (

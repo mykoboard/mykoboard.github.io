@@ -6,13 +6,11 @@ import { lobbyMachine } from "../machines/lobbyMachine";
 import { Connection, ConnectionStatus } from "../lib/webrtc";
 import { logger } from "../lib/logger";
 import { getGameById } from "../lib/GameRegistry";
-import { Ledger } from "../lib/ledger";
-import { createLobbyMessage, isLobbyMessage } from "../lib/network";
+import { Ledger, createLobbyMessage, isLobbyMessage, PlayerInfo } from "@mykoboard/integration";
 import { SecureWallet, PlayerIdentity } from "../lib/wallet";
 import { SignalingService } from "../lib/signaling";
 import { SessionManager } from "../lib/sessions";
 import { GameSession } from "../lib/db";
-import { PlayerInfo } from "../lib/types";
 
 interface GameSessionContextType {
     identity: PlayerIdentity | null;

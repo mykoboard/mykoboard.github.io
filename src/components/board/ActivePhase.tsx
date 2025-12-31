@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { Connection } from "../../lib/webrtc";
-import { PlayerInfo } from "../../lib/types";
+import { PlayerInfo } from "@mykoboard/integration";
 
 interface ActivePhaseProps {
     GameComponent: any;

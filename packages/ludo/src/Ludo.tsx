@@ -3,8 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useMachine } from '@xstate/react';
 import { ludoMachine, createLudoPieces, Color, Piece, Player, getMovablePieces, applyLedgerToLudoState } from './ludoMachine';
-import { createGameMessage, isGameMessage } from '@/lib/network';
-import { GameProps } from '@/lib/types';
+import { createGameMessage, isGameMessage, GameProps, PlayerInfo, SimpleConnection } from '@mykoboard/integration';
 
 const COLORS: Color[] = ['red', 'green', 'yellow', 'blue'];
 
@@ -19,7 +18,7 @@ const SAFE_INDICES = [1, 9, 14, 22, 27, 35, 40, 48];
 
 export default function Ludo({ connections, playerNames, playerInfos, isInitiator, ledger, onAddLedger, onFinishGame }: GameProps) {
     const players = useMemo((): Player[] => {
-        return playerInfos.slice(0, 4).map((info, i) => ({
+        return playerInfos.slice(0, 4).map((info: PlayerInfo, i: number) => ({
             id: info.isLocal ? 'local' : info.id,
             name: info.name,
             color: (['yellow', 'green', 'red', 'blue'] as Color[])[i] // TL, TR, BR, BL order
@@ -64,8 +63,8 @@ export default function Ludo({ connections, playerNames, playerInfos, isInitiato
             } catch (e) { }
         };
 
-        connections.forEach(c => c.addMessageListener(handleMessage));
-        return () => connections.forEach(c => c.removeMessageListener(handleMessage));
+        connections.forEach((c: SimpleConnection) => c.addMessageListener(handleMessage));
+        return () => connections.forEach((c: SimpleConnection) => c.removeMessageListener(handleMessage));
     }, [connections, isInitiator, onAddLedger]);
 
     useEffect(() => {
@@ -80,7 +79,7 @@ export default function Ludo({ connections, playerNames, playerInfos, isInitiato
             const val = Math.floor(Math.random() * 6) + 1;
             onAddLedger?.({ type: 'ROLL_DICE', payload: { value: val } });
         } else {
-            connections.forEach(c => c.send(JSON.stringify(createGameMessage('ROLL_DICE_REQUEST'))));
+            connections.forEach((c: SimpleConnection) => c.send(JSON.stringify(createGameMessage('ROLL_DICE_REQUEST'))));
         }
     };
 
@@ -95,7 +94,7 @@ export default function Ludo({ connections, playerNames, playerInfos, isInitiato
         if (isInitiator) {
             onAddLedger?.({ type: 'MOVE_PIECE', payload: { pieceId } });
         } else {
-            connections.forEach(c => c.send(JSON.stringify(createGameMessage('MOVE_PIECE_REQUEST', { pieceId }))));
+            connections.forEach((c: SimpleConnection) => c.send(JSON.stringify(createGameMessage('MOVE_PIECE_REQUEST', { pieceId }))));
         }
     };
 
