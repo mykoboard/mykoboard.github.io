@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useMachine } from '@xstate/react';
 import { ludoMachine, createLudoPieces, Color, Piece, Player, getMovablePieces, applyLedgerToLudoState } from './ludoMachine';
-import { createGameMessage, isGameMessage } from '../../../lib/network';
-import { GameProps } from '../../../lib/types';
+import { createGameMessage, isGameMessage } from '@/lib/network';
+import { GameProps } from '@/lib/types';
 
 const COLORS: Color[] = ['red', 'green', 'yellow', 'blue'];
 

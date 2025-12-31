@@ -28,7 +28,8 @@ export const games: GameMetadata[] = [
         description: "Standard Ludo game for 2-4 players. Race your pieces to the finish!",
         minPlayers: 2,
         maxPlayers: 4,
-        component: React.lazy(() => import('../components/games/ludo/Ludo')),
+        // @ts-ignore
+        component: React.lazy(() => import('ludo/Ludo')),
     },
 ];
 

@@ -17,8 +17,11 @@ export default defineConfig(({ mode }) => ({
       name: "host",
       remotes: {
         "tic-tac-toe": mode === 'development'
-          ? "http://localhost:5001/assets/remoteEntry.js"
+          ? "http://localhost:5001/packages/tic-tac-toe/assets/remoteEntry.js"
           : "https://mykoboard.com/packages/tic-tac-toe/assets/remoteEntry.js",
+        "ludo": mode === 'development'
+          ? "http://localhost:5002/packages/ludo/assets/remoteEntry.js"
+          : "https://mykoboard.com/packages/ludo/assets/remoteEntry.js",
       },
       shared: ["react", "react-dom", "@xstate/react", "xstate"],
     }),
