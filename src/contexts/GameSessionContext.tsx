@@ -96,11 +96,11 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         },
         inspect: (inspectionEvent) => {
             if (inspectionEvent.type === '@xstate.event') {
-                logger.state('EVENT', inspectionEvent.event.type, inspectionEvent.event);
+                logger.lobby('EVENT', inspectionEvent.event.type, inspectionEvent.event);
             }
             if (inspectionEvent.type === '@xstate.snapshot' && inspectionEvent.snapshot.status === 'active') {
                 const snapshotValue = (inspectionEvent.snapshot as any).value;
-                logger.state('STATE', JSON.stringify(snapshotValue));
+                logger.lobby('STATE', JSON.stringify(snapshotValue));
             }
         }
     });
@@ -241,7 +241,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
                                 if (entry.signature && entry.signerPublicKey) {
                                     const isValid = await SecureWallet.verify(entry.action, entry.signature, entry.signerPublicKey);
                                     if (!isValid) {
-                                        console.error("Invalid signature in ledger entry", entry);
+                                        logger.error("Invalid signature in ledger entry", entry);
                                         return;
                                     }
                                 }
@@ -258,7 +258,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         }
 
         if (connection.status === ConnectionStatus.connected && !(connection as any)._hasInitialSync) {
-            console.log(`[LOBBY] Sending initial sync to ${connection.id}`);
+            logger.lobby('STATE', `Sending initial sync to ${connection.id}`);
             connection.send(JSON.stringify(createLobbyMessage('SYNC_PLAYER_STATUS', view)));
             // If we are host and already have a session, tell the newcomer which board they should be on
             // This is critical for manual joiners who start at /manual route
@@ -328,7 +328,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
             if (currentSlots.length > 0) {
                 const slotsString = JSON.stringify(currentSlots);
                 if (slotsString !== lastSentSlotsRef.current) {
-                    console.log(`[SIGNALING] Broadcasting update with ${currentSlots.length} slots`);
+                    logger.sig(`Broadcasting update with ${currentSlots.length} slots`);
                     signalingClient.sendOffer(currentSlots, gameId!, boardId, state.context.playerName);
                     lastSentSlotsRef.current = slotsString;
                 }
@@ -372,7 +372,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
             const restoreSession = async () => {
                 const session = await SessionManager.getSession(boardId);
                 if (session && session.ledger.length > 0 && state.context.ledger.length === 0) {
-                    console.log(`[LOBBY] Restoring session ${boardId}, status: ${session.status}`);
+                    logger.lobby('STATE', `Restoring session ${boardId}, status: ${session.status}`);
                     send({ type: 'LOAD_LEDGER', ledger: session.ledger });
                     send({ type: 'RESUME' });
                     if (session.status === 'finished') {
@@ -471,7 +471,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
                     connectionBoardIdRef.current = currentBoardId;
                     setSignalingClient(client);
                 } catch (e) {
-                    console.error("Signaling connection failed", e);
+                    logger.error("Signaling connection failed", e);
                 } finally {
                     setIsServerConnecting(false);
                 }
@@ -523,7 +523,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         try {
             await connection.acceptOffer(offer, state.context.playerName);
         } catch (e) {
-            console.error("Failed to accept offer", e);
+            logger.error("Failed to accept offer", e);
         }
     };
 
@@ -533,7 +533,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
             connection.acceptAnswer(answer);
             updateConnection(connection);
         } catch (e) {
-            console.error("Failed to accept answer", e);
+            logger.error("Failed to accept answer", e);
         }
     };
 

@@ -1,4 +1,5 @@
 import { Signal } from './webrtc';
+import { logger } from './logger';
 
 export type SignalingSlot = {
     connectionId: string;
@@ -47,38 +48,38 @@ export class SignalingService {
         const SIGNALING_SERVER_URL = `${url}?${params.toString()}`;
 
         return new Promise<void>((resolve, reject) => {
-            console.log(`Connecting to signaling server: ${SIGNALING_SERVER_URL}`);
+            logger.sig(`Connecting to signaling server: ${SIGNALING_SERVER_URL}`);
             this.socket = new WebSocket(SIGNALING_SERVER_URL);
 
             this.socket.onopen = () => {
-                console.log("WebSocket Connection Open.");
+                logger.sig("WebSocket Connection Open.");
                 resolve();
             };
 
             this.socket.onmessage = (event) => {
-                console.log("Raw message from server:", event.data);
+                logger.sig("Raw message from server:", event.data);
                 try {
                     const msg = JSON.parse(event.data);
                     this.onMessageCallback(msg);
                 } catch (e) {
-                    console.error("Failed to parse signaling message", e);
+                    logger.error("Failed to parse signaling message", e);
                 }
             };
 
             this.socket.onclose = (event) => {
-                console.log("Disconnected from signaling server", event.code, event.reason);
+                logger.sig("Disconnected from signaling server", event.code, event.reason);
                 this.socket = null;
             };
 
             this.socket.onerror = (err) => {
-                console.error("Signaling WebSocket error:", err);
+                logger.error("Signaling WebSocket error:", err);
                 reject(err);
             };
         });
     }
 
     sendOffer(slots: SignalingSlot[], gameId: string, boardId: string, peerName: string) {
-        console.log("Broadcasting combined offer for game:", this.gameId, "board:", boardId, "slots:", slots.length);
+        logger.sig("Broadcasting combined offer for game:", this.gameId, "board:", boardId, "slots:", slots.length);
         this.send({
             type: 'offer',
             slots: slots,
@@ -89,7 +90,7 @@ export class SignalingService {
     }
 
     requestOffers() {
-        console.log("Requesting active offers for game:", this.gameId);
+        logger.sig("Requesting active offers for game:", this.gameId);
         this.send({
             type: 'listOffers',
             gameId: this.gameId
@@ -97,7 +98,7 @@ export class SignalingService {
     }
 
     sendAnswer(targetWebSocketId: string, targetP2PId: string, signal: Signal) {
-        console.log("Sending answer to host:", targetWebSocketId, "for P2P slot:", targetP2PId);
+        logger.sig("Sending answer to host:", targetWebSocketId, "for P2P slot:", targetP2PId);
         this.send({
             type: 'answer',
             target: targetWebSocketId,
@@ -109,10 +110,10 @@ export class SignalingService {
 
     deleteOffer() {
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-            console.warn("Cannot delete offer: Signaling socket is not open.");
+            logger.sig("Cannot delete offer: Signaling socket is not open.");
             return;
         }
-        console.log("Deleting offer for game:", this.gameId, "board:", this.boardId);
+        logger.sig("Deleting offer for game:", this.gameId, "board:", this.boardId);
         this.send({
             type: 'deleteOffer',
             gameId: this.gameId,
@@ -122,7 +123,7 @@ export class SignalingService {
 
     private send(message: Partial<SignalingMessage>) {
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-            console.error("Signaling socket not open. State:", this.socket?.readyState);
+            logger.error("Signaling socket not open. State:", this.socket?.readyState);
             return;
         }
 
@@ -133,7 +134,7 @@ export class SignalingService {
             ...message
         };
 
-        console.log("Sending payload to AWS:", payload);
+        logger.sig("Sending payload to AWS:", payload);
         this.socket.send(JSON.stringify(payload));
     }
 

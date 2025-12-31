@@ -50,7 +50,7 @@ export class Connection {
 
     this.peerConnection.onconnectionstatechange = (event) => {
       const state = this.peerConnection.connectionState;
-      logger.info(this.id + ': Connection state changed to ' + state);
+      logger.webrtc(this.id + ': Connection state changed to ' + state);
 
       if (state === "connected") {
         this.status = ConnectionStatus.connected;
@@ -76,8 +76,8 @@ export class Connection {
   openDataChannel() {
     this.dataChannel = this.peerConnection.createDataChannel('gameData');
 
-    this.dataChannel.onopen = (e) => logger.info(this.id + ' Data channel state is: ' + this.dataChannel.readyState);
-    this.dataChannel.onclose = (e) => logger.info(this.id + ' Data channel state is: ' + this.dataChannel.readyState);
+    this.dataChannel.onopen = (e) => logger.webrtc(this.id + ' Data channel state is: ' + this.dataChannel.readyState);
+    this.dataChannel.onclose = (e) => logger.webrtc(this.id + ' Data channel state is: ' + this.dataChannel.readyState);
     this.dataChannel.onerror = (e) => logger.error(this.id + ' Error ', e);
     this.dataChannel.onmessage = (e) => {
       logger.netIn(this.id, e.data);
@@ -87,7 +87,7 @@ export class Connection {
 
   setDataChannelCallback() {
     this.peerConnection.ondatachannel = (event) => {
-      logger.info('Receive Channel Callback', event);
+      logger.webrtc('Receive Channel Callback', event);
       this.dataChannel = event.channel;
       this.dataChannel.onmessage = (e) => {
         logger.netIn(this.id, e.data);
@@ -95,17 +95,17 @@ export class Connection {
       };
       this.dataChannel.onopen = (e) => {
         const readyState = this.dataChannel.readyState;
-        logger.info(this.id + ': Data channel state is: ' + readyState);
+        logger.webrtc(this.id + ': Data channel state is: ' + readyState);
 
         if (readyState == "open") {
-          logger.info(this.id + ': Sending ping');
+          logger.webrtc(this.id + ': Sending ping');
           this.send('Ping');
         }
       };
 
       this.dataChannel.onclose = (e) => {
         const readyState = this.dataChannel.readyState;
-        console.log(this.id + ': Data channel state is: ' + readyState);
+        logger.webrtc(this.id + ': Data channel state is: ' + readyState);
       };
     }
   }
@@ -170,12 +170,12 @@ export class Connection {
   }
 
   onCreateSessionDescriptionError(error) {
-    console.log('Failed to create session description: ' + error.toString());
+    logger.error('Failed to create session description: ' + error.toString());
   }
 
   async acceptAnswer(answerSignal: string | Signal) {
     const connectionSignal = typeof answerSignal === 'string' ? Signal.fromString(answerSignal) : answerSignal;
-    console.log(this.id + ': Accepting answer signal from ' + connectionSignal.playerName);
+    logger.webrtc(this.id + ': Accepting answer signal from ' + connectionSignal.playerName);
 
     try {
       await this.peerConnection.setRemoteDescription(connectionSignal.session);
@@ -183,15 +183,15 @@ export class Connection {
       this.remotePlayerName = connectionSignal.playerName;
 
       if (connectionSignal.iceCandidates) {
-        console.log(this.id + `: Adding ${connectionSignal.iceCandidates.length} ICE candidates from answer`);
+        logger.webrtc(this.id + `: Adding ${connectionSignal.iceCandidates.length} ICE candidates from answer`);
         connectionSignal.iceCandidates.forEach((candidate) => {
-          this.peerConnection.addIceCandidate(candidate).catch(e => console.error("Error adding ICE candidate:", e));
+          this.peerConnection.addIceCandidate(candidate).catch(e => logger.error("Error adding ICE candidate:", e));
         });
       }
 
       this.updateView(this);
     } catch (e) {
-      console.error(this.id + ": Failed to set remote description from answer", e);
+      logger.error(this.id + ": Failed to set remote description from answer", e);
     }
   }
 
@@ -223,7 +223,6 @@ export class Signal {
     this.connectionId = connectionId;
     this.playerName = playerName;
     this.iceCandidates = iceCandidates
-    console.log(iceCandidates);
   }
 
   toString(): string {

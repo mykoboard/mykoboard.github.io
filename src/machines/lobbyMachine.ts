@@ -319,7 +319,7 @@ export const lobbyMachine = createMachine({
                 if ((connection as any)._synced) return;
                 (connection as any)._synced = true;
 
-                logger.info(`[LOBBY] Syncing new connection: ${connection.id}`);
+                logger.lobby('STATE', `Syncing new connection: ${connection.id}`);
 
                 // CRITICAL: Always sync ledger first so the game state is ready
                 connection.send(JSON.stringify(createLobbyMessage('SYNC_LEDGER', context.ledger)));
@@ -373,13 +373,13 @@ export const lobbyMachine = createMachine({
         },
         acceptGuest: ({ context }) => {
             if (context.pendingGuest) {
-                console.log("Accepting guest:", context.pendingGuest.name);
+                logger.sig("Accepting guest:", context.pendingGuest.name);
                 context.pendingGuest.connection.acceptAnswer(context.pendingGuest.answer);
             }
         },
         rejectGuest: ({ context }) => {
             if (context.pendingGuest) {
-                console.log("Rejecting guest:", context.pendingGuest.name);
+                logger.sig("Rejecting guest:", context.pendingGuest.name);
                 context.pendingGuest.connection.close();
             }
         },

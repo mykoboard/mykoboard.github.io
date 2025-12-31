@@ -2,7 +2,7 @@ const DEBUG_KEY = 'debug';
 
 const isDev = import.meta.env.DEV;
 
-export type LogCategory = 'net' | 'state' | 'info' | 'error';
+export type LogCategory = 'net' | 'state' | 'info' | 'error' | 'lobby' | 'sig' | 'webrtc';
 
 const getInitialSettings = (): Record<LogCategory, boolean> => {
     const defaultSettings: Record<LogCategory, boolean> = {
@@ -10,6 +10,9 @@ const getInitialSettings = (): Record<LogCategory, boolean> => {
         state: isDev,
         info: isDev,
         error: true,
+        lobby: isDev,
+        sig: isDev,
+        webrtc: isDev,
     };
 
     try {
@@ -61,14 +64,38 @@ export const logger = {
         );
     },
 
-    state: (type: 'EVENT' | 'STATE', label: string, data?: any) => {
-        if (!logger.shouldLog('state')) return;
+    state: (type: 'EVENT' | 'STATE', label: string, data?: any, category: LogCategory = 'state') => {
+        if (!logger.shouldLog(category)) return;
         const color = type === 'EVENT' ? '#f59e0b' : '#10b981';
         console.log(
-            `%c[LOBBY-${type}] %c${label}`,
+            `%c[${category.toUpperCase()}-${type}] %c${label}`,
             `color: ${color}; font-weight: bold;`,
             'color: inherit;',
             data || ''
+        );
+    },
+
+    lobby: (type: 'EVENT' | 'STATE', label: string, data?: any) => {
+        logger.state(type, label, data, 'lobby');
+    },
+
+    sig: (label: string, ...args: any[]) => {
+        if (!logger.shouldLog('sig')) return;
+        console.log(
+            `%c[SIG] %c${label}`,
+            'color: #ec4899; font-weight: bold;',
+            'color: inherit;',
+            ...args
+        );
+    },
+
+    webrtc: (label: string, ...args: any[]) => {
+        if (!logger.shouldLog('webrtc')) return;
+        console.log(
+            `%c[WEBRTC] %c${label}`,
+            'color: #06b6d4; font-weight: bold;',
+            'color: inherit;',
+            ...args
         );
     },
 
