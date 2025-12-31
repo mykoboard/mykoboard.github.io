@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => ({
       remotes: {
         "tic-tac-toe": mode === 'development'
           ? "http://localhost:5001/assets/remoteEntry.js"
-          : "https://mykoboard.com/packages/tic-tac-toe/dist/assets/remoteEntry.js",
+          : "https://mykoboard.com/packages/tic-tac-toe/assets/remoteEntry.js",
       },
       shared: ["react", "react-dom", "@xstate/react", "xstate"],
     }),
