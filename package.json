@@ -4,9 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "homepage": "https://mykoboard.com/",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "vite",
+    "dev:all": "bun run build:remotes && (bun run --cwd packages/tic-tac-toe preview --port 5001 & vite)",
     "build": "vite build",
+    "build:remotes": "bun run --cwd packages/tic-tac-toe build",
+    "build:all": "bun run build:remotes && vite build --mode production && mkdir -p docs/packages/tic-tac-toe && cp -r packages/tic-tac-toe/dist/* docs/packages/tic-tac-toe/",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -73,6 +79,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@originjs/vite-plugin-federation": "^1.4.1",
     "@tailwindcss/postcss": "^4.1.18",
     "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^25.0.3",

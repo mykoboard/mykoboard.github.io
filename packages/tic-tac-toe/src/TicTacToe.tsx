@@ -1,13 +1,13 @@
 import React, { useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Connection } from '../../../lib/webrtc';
+import { Connection } from '@/lib/webrtc';
 import { useMachine } from '@xstate/react';
 import { ticTacToeMachine, calculateWinner, Player } from './ticTacToeMachine';
-import { createGameMessage, isGameMessage } from '../../../lib/network';
-import { LedgerEntry } from '../../../lib/ledger';
+import { createGameMessage, isGameMessage } from '@/lib/network';
+import { LedgerEntry } from '@/lib/ledger';
 
-import { GameProps } from '../../../lib/types';
+import { GameProps } from '@/lib/types';
 
 export default function TicTacToe({ connections, playerNames, playerInfos, isInitiator, ledger, onAddLedger, onFinishGame }: GameProps) {
     const [state, send] = useMachine(ticTacToeMachine, {

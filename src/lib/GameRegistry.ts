@@ -18,7 +18,8 @@ export const games: GameMetadata[] = [
         description: "Classic strategy game for two players. Get three in a row to win!",
         minPlayers: 2,
         maxPlayers: 2,
-        component: React.lazy(() => import('../components/games/tictactoe/TicTacToe')),
+        // @ts-ignore
+        component: React.lazy(() => import('tic-tac-toe/TicTacToe')),
     },
     {
         id: 'ludo',

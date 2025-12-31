@@ -1,0 +1,38 @@
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react-swc";
+import federation from "@originjs/vite-plugin-federation";
+import path from "path";
+
+// https://vitejs.dev/config/
+export default defineConfig(({ mode }) => ({
+    base: mode === 'production' ? '/packages/tic-tac-toe/dist/' : '/',
+    plugins: [
+        react(),
+        federation({
+            name: "tic-tac-toe",
+            filename: "remoteEntry.js",
+            exposes: {
+                "./TicTacToe": "./src/TicTacToe.tsx",
+            },
+            shared: ["react", "react-dom", "@xstate/react", "xstate"],
+        }),
+    ],
+    server: {
+        port: 5001,
+        cors: true,
+    },
+    preview: {
+        port: 5001,
+        cors: true,
+    },
+    resolve: {
+        alias: {
+            "@": path.resolve(__dirname, "../../src"),
+        },
+    },
+    build: {
+        modulePreload: false,
+        target: "esnext",
+        cssCodeSplit: false,
+    },
+}));

@@ -1,5 +1,5 @@
 import { createMachine, assign } from 'xstate';
-import { Connection } from '../../../lib/webrtc';
+import { Connection } from '@/lib/webrtc';
 
 export type Player = 'X' | 'O';
 
