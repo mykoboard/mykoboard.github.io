@@ -23,16 +23,12 @@ export function LobbyPastMatches({ activeSessions, boardId, onDeleteSession, onR
     if (finishedSessions.length === 0) return null;
 
     return (
-        <div className="space-y-3 mb-6 animate-in slide-in-from-top-4 duration-500">
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
-                <History className="w-3 h-3" />
-                Past Matches
-            </h3>
-            <div className="grid gap-2">
+        <div className="space-y-4 mb-10 animate-in slide-in-from-top-4 duration-500">
+            <div className="grid gap-4">
                 {finishedSessions.map((session) => (
-                    <Card
+                    <div
                         key={session.boardId}
-                        className="p-3 border-l-4 border-l-slate-200 bg-white opacity-75 hover:border-l-primary hover:shadow-md transition-all cursor-pointer group flex items-center justify-between"
+                        className="p-5 glass-dark rounded-2xl border border-white/5 hover:border-primary/20 hover:shadow-glass-dark transition-all duration-300 cursor-pointer group flex items-center justify-between"
                         onClick={() => {
                             if (session.boardId !== boardId) {
                                 navigate(`/games/${session.gameId}/${session.boardId}`);
@@ -41,40 +37,44 @@ export function LobbyPastMatches({ activeSessions, boardId, onDeleteSession, onR
                             }
                         }}
                     >
-                        <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 bg-green-50 rounded-lg flex items-center justify-center transition-colors">
-                                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        <div className="flex items-center gap-5">
+                            <div className="h-12 w-12 bg-primary/10 rounded-xl flex items-center justify-center border border-primary/20 shadow-neon">
+                                <CheckCircle2 className="w-6 h-6 text-primary" />
                             </div>
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <p className="font-bold text-slate-700">{session.gameName}</p>
-                                    <span className="text-[8px] bg-green-100 text-green-600 px-1 rounded uppercase font-bold">Finished</span>
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-3">
+                                    <p className="font-bold text-lg text-white tracking-tight uppercase">{session.gameName}</p>
+                                    <span className="text-[9px] bg-primary/10 text-primary px-2 py-0.5 rounded-full border border-primary/30 uppercase font-black tracking-tighter shadow-neon">Verified</span>
                                 </div>
-                                <div className="flex flex-wrap gap-1 mt-1">
+                                <div className="flex flex-wrap gap-2 mt-1">
                                     {session.participants?.map((p, i) => (
-                                        <span key={i} className={`text-[8px] px-1 rounded-sm border ${p.isYou ? 'bg-primary/10 border-primary/20 text-primary font-bold' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
-                                            {p.isYou ? 'You' : p.name}{p.isHost && ' 👑'}
+                                        <span key={i} className={`text-[9px] px-2 py-0.5 rounded-md border uppercase font-bold tracking-tight ${p.isYou ? 'bg-primary/20 border-primary/40 text-primary shadow-[0_0_8px_rgba(16,185,129,0.2)]' : 'bg-white/5 border-white/10 text-white/40'}`}>
+                                            {p.isYou ? 'Identity Match' : p.name}{p.isHost && ' 👑'}
                                         </span>
                                     ))}
                                 </div>
-                                <p className="text-[9px] text-slate-400 mt-1">Board: {session.boardId.slice(0, 8)}... • {new Date(session.lastPlayed).toLocaleTimeString()}</p>
+                                <p className="text-[10px] text-white/20 font-mono tracking-widest uppercase">
+                                    Sector: {session.boardId.slice(0, 8)} • {new Date(session.lastPlayed).toLocaleTimeString()}
+                                </p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all opacity-0 group-hover:opacity-100"
+                                className="h-10 w-10 text-white/20 hover:text-rose-500 hover:bg-rose-500/10 transition-all rounded-xl border border-transparent hover:border-rose-500/30"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onDeleteSession(session.boardId);
                                 }}
                             >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-5 h-5" />
                             </Button>
-                            <ExternalLink className="w-3 h-3 text-slate-300 group-hover:text-primary transition-colors" />
+                            <div className="p-2 rounded-xl bg-white/5 border border-white/10 group-hover:neon-border transition-all duration-500">
+                                <ExternalLink className="w-4 h-4 text-white/20 group-hover:text-primary transition-colors" />
+                            </div>
                         </div>
-                    </Card>
+                    </div>
                 ))}
             </div>
         </div>

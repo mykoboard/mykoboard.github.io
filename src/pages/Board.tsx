@@ -43,9 +43,11 @@ export default function Board() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50">
-      <div className="max-w-7xl mx-auto p-6 space-y-8">
-        <h1 className="text-2xl font-bold">{game.name}</h1>
+    <div className="min-h-screen bg-background">
+      <div className="max-w-7xl mx-auto p-6 space-y-12">
+        <h1 className="text-3xl font-black tracking-tighter uppercase text-white">
+          Lobby: <span className="text-gradient">{game.name}</span>
+        </h1>
 
         <div className="animate-in fade-in slide-in-from-top-4 duration-700">
           {isFinished ? (
@@ -86,10 +88,11 @@ export default function Board() {
               onRemovePlayer={(id) => send({ type: 'REMOVE_PLAYER', playerId: id })}
               playerCount={playerInfos.length}
               maxPlayers={state.context.maxPlayers}
+              boardId={boardId}
             />
           )}
 
-          <div className="mt-8">
+          <div className="mt-12 max-w-2xl">
             <PlayerList
               players={playerInfos}
               onRemove={isInitiator ? (id) => send({ type: 'REMOVE_PLAYER', playerId: id }) : undefined}

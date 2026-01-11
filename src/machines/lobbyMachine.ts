@@ -33,6 +33,7 @@ type LobbyEvent =
     | { type: 'REQUEST_JOIN'; connectionId: string; peerName: string; answer: any; connection: Connection }
     | { type: 'ACCEPT_GUEST' }
     | { type: 'REJECT_GUEST' }
+    | { type: 'CANCEL_SIGNALING'; connectionId: string }
     | { type: 'RESUME' }
     | { type: 'FINISH_GAME' }
     | { type: 'GAME_RESET' }
@@ -65,7 +66,7 @@ export const lobbyMachine = createMachine({
             actions: ['updateConnection', 'syncConnection']
         },
         PEER_DISCONNECTED: {
-            actions: 'updateConnectionStatus'
+            actions: ['updateConnectionStatus', 'removeConnection']
         },
         SET_PLAYER_STATUS: {
             actions: 'setPlayerStatus'
@@ -89,6 +90,9 @@ export const lobbyMachine = createMachine({
         CLOSE_SESSION: {
             target: '#selection',
             actions: ['resetContext', 'closeAllConnections', 'resetGameStarted', 'clearPendingGuest']
+        },
+        CANCEL_SIGNALING: {
+            actions: 'removeConnection'
         }
     },
     states: {
@@ -248,6 +252,9 @@ export const lobbyMachine = createMachine({
                 RESET_GAME: {
                     target: '.waiting',
                     actions: ['resetGameStarted', 'broadcastResetGame']
+                },
+                CANCEL_SIGNALING: {
+                    actions: 'removeConnection'
                 }
             }
         }

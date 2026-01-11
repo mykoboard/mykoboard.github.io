@@ -33,12 +33,15 @@ export default function GameLobby() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50/50">
-            <div className="max-w-7xl mx-auto p-6 space-y-8">
+        <div className="min-h-screen bg-background">
+            <div className="max-w-7xl mx-auto p-6 space-y-12">
                 <Header />
-                <h1 className="text-2xl font-bold">{game.name}</h1>
 
-                <div className="space-y-8">
+                <h1 className="text-3xl font-black tracking-tighter uppercase text-white">
+                    Lobby: <span className="text-gradient">{game.name}</span>
+                </h1>
+
+                <div className="animate-in fade-in slide-in-from-top-4 duration-700">
                     {!signalingMode && (
                         <LobbyModeSelection
                             onSelectManual={() => {
@@ -54,15 +57,15 @@ export default function GameLobby() {
                     )}
 
                     {signalingMode && (
-                        <div className="space-y-6">
+                        <div className="space-y-8">
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="mb-4 text-slate-400 hover:text-primary hover:bg-primary/5 transition-all group"
+                                className="mb-4 text-white/30 hover:text-primary hover:bg-primary/5 transition-all group font-black uppercase tracking-widest text-[10px]"
                                 onClick={() => setSignalingMode(null)}
                             >
                                 <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-                                Back to Mode Selection
+                                De-initialize Mode
                             </Button>
 
                             {signalingMode === 'manual' && (

@@ -39,6 +39,7 @@ interface GameSessionContextType {
     onDeleteSession: (id: string) => Promise<void>;
     onAcceptGuest: () => void;
     onRejectGuest: () => void;
+    onCancelSignaling: (connection: Connection) => void;
     onBackToGames: () => void;
     onBackToDiscovery: () => void;
 }
@@ -492,18 +493,37 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
 
     const onHostAGame = (playerCount: number = 2) => {
         let currentBoardId = boardId;
-        if (state.matches('selection') || state.matches('discovery')) {
+        const isNewSession = state.matches('selection') || state.matches('discovery');
+
+        if (isNewSession) {
             currentBoardId = uuidv4();
             navigate(`/games/${gameId}/${currentBoardId}`, { replace: true });
             send({ type: 'HOST', maxPlayers: playerCount });
         }
 
-        const numOffers = playerCount - 1;
-        for (let i = 0; i < numOffers; i++) {
+        // Capacity check
+        const currentCount = playerInfos.length;
+        const pendingCount = pendingSignaling.length;
+        if (currentCount + pendingCount >= state.context.maxPlayers) {
+            logger.info("Lobby capacity reached");
+            return;
+        }
+
+        const createConnection = () => {
             const connection = new Connection(updateConnection);
             connection.onClose = () => send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
             connection.openDataChannel();
             connection.prepareOfferSignal(state.context.playerName);
+        };
+
+        if (isNewSession) {
+            const numOffers = playerCount - 1;
+            for (let i = 0; i < numOffers; i++) {
+                createConnection();
+            }
+        } else {
+            // Incremental connect
+            createConnection();
         }
     };
 
@@ -620,6 +640,11 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         send({ type: 'REJECT_GUEST' });
     };
 
+    const onCancelSignaling = (connection: Connection) => {
+        connection.close();
+        send({ type: 'CANCEL_SIGNALING', connectionId: connection.id });
+    };
+
     const onBackToGames = () => {
         signalingClient?.deleteOffer();
         send({ type: 'CLOSE_SESSION' });
@@ -663,6 +688,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         onDeleteSession,
         onAcceptGuest,
         onRejectGuest,
+        onCancelSignaling,
         onBackToGames,
         onBackToDiscovery
     };

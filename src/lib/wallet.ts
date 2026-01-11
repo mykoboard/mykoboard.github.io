@@ -8,6 +8,7 @@ export interface PlayerIdentity {
     id: string;
     publicKey: string;
     name: string;
+    avatar?: string;
     subscriptionToken: string;
 }
 
@@ -180,13 +181,20 @@ export class SecureWallet {
     }
 
     async updateSubscriptionToken(token: string): Promise<void> {
+        await this.updateIdentity({ subscriptionToken: token });
+    }
+
+    /**
+     * Update any field in the current identity
+     */
+    async updateIdentity(updates: Partial<PlayerIdentity>): Promise<void> {
         await this.init();
         const identity = await this.getIdentity();
         if (!identity) throw new Error("No identity found to update");
 
-        identity.subscriptionToken = token;
-        this.identity = identity;
-        await this.saveToDB('current_identity', identity);
+        const updatedIdentity = { ...identity, ...updates };
+        this.identity = updatedIdentity;
+        await this.saveToDB('current_identity', updatedIdentity);
     }
 
     getCurrentIdentity(): PlayerIdentity | null {

@@ -27,96 +27,94 @@ export function LobbyServerMode({
     const [playerCount, setPlayerCount] = useState(maxPlayers);
 
     return (
-        <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-6 animate-in slide-in-from-bottom-6 duration-700 w-full">
             <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold text-slate-500 uppercase flex items-center gap-2">
-                    <Globe className="w-4 h-4" />
-                    Active Game Rooms
+                <h3 className="text-xs font-black text-white/30 uppercase tracking-[0.3em] flex items-center gap-3">
+                    <Globe className="w-5 h-5 text-blue-400" />
+                    Discovery Mesh: Active Rooms
                 </h3>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-6">
                     <PlayerCountSelector
                         value={playerCount}
                         onChange={setPlayerCount}
                         min={minPlayers}
                         max={maxPlayers}
                     />
-                    <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => signalingClient?.requestOffers()} className="h-7 text-[10px]">
-                            Refresh List
+                    <div className="flex gap-3">
+                        <Button variant="ghost" size="sm" onClick={() => signalingClient?.requestOffers()} className="h-10 px-4 text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-white hover:bg-white/5 border border-white/5 rounded-xl">
+                            Rescan Network
                         </Button>
                         <Button
-                            variant="secondary"
-                            size="sm"
                             onClick={() => onHostAGame(playerCount)}
-                            className="h-7 text-[10px]"
+                            className="h-10 px-4 text-[10px] font-black uppercase tracking-widest bg-primary text-primary-foreground shadow-neon hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] rounded-xl"
                         >
-                            Host My Own
+                            Initialize Host
                         </Button>
                     </div>
                 </div>
             </div>
 
             {isServerConnecting && (
-                <div className="text-center py-4 space-y-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mx-auto"></div>
-                    <p className="text-[10px] text-slate-400 font-mono">Searching network...</p>
+                <div className="text-center py-12 space-y-4 glass-dark rounded-[2rem] border border-white/5">
+                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mx-auto"></div>
+                    <p className="text-[10px] text-primary font-black uppercase tracking-[0.2em] animate-pulse">Synchronizing with global mesh...</p>
                 </div>
             )}
 
             {!isServerConnecting && availableOffers.length === 0 ? (
-                <Card className="p-12 text-center border-dashed bg-white/50 border-2 rounded-2xl">
-                    <div className="h-12 w-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Search className="w-6 h-6 text-slate-300" />
+                <div className="p-20 text-center border border-white/5 bg-white/5 rounded-[3rem] backdrop-blur-sm">
+                    <div className="h-20 w-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6 border border-white/10 group-hover:scale-110 transition-transform">
+                        <Search className="w-10 h-10 text-white/20" />
                     </div>
-                    <p className="text-sm text-slate-400">No active lobbies found for this game.</p>
-                    <Button variant="link" size="sm" onClick={() => onHostAGame(playerCount)} className="mt-2 text-primary font-bold">Be the first to host!</Button>
-                </Card>
+                    <p className="text-xs text-white/30 uppercase font-black tracking-[0.2em]">Null Results: No active nodes found</p>
+                    <Button variant="link" size="sm" onClick={() => onHostAGame(playerCount)} className="mt-4 text-primary font-black uppercase tracking-widest text-[10px] hover:text-primary/70">Broadcasting first signal...</Button>
+                </div>
             ) : (
-                <div className="grid gap-4">
+                <div className="grid gap-6">
                     {availableOffers.map((session) => (
-                        <Card
+                        <div
                             key={session.boardId}
-                            className="p-5 flex items-center justify-between bg-white border-2 border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all"
+                            className="glass-dark p-8 flex items-center justify-between border border-white/5 rounded-[2.5rem] shadow-glass-dark hover:border-primary/20 transition-all duration-500 group"
                         >
-                            <div className="flex items-center gap-5">
-                                <div className="h-14 w-14 bg-primary/10 rounded-2xl flex items-center justify-center font-bold text-primary text-xl">
+                            <div className="flex items-center gap-6">
+                                <div className="h-16 w-16 bg-white/5 rounded-2xl flex items-center justify-center font-black text-primary text-2xl border border-white/10 shadow-neon-sm">
                                     {session.peerName?.[0] || "?"}
                                 </div>
                                 <div className="space-y-1">
-                                    <p className="font-bold text-slate-800 text-lg leading-none">{session.peerName}'s Lobby</p>
+                                    <p className="font-black text-white text-xl uppercase tracking-tight">{session.peerName}'s Instance</p>
                                     <div className="flex items-center gap-2">
-                                        <span className="flex h-2 w-2 rounded-full bg-green-500"></span>
-                                        <p className="text-xs text-slate-400 font-medium tracking-tight">
-                                            {session.slots?.filter(s => s.status === 'open').length} slots available
+                                        <span className="flex h-2 w-2 rounded-full bg-primary shadow-neon animate-pulse"></span>
+                                        <p className="text-[10px] text-white/30 font-black uppercase tracking-widest">
+                                            {session.slots?.filter(s => s.status === 'open').length} Vectors Available
                                         </p>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-100">
+                            <div className="flex items-center gap-3 bg-white/5 p-3 rounded-[2rem] border border-white/10">
                                 {session.slots?.map((slot, idx) => (
                                     <div
                                         key={slot.connectionId}
                                         onClick={() => slot.status === 'open' && onJoinFromList(session, slot)}
                                         className={`
-                                            h-10 w-10 rounded-full flex items-center justify-center border-2 transition-all duration-300
+                                            h-12 w-12 rounded-full flex items-center justify-center border-2 transition-all duration-500
                                             ${slot.status === 'open'
-                                                ? 'border-primary/40 border-dashed cursor-pointer hover:border-primary hover:bg-primary/5 hover:scale-105 shadow-sm bg-white'
-                                                : 'border-slate-200 bg-slate-200/50 cursor-not-allowed opacity-60'}
+                                                ? 'border-primary/20 border-dashed cursor-pointer hover:border-primary hover:bg-primary/10 hover:shadow-neon-sm bg-primary/5'
+                                                : 'border-white/5 bg-white/5 cursor-not-allowed opacity-30'}
                                         `}
-                                        title={slot.status === 'open' ? 'Join Game' : `Taken by ${slot.peerName || 'Player'}`}
+                                        title={slot.status === 'open' ? 'Join Game' : `Occupied by ${slot.peerName || 'Entity'}`}
                                     >
                                         {slot.status === 'open' ? (
-                                            <span className="text-[10px] font-bold text-primary/40">JOIN</span>
+                                            <span className="text-[9px] font-black text-primary uppercase tracking-tighter">JOIN</span>
                                         ) : (
-                                            <div className="h-5 w-5 bg-slate-300 rounded-full flex items-center justify-center text-[8px] font-bold text-white uppercase overflow-hidden">
+                                            <div className="h-6 w-6 bg-white/10 rounded-full flex items-center justify-center text-[10px] font-black text-white/50 uppercase overflow-hidden border border-white/10">
                                                 {slot.peerName?.[0] || 'P'}
                                             </div>
                                         )}
                                     </div>
                                 ))}
                             </div>
-                        </Card>
+                        </div>
                     ))}
                 </div>
             )}

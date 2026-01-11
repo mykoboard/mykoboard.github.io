@@ -9,35 +9,35 @@ interface LobbyModeSelectionProps {
 
 export function LobbyModeSelection({ onSelectManual, onSelectServer }: LobbyModeSelectionProps) {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in zoom-in-95 duration-300">
-            <Card
-                className="p-8 flex flex-col items-center text-center space-y-6 hover:shadow-xl transition-all border-2 border-primary/5 group cursor-pointer"
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in zoom-in-95 duration-500 w-full">
+            <div
+                className="glass-dark p-10 flex flex-col items-center text-center space-y-8 border border-white/5 hover:border-primary/30 shadow-glass-dark hover:shadow-[0_0_40px_rgba(16,185,129,0.1)] transition-all duration-500 rounded-[2.5rem] group cursor-pointer relative overflow-hidden"
                 onClick={onSelectManual}
             >
-                <div className="h-20 w-20 bg-primary/5 rounded-3xl flex items-center justify-center group-hover:bg-primary/10 transition-colors">
-                    <MousePointer2 className="w-10 h-10 text-primary" />
+                <div className="h-24 w-24 bg-primary/5 rounded-[2rem] flex items-center justify-center border border-primary/20 group-hover:bg-primary/10 transition-colors shadow-neon-sm">
+                    <MousePointer2 className="w-12 h-12 text-primary" />
                 </div>
-                <div className="space-y-2">
-                    <h2 className="text-xl font-bold">Manual Invite</h2>
-                    <p className="text-sm text-slate-500">Copy-paste signaling strings. 100% Private & Serverless.</p>
+                <div className="space-y-3">
+                    <h2 className="text-2xl font-black text-white uppercase tracking-tight">Manual Bridge</h2>
+                    <p className="text-xs text-white/30 uppercase tracking-[0.2em] font-medium leading-relaxed">Encrypted P2P signaling via shared vectors. 100% serverless.</p>
                 </div>
-                <Button variant="outline" className="w-full rounded-xl">Private Mode</Button>
-            </Card>
+                <Button variant="outline" className="w-full h-12 rounded-xl border-white/10 text-white/70 hover:text-primary hover:border-primary/40 font-black uppercase tracking-widest text-[10px]">Initialize Private Link</Button>
+            </div>
 
-            <Card
-                className="p-8 flex flex-col items-center text-center space-y-6 hover:shadow-xl transition-all border-2 border-primary/5 group cursor-pointer relative overflow-hidden"
+            <div
+                className="glass-dark p-10 flex flex-col items-center text-center space-y-8 border border-white/5 hover:border-blue-400/30 shadow-glass-dark hover:shadow-[0_0_40px_rgba(59,130,246,0.1)] transition-all duration-500 rounded-[2.5rem] group cursor-pointer relative overflow-hidden"
                 onClick={onSelectServer}
             >
-                <div className="absolute top-3 right-3 px-2 py-0.5 bg-yellow-400 text-[10px] font-bold rounded-full uppercase tracking-tighter">Alpha</div>
-                <div className="h-20 w-20 bg-blue-50 rounded-3xl flex items-center justify-center group-hover:bg-blue-100 transition-colors">
-                    <Globe className="w-10 h-10 text-blue-500" />
+                <div className="absolute top-4 right-6 px-3 py-1 bg-primary text-primary-foreground text-[9px] font-black rounded-full uppercase tracking-[0.2em] shadow-neon">Stable</div>
+                <div className="h-24 w-24 bg-blue-500/5 rounded-[2rem] flex items-center justify-center border border-blue-400/20 group-hover:bg-blue-400/10 transition-colors shadow-[0_0_50px_rgba(59,130,246,0.1)]">
+                    <Globe className="w-12 h-12 text-blue-400" />
                 </div>
-                <div className="space-y-2">
-                    <h2 className="text-xl font-bold">Global Online</h2>
-                    <p className="text-sm text-slate-500">Seamless connection via global signaling server.</p>
+                <div className="space-y-3">
+                    <h2 className="text-2xl font-black text-white uppercase tracking-tight">Global Mesh</h2>
+                    <p className="text-xs text-white/30 uppercase tracking-[0.2em] font-medium leading-relaxed">Seamless node discovery via global signaling network.</p>
                 </div>
-                <Button variant="outline" className="w-full rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50">Experimental Mode</Button>
-            </Card>
+                <Button variant="outline" className="w-full h-12 rounded-xl border-blue-400/20 text-blue-400 hover:text-blue-300 hover:bg-blue-400/5 font-black uppercase tracking-widest text-[10px]">Connect to Mesh</Button>
+            </div>
         </div>
     );
 }

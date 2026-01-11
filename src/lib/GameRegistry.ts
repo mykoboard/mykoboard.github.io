@@ -35,7 +35,7 @@ export const games: GameMetadata[] = [
     {
         id: 'galactic-hegemony',
         name: "Galactic Hegemony",
-        image: "/img/placeholder.svg",
+        image: "/img/games/galactic-hegemony/card.png",
         description: "Decentralized P2P strategy game. Compete for cosmic dominance in a serverless galaxy!",
         minPlayers: 2,
         maxPlayers: 6,

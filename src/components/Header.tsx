@@ -18,25 +18,41 @@ export function Header() {
     }, []);
 
     return (
-        <header className="flex justify-between items-center mb-4">
-            <NavigationMenu
-                className="relative z-10 flex w-screen justify-center"
-                children={
-                    <NavigationMenuList className="center m-0 flex list-none rounded-md p-1">
+        <header className="flex justify-between items-center py-6 border-b border-white/5 bg-background/50 backdrop-blur-md sticky top-0 z-50">
+            <div className="flex items-center gap-8">
+                <h1
+                    className="text-2xl font-black tracking-tighter cursor-pointer"
+                    onClick={() => navigate("/")}
+                >
+                    MYKO<span className="text-primary">BOARD</span>
+                </h1>
+                <NavigationMenu className="hidden md:flex">
+                    <NavigationMenuList className="flex space-x-2">
                         <NavigationMenuItem>
-                            <NavigationMenuLink className="select-none rounded px-3 py-2 text-lg font-semibold leading-none  no-underline outline-none " href="#/games">
-                                Games
+                            <NavigationMenuLink
+                                className="px-4 py-2 text-sm font-bold uppercase tracking-widest text-white/70 hover:text-primary transition-colors cursor-pointer"
+                                onClick={() => navigate("/games")}
+                            >
+                                Arcade
                             </NavigationMenuLink>
                         </NavigationMenuItem>
                     </NavigationMenuList>
-                } />
-            <div className="flex items-center space-x-2">
-                <User className="w-6 h-6 shrink-0" />
-                <span
-                    className="text-lg font-semibold cursor-pointer hover:text-primary transition-colors"
-                    onClick={() => navigate("/profile")}
-                >
-                    {identity?.name}
+                </NavigationMenu>
+            </div>
+
+            <div
+                className="flex items-center space-x-3 glass-dark px-4 py-2 rounded-full cursor-pointer hover:neon-border transition-all duration-300"
+                onClick={() => navigate("/profile")}
+            >
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden border border-primary/20">
+                    {identity?.avatar ? (
+                        <img src={identity.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                        <User className="w-5 h-5 text-primary" />
+                    )}
+                </div>
+                <span className="text-sm font-bold text-white/90 tracking-wide uppercase">
+                    {identity?.name || "Guest"}
                 </span>
             </div>
         </header>

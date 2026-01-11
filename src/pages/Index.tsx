@@ -5,7 +5,7 @@ import { HowItWorks } from "../components/HowItWorks";
 
 const Index = () => {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <Hero />
       <Features />
       <HowItWorks />

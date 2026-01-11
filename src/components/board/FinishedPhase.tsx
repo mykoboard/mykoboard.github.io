@@ -37,26 +37,29 @@ export function FinishedPhase({
                     />
                 </div>
             </Suspense>
-            <Card className="p-6 border-2 border-primary/20 bg-primary/5 shadow-xl animate-in slide-in-from-bottom-4 duration-500">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center">
-                            <CheckCircle2 className="w-6 h-6 text-primary" />
+            <div className="glass-dark p-8 border border-white/5 shadow-glass-dark rounded-[2.5rem] animate-in slide-in-from-bottom-6 duration-700">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                        <div className="h-14 w-14 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 shadow-neon">
+                            <CheckCircle2 className="w-8 h-8 text-primary" />
                         </div>
-                        <div>
-                            <h3 className="font-bold text-slate-900">Match Finished</h3>
-                            <p className="text-xs text-slate-500">The game has concluded. What's next?</p>
+                        <div className="space-y-1">
+                            <h3 className="text-xl font-black text-white uppercase tracking-tight">Match Finalized</h3>
+                            <p className="text-[10px] text-white/30 uppercase tracking-widest font-black">All cycles complete. Handshake terminated.</p>
                         </div>
                     </div>
-                    <div className="flex gap-3 w-full md:w-auto">
-                        <Button onClick={onBackToLobby} className="w-full md:w-auto bg-primary hover:bg-primary/90 text-white font-bold">
-                            Leave Room
+                    <div className="flex gap-4 w-full md:w-auto">
+                        <Button
+                            onClick={onBackToLobby}
+                            className="w-full md:w-56 h-14 rounded-2xl bg-primary text-primary-foreground shadow-neon hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] font-black uppercase tracking-[0.3em] text-xs transition-all"
+                        >
+                            Return to Discovery
                         </Button>
                     </div>
                 </div>
-            </Card>
-            <div className="text-center text-slate-400 text-xs italic">
-                You can review the game board above. Click "Leave Room" to start a new match.
+            </div>
+            <div className="text-center text-white/10 text-[9px] font-black uppercase tracking-[0.4em] italic pt-4">
+                Node state captured. Verification record locked inside vault.
             </div>
         </div>
     );

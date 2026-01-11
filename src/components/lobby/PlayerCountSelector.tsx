@@ -19,12 +19,12 @@ export function PlayerCountSelector({
     const options = Array.from({ length: max - min + 1 }, (_, i) => min + i);
 
     return (
-        <div className="flex flex-col items-center gap-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+        <div className="flex flex-col items-center gap-3">
+            <span className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] flex items-center gap-2">
                 <Users className="w-3 h-3" />
-                {label}
+                {label} Node Capacity
             </span>
-            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-inner">
+            <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 shadow-inner">
                 {options.map((option) => (
                     <Button
                         key={option}
@@ -35,10 +35,10 @@ export function PlayerCountSelector({
                             onChange(option);
                         }}
                         className={`
-                            h-8 w-10 rounded-lg text-xs font-bold transition-all duration-200
+                            h-10 w-12 rounded-xl text-xs font-black transition-all duration-300
                             ${value === option
-                                ? "bg-white text-primary shadow-sm hover:bg-white"
-                                : "text-slate-500 hover:bg-slate-200/50"}
+                                ? "bg-primary text-primary-foreground shadow-neon hover:bg-primary"
+                                : "text-white/30 hover:text-white hover:bg-white/5"}
                         `}
                     >
                         {option}

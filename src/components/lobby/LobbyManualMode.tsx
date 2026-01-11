@@ -23,16 +23,16 @@ export function LobbyManualMode({
     const [playerCount, setPlayerCount] = useState(maxPlayers);
 
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in slide-in-from-bottom-4 duration-500">
-            <Card className="p-8 flex flex-col items-center text-center space-y-4 hover:shadow-xl transition-all border-2 border-primary/5 hover:border-primary/20 group cursor-pointer"
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 animate-in slide-in-from-bottom-6 duration-700 w-full">
+            <div className="glass-dark p-10 flex flex-col items-center text-center space-y-8 border border-white/5 hover:border-primary/30 shadow-glass-dark hover:shadow-[0_0_40px_rgba(16,185,129,0.1)] transition-all duration-500 rounded-[2.5rem] group cursor-pointer"
                 onClick={() => onHostAGame(playerCount)}>
-                <div className="h-14 w-14 bg-primary/5 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <UserPlus className="w-7 h-7 text-primary" />
+                <div className="h-20 w-20 bg-primary/5 rounded-[2rem] flex items-center justify-center border border-primary/20 group-hover:scale-110 transition-transform shadow-neon-sm">
+                    <UserPlus className="w-10 h-10 text-primary" />
                 </div>
-                <div>
-                    <h2 className="text-xl font-bold text-slate-800">Host a Game</h2>
-                    <p className="text-xs text-slate-500 mt-1 max-w-[180px] mb-4">
-                        Start a new secure match and invite your friends.
+                <div className="space-y-3">
+                    <h2 className="text-2xl font-black text-white uppercase tracking-tight">Host Instance</h2>
+                    <p className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-black leading-relaxed max-w-[200px] mb-4">
+                        Initialize a new node session and broadcast invite vector.
                     </p>
                     <PlayerCountSelector
                         value={playerCount}
@@ -41,29 +41,29 @@ export function LobbyManualMode({
                         max={maxPlayers}
                     />
                 </div>
-                <Button className="w-full rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 pointer-events-none">
-                    Create Session
+                <Button className="w-full h-14 rounded-2xl bg-primary text-primary-foreground shadow-neon hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] font-black uppercase tracking-[0.3em] text-xs transition-all pointer-events-none">
+                    Generate Session
                 </Button>
-            </Card>
+            </div>
 
-            <Card className="p-8 flex flex-col items-center text-center space-y-4 hover:shadow-xl transition-all border-2 border-secondary/10 hover:border-secondary/30 group cursor-pointer"
+            <div className="glass-dark p-10 flex flex-col items-center text-center space-y-8 border border-white/5 hover:border-white/20 shadow-glass-dark transition-all duration-500 rounded-[2.5rem] group cursor-pointer"
                 onClick={() => {
                     connectWithOffer();
                     navigate(`/games/${gameId}/manual`);
                 }}>
-                <div className="h-14 w-14 bg-secondary/10 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <LogIn className="w-7 h-7 text-secondary-foreground" />
+                <div className="h-20 w-20 bg-white/5 rounded-[2rem] flex items-center justify-center border border-white/10 group-hover:scale-110 transition-transform">
+                    <LogIn className="w-10 h-10 text-white/70" />
                 </div>
-                <div>
-                    <h2 className="text-xl font-bold text-slate-800">Join a Game</h2>
-                    <p className="text-xs text-slate-500 mt-1 max-w-[180px]">
-                        Use a secure invite to connect to an existing match.
+                <div className="space-y-3">
+                    <h2 className="text-2xl font-black text-white uppercase tracking-tight">Bridge Session</h2>
+                    <p className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-black leading-relaxed max-w-[200px]">
+                        Receive external node signal to enter existing match.
                     </p>
                 </div>
-                <Button variant="secondary" className="w-full rounded-xl pointer-events-none">
-                    Join Session
+                <Button variant="outline" className="w-full h-14 rounded-2xl border-white/10 text-white/70 hover:text-white hover:bg-white/5 font-black uppercase tracking-widest text-xs transition-all pointer-events-none mt-auto">
+                    Initialize Bridge
                 </Button>
-            </Card>
+            </div>
         </div>
     );
 }
