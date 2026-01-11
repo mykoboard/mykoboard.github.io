@@ -1,0 +1,31 @@
+{
+    "name": "@mykoboard/galactic-hegemony",
+    "private": true,
+    "version": "0.0.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc && vite build",
+        "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "@mykoboard/integration": "workspace:*",
+        "@xstate/react": "^5.0.0",
+        "lucide-react": "^0.446.0",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "xstate": "^5.18.2"
+    },
+    "devDependencies": {
+        "@originjs/vite-plugin-federation": "^1.5.0",
+        "@types/react": "^18.3.3",
+        "@types/react-dom": "^18.3.0",
+        "@vitejs/plugin-react-swc": "^3.5.0",
+        "autoprefixer": "^10.4.19",
+        "postcss": "^8.4.38",
+        "tailwindcss": "^3.4.3",
+        "typescript": "^5.2.2",
+        "vite": "^5.3.1"
+    }
+}

@@ -9,10 +9,10 @@
   ],
   "scripts": {
     "dev": "vite",
-    "dev:all": "bun run build:remotes && (bun run --cwd packages/tic-tac-toe preview --port 5001 < /dev/null & bun run --cwd packages/ludo preview --port 5002 < /dev/null & vite < /dev/null)",
+    "dev:all": "bun run build:remotes && (bun run --cwd packages/tic-tac-toe preview --port 5001 < /dev/null & bun run --cwd packages/ludo preview --port 5002 < /dev/null & bun run --cwd packages/galactic-hegemony preview --port 5003 < /dev/null & vite < /dev/null)",
     "build": "vite build",
-    "build:remotes": "bun run --cwd packages/tic-tac-toe build && bun run --cwd packages/ludo build",
-    "build:all": "bun run build:remotes && vite build --mode production && mkdir -p docs/packages/tic-tac-toe && cp -r packages/tic-tac-toe/dist/* docs/packages/tic-tac-toe/ && mkdir -p docs/packages/ludo && cp -r packages/ludo/dist/* docs/packages/ludo/",
+    "build:remotes": "bun run --cwd packages/tic-tac-toe build && bun run --cwd packages/ludo build && bun run --cwd packages/galactic-hegemony build",
+    "build:all": "bun run build:remotes && vite build --mode production && mkdir -p docs/packages/tic-tac-toe && cp -r packages/tic-tac-toe/dist/* docs/packages/tic-tac-toe/ && mkdir -p docs/packages/ludo && cp -r packages/ludo/dist/* docs/packages/ludo/ && mkdir -p docs/packages/galactic-hegemony && cp -r packages/galactic-hegemony/dist/* docs/packages/galactic-hegemony/",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",

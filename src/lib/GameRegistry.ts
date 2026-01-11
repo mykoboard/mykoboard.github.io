@@ -32,6 +32,16 @@ export const games: GameMetadata[] = [
         // @ts-ignore
         component: React.lazy(() => import('ludo/Ludo')),
     },
+    {
+        id: 'galactic-hegemony',
+        name: "Galactic Hegemony",
+        image: "/img/placeholder.svg",
+        description: "Decentralized P2P strategy game. Compete for cosmic dominance in a serverless galaxy!",
+        minPlayers: 2,
+        maxPlayers: 6,
+        // @ts-ignore
+        component: React.lazy(() => import('galactic-hegemony/GalacticHegemony')),
+    },
 ];
 
 export function getGameById(id: string): GameMetadata | undefined {
