@@ -124,7 +124,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         const localParticipant = storedParticipants.find(p => p.isYou);
 
         const localPlayer: PlayerInfo = {
-            id: 'local',
+            id: identity?.id || 'local',
             name: state.context.playerName,
             status: isGameStarted ? 'game' : 'lobby',
             isConnected: true,
@@ -138,20 +138,20 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         // 1. DETERMINE THE HOST (Always index 0)
         if (isInitiator) {
             infos.push(localPlayer);
-            processedIds.add('local');
+            processedIds.add(localPlayer.id);
         } else if (externalParticipants.length > 0) {
-            const hostData = externalParticipants.find(p => p.isHost || p.id === 'local');
+            const hostData = externalParticipants.find(p => p.isHost);
             if (hostData) {
                 const hostConnection = connectionList.find(c => c.status === ConnectionStatus.connected);
                 infos.push({
-                    id: hostConnection?.id || 'host',
+                    id: hostData.id,
                     name: hostData.name,
                     status: (hostConnection ? state.context.playerStatuses.get(hostConnection.id) : null) || (isGameStarted ? 'game' : 'lobby'),
                     isConnected: !!hostConnection,
                     isLocal: false,
                     isHost: true
                 });
-                if (hostConnection) processedIds.add(hostConnection.id);
+                processedIds.add(hostData.id);
             }
         }
 
@@ -178,12 +178,10 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
                 const isHostData = p.isHost || p.id === 'local';
                 if (isHostData) return; // Already handled host
 
-                if (p.name === localPlayer.name) {
-                    // This is ME (the guest)
-                    if (!processedIds.has('local')) {
-                        infos.push(localPlayer);
-                        processedIds.add('local');
-                    }
+                if (p.name === localPlayer.name && !processedIds.has(p.id)) {
+                    // This is ME (the guest) - adapt to the ID the host gave us
+                    infos.push({ ...localPlayer, id: p.id });
+                    processedIds.add(p.id);
                 } else {
                     // This is another GUEST
                     infos.push({

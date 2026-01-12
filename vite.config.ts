@@ -25,6 +25,9 @@ export default defineConfig(({ mode }) => ({
         "galactic-hegemony": mode === 'development'
           ? "http://localhost:5003/packages/galactic-hegemony/assets/remoteEntry.js"
           : "https://mykoboard.com/packages/galactic-hegemony/assets/remoteEntry.js",
+        "planning-poker": mode === 'development'
+          ? "http://localhost:5004/packages/planning-poker/assets/remoteEntry.js"
+          : "https://mykoboard.com/packages/planning-poker/assets/remoteEntry.js",
       },
       shared: ["react", "react-dom", "@xstate/react", "xstate", "@mykoboard/integration"],
     }),

@@ -1,0 +1,17 @@
+{
+    "extends": "../../tsconfig.app.json",
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "../../src/*"
+            ],
+            "@mykoboard/integration": [
+                "../integration/src/index.ts"
+            ]
+        }
+    },
+    "include": [
+        "src"
+    ]
+}

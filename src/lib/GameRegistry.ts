@@ -42,6 +42,16 @@ export const games: GameMetadata[] = [
         // @ts-ignore
         component: React.lazy(() => import('galactic-hegemony/GalacticHegemony')),
     },
+    {
+        id: 'planning-poker',
+        name: "Planning Poker",
+        image: "/img/games/planning-poker/card.png",
+        description: "Scrum estimation tool for teams. Vote on story points with Fibonacci cards in real-time.",
+        minPlayers: 2,
+        maxPlayers: 10,
+        // @ts-ignore
+        component: React.lazy(() => import('planning-poker/PlanningPoker')),
+    },
 ];
 
 export function getGameById(id: string): GameMetadata | undefined {
