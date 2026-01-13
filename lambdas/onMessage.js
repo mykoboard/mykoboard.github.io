@@ -27,7 +27,7 @@ export const handler = async (event) => {
         return { statusCode: 400, body: "Invalid JSON" };
     }
 
-    const { type, gameId, boardId, peerName, slots, answer, target, to } = body;
+    const { type, gameId, boardId, peerName, slots, answer, target, to, publicKey } = body;
 
     try {
         // 1️⃣ Offer (Combined Slots)
@@ -39,6 +39,7 @@ export const handler = async (event) => {
                     gameId: { S: gameId || "default" },
                     boardId: { S: boardId || "default" },
                     peerName: { S: peerName || "unknown" },
+                    publicKey: { S: publicKey || "anonymous" },
                     status: { S: "waiting" },
                     slots: { S: JSON.stringify(slots || []) },
                     timestamp: { N: Date.now().toString() }
@@ -74,6 +75,42 @@ export const handler = async (event) => {
 
         // 3️⃣ Answer (Standard)
         if (type === "answer") {
+            // Check if user is already in this game (duplicate join prevention)
+            if (publicKey && boardId) {
+                const existing = await ddb.send(new ScanCommand({
+                    TableName: TABLE_NAME,
+                    FilterExpression: "boardId = :bid AND publicKey = :pk AND connectionId <> :cid",
+                    ExpressionAttributeValues: {
+                        ":bid": { S: boardId },
+                        ":pk": { S: publicKey },
+                        ":cid": { S: connectionId }
+                    }
+                }));
+
+                if (existing.Items && existing.Items.length > 0) {
+                    await sendMessage(client, connectionId, {
+                        type: "error",
+                        code: "DUPLICATE_IDENTITY",
+                        message: "Identity already active in this session."
+                    });
+                    return { statusCode: 200, body: "Duplicate blocked" };
+                }
+            }
+
+            // Store guest as participant to prevent others from using same identity
+            await ddb.send(new PutItemCommand({
+                TableName: TABLE_NAME,
+                Item: {
+                    connectionId: { S: connectionId },
+                    gameId: { S: gameId || "default" },
+                    boardId: { S: boardId || "default" },
+                    peerName: { S: peerName || "unknown" },
+                    publicKey: { S: publicKey || "anonymous" },
+                    status: { S: "participant" },
+                    timestamp: { N: Date.now().toString() }
+                }
+            }));
+
             await sendMessage(client, target, {
                 type: "answer",
                 from: connectionId,
@@ -82,8 +119,6 @@ export const handler = async (event) => {
                 peerName: peerName
             });
 
-            // We don't mark as "answered" yet because multiple guests might still join
-            // unless all slots are full. For now, we keep it "waiting".
             return { statusCode: 200 };
         }
 

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { getGameById } from "../lib/GameRegistry";
 import { useGameSession } from "../contexts/GameSessionContext";
@@ -32,11 +32,25 @@ export default function Board() {
     handlePlayAgain,
     onAcceptGuest,
     onRejectGuest,
+    onCancelSignaling,
     onBackToGames,
     onBackToDiscovery
   } = useGameSession();
 
   const isFinished = state.matches('room.finished');
+  const isPreparation = !isGameStarted && !isFinished;
+
+  useEffect(() => {
+    if (!isPreparation) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isPreparation]);
 
   if (!game) {
     return <div className="p-10 text-center">Game not found</div>;
@@ -85,6 +99,7 @@ export default function Board() {
               onBackToLobby={onBackToDiscovery}
               onAcceptGuest={onAcceptGuest}
               onRejectGuest={onRejectGuest}
+              onCancelSignaling={onCancelSignaling}
               onRemovePlayer={(id) => send({ type: 'REMOVE_PLAYER', playerId: id })}
               playerCount={playerInfos.length}
               maxPlayers={state.context.maxPlayers}

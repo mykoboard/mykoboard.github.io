@@ -82,5 +82,13 @@ export const SessionManager = {
         } catch (e) {
             console.error("Failed to remove session", e);
         }
+    },
+
+    async clearAllSessions() {
+        try {
+            await db.clearAllGames();
+        } catch (e) {
+            console.error("Failed to clear all sessions", e);
+        }
     }
 };

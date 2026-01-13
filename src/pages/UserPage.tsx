@@ -3,11 +3,23 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SecureWallet, PlayerIdentity } from "@/lib/wallet";
-import { User, Key, Fingerprint, Sparkles, Save, Shield, History } from "lucide-react";
+import { User, Key, Fingerprint, Sparkles, Save, Shield, History, AlertTriangle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { SessionManager } from "@/lib/sessions";
 import { GameSession } from "@/lib/db";
 import { LobbyPastMatches } from "@/components/lobby/LobbyPastMatches";
+import { useNavigate } from "react-router-dom";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function UserPage() {
     const [identity, setIdentity] = useState<PlayerIdentity | null>(null);
@@ -15,7 +27,9 @@ export default function UserPage() {
     const [avatar, setAvatar] = useState("");
     const [token, setToken] = useState("");
     const [isSaving, setIsSaving] = useState(false);
+    const [isClearing, setIsClearing] = useState(false);
     const [activeSessions, setActiveSessions] = useState<GameSession[]>([]);
+    const navigate = useNavigate();
 
     useEffect(() => {
         const loadIdentity = async () => {
@@ -71,6 +85,28 @@ export default function UserPage() {
             toast.error("Encryption Phase Failed");
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleClearAllData = async () => {
+        setIsClearing(true);
+        try {
+            const wallet = SecureWallet.getInstance();
+            await wallet.clearIdentity();
+            await SessionManager.clearAllSessions();
+
+            toast.success("All Data Cleared", {
+                description: "Your local identity and history have been wiped.",
+                icon: <Trash2 className="w-4 h-4 text-destructive" />
+            });
+
+            // Redirect to landing page
+            navigate("/", { replace: true });
+        } catch (error) {
+            console.error(error);
+            toast.error("Wipe Operation Failed");
+        } finally {
+            setIsClearing(false);
         }
     };
 
@@ -212,6 +248,64 @@ export default function UserPage() {
                             </div>
                         </div>
                     )}
+
+                    {/* Danger Zone Section */}
+                    <div className="pt-12 mt-12 border-t border-destructive/20 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-destructive/10 rounded-2xl border border-destructive/20 shadow-[0_0_20px_rgba(239,68,68,0.1)]">
+                                <AlertTriangle className="w-6 h-6 text-destructive" />
+                            </div>
+                            <h2 className="text-3xl font-black tracking-tight text-white uppercase italic">Danger <span className="text-destructive">Zone</span></h2>
+                        </div>
+
+                        <div className="glass-dark p-8 rounded-3xl border border-destructive/10 shadow-glass-dark space-y-6">
+                            <div className="space-y-2">
+                                <h3 className="text-xl font-bold text-white uppercase tracking-tight">Purge All Neural Records</h3>
+                                <p className="text-sm text-slate-400 font-medium leading-relaxed">
+                                    This action will permanently delete your <span className="text-destructive font-bold">decentralized identity</span>,
+                                    private keys, and <span className="text-destructive font-bold">all match history</span> from this device.
+                                    This cannot be undone.
+                                </p>
+                            </div>
+
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        disabled={isClearing}
+                                        className="h-14 px-8 text-xs font-black uppercase tracking-[0.2em] rounded-xl border-destructive/30 text-destructive hover:bg-destructive hover:text-white hover:border-destructive transition-all duration-300"
+                                    >
+                                        {isClearing ? "PURGING DATA..." : "INITIATE FULL DATA WIPE"}
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent className="glass-dark border border-destructive/20 rounded-[2rem] p-8 max-w-md">
+                                    <AlertDialogHeader className="space-y-4">
+                                        <div className="mx-auto h-20 w-20 bg-destructive/10 rounded-[2.5rem] border border-destructive/20 flex items-center justify-center relative group">
+                                            <div className="absolute inset-0 bg-destructive/20 blur-2xl rounded-full opacity-50" />
+                                            <AlertTriangle className="w-10 h-10 text-destructive relative z-10" />
+                                        </div>
+                                        <AlertDialogTitle className="text-2xl font-black text-center tracking-tighter text-white uppercase">
+                                            Confirm Neural Purge?
+                                        </AlertDialogTitle>
+                                        <AlertDialogDescription className="text-center text-slate-400 font-medium px-4">
+                                            You are about to erase all local data. Your identity and game history will be lost forever. Are you absolutely certain?
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter className="flex gap-4 pt-6 sm:justify-end">
+                                        <AlertDialogCancel className="h-14 rounded-xl bg-white/5 border-white/10 text-white font-bold hover:bg-white/10">
+                                            ABORT
+                                        </AlertDialogCancel>
+                                        <AlertDialogAction
+                                            onClick={handleClearAllData}
+                                            className="h-14 rounded-xl bg-destructive text-white font-black uppercase tracking-widest shadow-[0_0_20px_rgba(239,68,68,0.3)] hover:bg-destructive/90"
+                                        >
+                                            WIPE DATA
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -14,10 +14,11 @@ interface LobbyContext {
     pendingGuest: { id: string; name: string; answer: any; connection: Connection } | null;
     externalParticipants: { id: string; name: string; isHost: boolean }[];
     maxPlayers: number;
+    boardId?: string;
 }
 
 type LobbyEvent =
-    | { type: 'HOST'; maxPlayers?: number }
+    | { type: 'HOST'; maxPlayers?: number; boardId?: string }
     | { type: 'JOIN' }
     | { type: 'GOTO_LOBBY' }
     | { type: 'UPDATE_CONNECTION'; connection: Connection }
@@ -60,6 +61,7 @@ export const lobbyMachine = createMachine({
         pendingGuest: null,
         externalParticipants: [],
         maxPlayers: 2,
+        boardId: undefined,
     }),
     on: {
         UPDATE_CONNECTION: {
@@ -105,7 +107,8 @@ export const lobbyMachine = createMachine({
                     actions: ['resetContext', assign({
                         isInitiator: true,
                         isGameFinished: false,
-                        maxPlayers: ({ event }) => event.type === 'HOST' ? (event.maxPlayers || 2) : 2
+                        maxPlayers: ({ event }) => event.type === 'HOST' ? (event.maxPlayers || 2) : 2,
+                        boardId: ({ event }) => event.type === 'HOST' ? event.boardId : undefined
                     })]
                 },
                 JOIN: {
@@ -128,7 +131,8 @@ export const lobbyMachine = createMachine({
                     actions: ['resetContext', assign({
                         isInitiator: true,
                         isGameFinished: false,
-                        maxPlayers: ({ event }) => event.type === 'HOST' ? (event.maxPlayers || 2) : 2
+                        maxPlayers: ({ event }) => event.type === 'HOST' ? (event.maxPlayers || 2) : 2,
+                        boardId: ({ event }) => event.type === 'HOST' ? event.boardId : undefined
                     })]
                 },
                 JOIN: {
@@ -232,14 +236,16 @@ export const lobbyMachine = createMachine({
                 },
                 REQUEST_JOIN: {
                     target: '#approving',
-                    actions: assign({
-                        pendingGuest: ({ event }) => ({
-                            id: event.connectionId,
-                            name: event.peerName,
-                            answer: event.answer,
-                            connection: event.connection
+                    actions: [
+                        assign({
+                            pendingGuest: ({ event }) => ({
+                                id: event.connectionId,
+                                name: event.peerName,
+                                answer: event.answer,
+                                connection: event.connection
+                            })
                         })
-                    })
+                    ]
                 },
                 GAME_STARTED: {
                     target: '.game',
@@ -398,7 +404,8 @@ export const lobbyMachine = createMachine({
             isInitiator: false,
             maxPlayers: 2,
             pendingGuest: null,
-            externalParticipants: []
+            externalParticipants: [],
+            boardId: undefined
         }),
         clearPendingGuest: assign({ pendingGuest: null })
     },

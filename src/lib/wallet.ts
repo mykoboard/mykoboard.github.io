@@ -201,6 +201,25 @@ export class SecureWallet {
         return this.identity;
     }
 
+    /**
+     * Clear all identity data from IndexedDB
+     */
+    async clearIdentity(): Promise<void> {
+        await this.init();
+        return new Promise((resolve, reject) => {
+            if (!this.db) return reject("DB not initialized");
+            const transaction = this.db.transaction(STORE_NAME, 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.clear();
+            request.onsuccess = () => {
+                this.identity = null;
+                this.keyPair = null;
+                resolve();
+            };
+            request.onerror = () => reject(request.error);
+        });
+    }
+
     private async saveToDB(key: string, value: any): Promise<void> {
         return new Promise((resolve, reject) => {
             if (!this.db) return reject("DB not initialized");

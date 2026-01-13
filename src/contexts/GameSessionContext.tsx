@@ -6,6 +6,7 @@ import { lobbyMachine } from "../machines/lobbyMachine";
 import { Connection, ConnectionStatus } from "../lib/webrtc";
 import { logger } from "../lib/logger";
 import { getGameById } from "../lib/GameRegistry";
+import { toast } from "sonner";
 import { Ledger, createLobbyMessage, isLobbyMessage, PlayerInfo } from "@mykoboard/integration";
 import { SecureWallet, PlayerIdentity } from "../lib/wallet";
 import { SignalingService } from "../lib/signaling";
@@ -115,6 +116,36 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
     const isConnected = state.matches('room');
 
     const isLeavingRef = useRef(false);
+    const prevBoardIdRef = useRef<string | undefined>(boardId);
+
+    // Host Exit Detection & Signaling Cleanup
+    useEffect(() => {
+        const wasOnBoard = !!prevBoardIdRef.current;
+        const isNowOffBoard = !boardId;
+
+        if (wasOnBoard && isNowOffBoard && isInitiator) {
+            logger.sig(`Host detected leaving board ${prevBoardIdRef.current}. Purging offers.`);
+            if (signalingClient?.isConnected) {
+                signalingClient.deleteOffer();
+            }
+            // Also reset machine so we don't carry over hosting state to the lobby
+            send({ type: 'CLOSE_SESSION' });
+        }
+
+        prevBoardIdRef.current = boardId;
+    }, [boardId, isInitiator, signalingClient, send]);
+
+    // Browser-level cleanup (Reload/Close)
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            if (isInitiator && signalingClient && boardId) {
+                // Attempt to purge offer before the socket is killed by the browser
+                signalingClient.deleteOffer();
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isInitiator, signalingClient, boardId]);
 
     const playerInfos = useMemo((): PlayerInfo[] => {
         const currentSession = activeSessions.find(s => s.boardId === boardId);
@@ -214,7 +245,36 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         return infos;
     }, [state.context.playerName, isGameStarted, connectionList, state.context.playerStatuses, isInitiator, activeSessions, boardId, state.context.externalParticipants]);
 
+    const signalingClientRef = useRef<SignalingService | null>(null);
+    const isInitiatorRef = useRef(false);
+
+    useEffect(() => {
+        signalingClientRef.current = signalingClient;
+    }, [signalingClient]);
+
+    useEffect(() => {
+        isInitiatorRef.current = isInitiator;
+    }, [isInitiator]);
+
+    const lastStatusRef = useRef<Map<string, string>>(new Map());
+    const lastSignalRef = useRef<Map<string, string>>(new Map());
+
     const updateConnection = (connection: Connection) => {
+        // Prevent redundant machine events if nothing meaningful changed
+        // This significantly reduces log noise from ICE candidate gathering
+        const existingStatus = lastStatusRef.current.get(connection.id);
+        const existingSignal = connection.signal?.toString() || "";
+        const prevSignal = lastSignalRef.current.get(connection.id);
+
+        if (existingStatus === connection.status && prevSignal === existingSignal) {
+            return;
+        }
+
+        lastStatusRef.current.set(connection.id, connection.status);
+        lastSignalRef.current.set(connection.id, existingSignal);
+
+        send({ type: 'UPDATE_CONNECTION', connection });
+
         if (!(connection as any)._hasListener) {
             const handleLobbyMessage = (data: string) => {
                 try {
@@ -289,7 +349,10 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
 
     // Broadcast combined offer (Host Only)
     useEffect(() => {
-        if (!isInitiator || signalingMode !== 'server' || !signalingClient || !boardId) return;
+        const effectiveBoardId = state.context.boardId || boardId;
+        if (!isInitiator || signalingMode !== 'server' || !signalingClient || !effectiveBoardId) {
+            return;
+        }
 
         // Clear existing timeout
         if (broadcastTimeoutRef.current) clearTimeout(broadcastTimeoutRef.current);
@@ -324,18 +387,26 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
 
             if (currentSlots.length > 0) {
                 const slotsString = JSON.stringify(currentSlots);
-                if (slotsString !== lastSentSlotsRef.current) {
-                    logger.sig(`Broadcasting update with ${currentSlots.length} slots`);
-                    signalingClient.sendOffer(currentSlots, gameId!, boardId, state.context.playerName);
-                    lastSentSlotsRef.current = slotsString;
+                // We also include boardId in the key to ensure we broadcast when switching boards
+                const cacheKey = `${effectiveBoardId}:${slotsString}`;
+                if (cacheKey !== lastSentSlotsRef.current) {
+                    logger.sig(`Broadcasting update with ${currentSlots.length} slots for session ${effectiveBoardId}`);
+                    const success = signalingClient.sendOffer(currentSlots, gameId!, effectiveBoardId, state.context.playerName);
+                    if (success) {
+                        lastSentSlotsRef.current = cacheKey;
+                    } else {
+                        logger.sig(`Broadcast failed (likely socket not open). Will retry.`);
+                    }
                 }
+            } else {
+                logger.sig(`Broadcast: No active signal slots available for session ${effectiveBoardId} yet.`);
             }
         }, 500);
 
         return () => {
             if (broadcastTimeoutRef.current) clearTimeout(broadcastTimeoutRef.current);
         };
-    }, [isInitiator, signalingMode, signalingClient, boardId, connectedPeers, pendingSignaling, state.context.playerName, gameId]);
+    }, [isInitiator, signalingMode, signalingClient, boardId, state.context.boardId, connectedPeers, pendingSignaling, state.context.playerName, gameId]);
 
     useEffect(() => {
         if (isConnected || isInitiator) {
@@ -416,6 +487,12 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
             if (msg.type === 'offerList') {
                 setAvailableOffers(msg.offers || []);
             }
+            if (msg.type === 'error') {
+                logger.error("Signaling error:", msg.message);
+                toast.error(msg.message || "Signaling error occurred", {
+                    description: msg.code === 'DUPLICATE_IDENTITY' ? "You are already in this game session." : undefined
+                });
+            }
             if (msg.type === 'answer') {
                 const connectionList = Array.from(state.context.connections.values()) as Connection[];
                 // Targeted connection (multi-slot) or first available
@@ -445,42 +522,85 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         const isActiveLobby = state.matches('hosting') || state.matches('discovery') || state.matches('joining') || state.matches('approving');
         const isHostInRoom = state.matches('room') && isInitiator;
         const shouldConnect = signalingMode === 'server' && (isActiveLobby || isHostInRoom);
-        const currentBoardId = boardId || gameId;
+        const currentBoardId = state.context.boardId || boardId || gameId || "";
 
-        if (shouldConnect && !signalingClient) {
-            const initSignaling = async () => {
-                setIsServerConnecting(true);
-                try {
-                    const wallet = SecureWallet.getInstance();
-                    const identity = await wallet.getIdentity();
-                    if (!identity) return;
+        if (shouldConnect) {
+            const boardIdChanged = connectionBoardIdRef.current !== currentBoardId;
 
-                    const client = new SignalingService(
-                        gameId || "default",
-                        boardId || gameId || "",
-                        identity.name,
-                        (msg) => signalingHandlerRef.current?.(msg)
-                    );
+            if (boardIdChanged && signalingClient?.isConnected) {
+                // If we already have a connection, just update the board ID statefully
+                // This prevents losing the WebSocket connectionId during host initiation
+                signalingClient.updateBoardId(currentBoardId);
+                connectionBoardIdRef.current = currentBoardId;
+            }
 
-                    const challenge = `SIGN_IN:${identity.subscriptionToken}`;
-                    const signature = await wallet.sign(challenge);
-                    await client.connect(identity.subscriptionToken, identity.publicKey, signature);
-                    connectionBoardIdRef.current = currentBoardId;
-                    setSignalingClient(client);
-                } catch (e) {
-                    logger.error("Signaling connection failed", e);
-                } finally {
-                    setIsServerConnecting(false);
-                }
-            };
-            initSignaling();
+            // Re-init ONLY if client doesn't exist or is not connected
+            const needsConnection = (!signalingClient || !signalingClient.isConnected) && !isServerConnecting;
+
+            if (needsConnection) {
+                const initSignaling = async () => {
+                    if (isServerConnecting || signalingClient?.isConnected) return;
+                    setIsServerConnecting(true);
+                    try {
+                        const wallet = SecureWallet.getInstance();
+                        const identity = await wallet.getIdentity();
+                        if (!identity) {
+                            logger.error("No identity available for signaling");
+                            return;
+                        }
+
+                        logger.sig(`Initializing signaling for session: ${currentBoardId}`);
+                        const client = new SignalingService(
+                            gameId || "default",
+                            currentBoardId,
+                            identity.name,
+                            (msg) => signalingHandlerRef.current?.(msg)
+                        );
+
+                        const challenge = `SIGN_IN:${identity.subscriptionToken}`;
+                        const signature = await wallet.sign(challenge);
+                        await client.connect(identity.subscriptionToken, identity.publicKey, signature);
+
+                        connectionBoardIdRef.current = currentBoardId;
+                        setSignalingClient(client);
+                        logger.sig(`Signaling connected for session: ${currentBoardId}`);
+                    } catch (e) {
+                        logger.error("Signaling connection failed", e);
+                    } finally {
+                        setIsServerConnecting(false);
+                    }
+                };
+                initSignaling();
+            }
         }
 
         if (!shouldConnect && signalingClient) {
-            signalingClient.disconnect();
+            // If we are disconnecting because we left the board/game and we were the host,
+            // ensure we delete the offer before closing the socket.
+            const wasHost = isInitiator;
+            logger.sig(`Cleanup: Disconnecting signaling client. Was host: ${wasHost}`);
+            signalingClient.disconnect(wasHost);
             setSignalingClient(null);
         }
-    }, [signalingMode, state.value, gameId, boardId, isInitiator, signalingClient]);
+
+        return () => {
+            // This runs on unmount or when dependencies change (e.g., boardId changes)
+            // We NO LONGER null out the ref here because we handle it in the next effect run
+            // or we let the shouldConnect logic handle it.
+            // But if we are COMPLETELY unmounting, we should cleanup.
+        };
+    }, [signalingMode, state.value, state.context.boardId, gameId, boardId, isInitiator, signalingClient]);
+
+    // Add a dedicated cleanup effect for unmounting the Provider
+    useEffect(() => {
+        return () => {
+            if (signalingClientRef.current) {
+                const wasHost = isInitiatorRef.current;
+                logger.sig(`Provider Unmount: Cleaning up signaling. Was host: ${wasHost}`);
+                signalingClientRef.current.disconnect(wasHost);
+            }
+        };
+    }, []);
 
     // Refresh offers when entering lobby
     useEffect(() => {
@@ -496,7 +616,7 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
         if (isNewSession) {
             currentBoardId = uuidv4();
             navigate(`/games/${gameId}/${currentBoardId}`, { replace: true });
-            send({ type: 'HOST', maxPlayers: playerCount });
+            send({ type: 'HOST', maxPlayers: playerCount, boardId: currentBoardId });
         }
 
         // Capacity check
@@ -595,10 +715,16 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
 
         const checkSignal = setInterval(() => {
             if (conn.signal) {
-                signalingClient?.sendAnswer(session.connectionId, slot.connectionId, conn.signal);
+                const targetBoardId = session.sessionBoardId || session.boardId || boardId;
+
+                // Sync signaling client board ID before sending answer
+                if (targetBoardId) {
+                    signalingClient?.updateBoardId(targetBoardId);
+                }
+
+                signalingClient?.sendAnswer(session.connectionId, slot.connectionId, conn.signal, targetBoardId);
                 clearInterval(checkSignal);
 
-                const targetBoardId = session.sessionBoardId || session.boardId;
                 if (!boardId && targetBoardId) {
                     navigate(`/games/${gameId}/${targetBoardId}`, { replace: true });
                 }

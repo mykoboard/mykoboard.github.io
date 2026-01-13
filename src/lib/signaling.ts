@@ -21,6 +21,7 @@ export type SignalingMessage = {
     answer?: any;
     boardId?: string;
     gameId?: string;
+    publicKey?: string;
 };
 
 export class SignalingService {
@@ -29,6 +30,7 @@ export class SignalingService {
     private gameId: string;
     private boardId: string; // The specific session ID (optional for joiners)
     private peerName: string;
+    private publicKey: string | null = null;
 
     constructor(gameId: string, boardId: string | undefined, peerName: string, onMessage: (msg: any) => void) {
         this.gameId = gameId;
@@ -37,12 +39,20 @@ export class SignalingService {
         this.onMessageCallback = onMessage;
     }
 
+    updateBoardId(boardId: string) {
+        logger.sig(`Updating signaling boardId from ${this.boardId} to ${boardId}`);
+        this.boardId = boardId;
+    }
+
     async connect(token: string, publicKey?: string, signature?: string) {
         let url = import.meta.env.VITE_SIGNALING_SERVER_URL || 'wss://pebsg4v5yk.execute-api.eu-central-1.amazonaws.com/production';
 
         const params = new URLSearchParams();
         params.append('x-api-key', token);
-        if (publicKey) params.append('x-pubkey', publicKey);
+        if (publicKey) {
+            params.append('x-pubkey', publicKey);
+            this.publicKey = publicKey;
+        }
         if (signature) params.append('x-sig', signature);
 
         const SIGNALING_SERVER_URL = `${url}?${params.toString()}`;
@@ -78,33 +88,36 @@ export class SignalingService {
         });
     }
 
-    sendOffer(slots: SignalingSlot[], gameId: string, boardId: string, peerName: string) {
+    sendOffer(slots: SignalingSlot[], gameId: string, boardId: string, peerName: string): boolean {
         logger.sig("Broadcasting combined offer for game:", this.gameId, "board:", boardId, "slots:", slots.length);
-        this.send({
+        return this.send({
             type: 'offer',
             slots: slots,
             gameId: this.gameId,
             boardId: boardId,
-            peerName: peerName
+            peerName: peerName,
+            publicKey: this.publicKey || undefined
         });
     }
 
-    requestOffers() {
+    requestOffers(): boolean {
         logger.sig("Requesting active offers for game:", this.gameId);
-        this.send({
+        return this.send({
             type: 'listOffers',
             gameId: this.gameId
         });
     }
 
-    sendAnswer(targetWebSocketId: string, targetP2PId: string, signal: Signal) {
+    sendAnswer(targetWebSocketId: string, targetP2PId: string, signal: Signal, boardId?: string): boolean {
         logger.sig("Sending answer to host:", targetWebSocketId, "for P2P slot:", targetP2PId);
-        this.send({
+        return this.send({
             type: 'answer',
             target: targetWebSocketId,
             to: targetP2PId,
             answer: signal,
-            peerName: this.peerName // Include name so host can approve
+            peerName: this.peerName,
+            publicKey: this.publicKey || undefined,
+            boardId: boardId || this.boardId
         });
     }
 
@@ -121,10 +134,10 @@ export class SignalingService {
         });
     }
 
-    private send(message: Partial<SignalingMessage>) {
+    private send(message: Partial<SignalingMessage>): boolean {
         if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
             logger.error("Signaling socket not open. State:", this.socket?.readyState);
-            return;
+            return false;
         }
 
         // AWS API Gateway REQUIRES the 'action' key to match the route 
@@ -136,9 +149,13 @@ export class SignalingService {
 
         logger.sig("Sending payload to AWS:", payload);
         this.socket.send(JSON.stringify(payload));
+        return true;
     }
 
-    disconnect() {
+    disconnect(deleteOfferFirst: boolean = false) {
+        if (deleteOfferFirst && this.isConnected) {
+            this.deleteOffer();
+        }
         this.socket?.close();
         this.socket = null;
     }

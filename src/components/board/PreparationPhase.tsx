@@ -4,8 +4,19 @@ import { Connection, ConnectionStatus } from "../../lib/webrtc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { UserPlus, Globe, LogIn, CheckCircle2, Clipboard } from "lucide-react";
+import { UserPlus, Globe, LogIn, CheckCircle2, Clipboard, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export function SignalingStep({ connection, onOfferChange, onAnswerChange, onCancel }: any) {
     const [copied, setCopied] = useState(false);
@@ -211,11 +222,11 @@ export function PreparationPhase({
             )}
 
             {/* Session Connection States */}
-            {(isHosting || isJoining || isRoom) && (
+            {(isHosting || isJoining || isRoom || isApproving) && (
                 <div className="glass-dark p-10 text-center space-y-8 border border-white/5 shadow-glass-dark rounded-[3rem] animate-in zoom-in-95 duration-500">
                     <div className="space-y-4">
                         <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-neon transform -translate-y-2">
-                            {isHosting ? "Broadcasting Session" : isJoining ? "Initializing Node" : "Command Lobby Active"}
+                            {(isHosting || isApproving) ? "Broadcasting Session" : isJoining ? "Initializing Node" : "Command Lobby Active"}
                         </div>
                         <h2 className="text-4xl font-black text-white uppercase tracking-tighter">
                             {isRoom ? "Game Room" : isHosting ? "Link Establishment" : "Connecting..."}
@@ -239,13 +250,40 @@ export function PreparationPhase({
                                 </Button>
                             )}
 
-                            <Button
-                                onClick={onCloseSession}
-                                variant="ghost"
-                                className="px-4 h-12 rounded-xl text-white/20 hover:text-rose-500 font-black uppercase tracking-widest text-[10px]"
-                            >
-                                Terminate
-                            </Button>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        className="px-4 h-12 rounded-xl text-white/20 hover:text-rose-500 font-black uppercase tracking-widest text-[10px]"
+                                    >
+                                        Terminate Session
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent className="glass-dark border border-white/10 rounded-[2rem] p-8 max-w-sm">
+                                    <AlertDialogHeader className="space-y-4">
+                                        <div className="mx-auto h-16 w-16 bg-rose-500/10 rounded-2xl flex items-center justify-center border border-rose-500/20">
+                                            <AlertTriangle className="w-8 h-8 text-rose-500" />
+                                        </div>
+                                        <AlertDialogTitle className="text-xl font-black text-center text-white uppercase tracking-tight">
+                                            Terminate Session?
+                                        </AlertDialogTitle>
+                                        <AlertDialogDescription className="text-center text-white/40 text-xs font-medium uppercase tracking-widest leading-relaxed">
+                                            Reloading or leaving will cause the game session to be lost. Peers will be disconnected and discovery mesh link terminated.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter className="grid grid-cols-2 gap-4 pt-4">
+                                        <AlertDialogCancel className="h-12 rounded-xl bg-white/5 border-white/5 text-white/60 hover:bg-white/10 font-bold uppercase tracking-widest text-[10px]">
+                                            Abort
+                                        </AlertDialogCancel>
+                                        <AlertDialogAction
+                                            onClick={onCloseSession}
+                                            className="h-12 rounded-xl bg-rose-500 text-white font-black uppercase tracking-widest text-[10px] hover:bg-rose-600 shadow-neon-sm"
+                                        >
+                                            Confirm
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                         </div>
                     ) : (
                         <div className="flex flex-col items-center gap-8 py-6">
@@ -265,13 +303,40 @@ export function PreparationPhase({
                                     {isRoom ? "Identity verified. Awaiting initiator's launch command." : "Establishing secure encrypted tunnel to host node."}
                                 </p>
                             </div>
-                            <Button
-                                onClick={onBackToLobby}
-                                variant="ghost"
-                                className="h-10 text-white/20 hover:text-rose-500 font-black uppercase tracking-widest text-[10px]"
-                            >
-                                Sever Connection
-                            </Button>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        className="h-10 text-white/20 hover:text-rose-500 font-black uppercase tracking-widest text-[10px]"
+                                    >
+                                        Sever Connection
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent className="glass-dark border border-white/10 rounded-[2rem] p-8 max-w-sm">
+                                    <AlertDialogHeader className="space-y-4">
+                                        <div className="mx-auto h-16 w-16 bg-rose-500/10 rounded-2xl flex items-center justify-center border border-rose-500/20">
+                                            <AlertTriangle className="w-8 h-8 text-rose-500" />
+                                        </div>
+                                        <AlertDialogTitle className="text-xl font-black text-center text-white uppercase tracking-tight">
+                                            Sever Connection?
+                                        </AlertDialogTitle>
+                                        <AlertDialogDescription className="text-center text-white/40 text-xs font-medium uppercase tracking-widest leading-relaxed">
+                                            Leaving or reloading will sever your node link. The game session progress will be lost.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter className="grid grid-cols-2 gap-4 pt-4">
+                                        <AlertDialogCancel className="h-12 rounded-xl bg-white/5 border-white/5 text-white/60 hover:bg-white/10 font-bold uppercase tracking-widest text-[10px]">
+                                            Abort
+                                        </AlertDialogCancel>
+                                        <AlertDialogAction
+                                            onClick={onBackToLobby}
+                                            className="h-12 rounded-xl bg-rose-500 text-white font-black uppercase tracking-widest text-[10px] hover:bg-rose-600 shadow-neon-sm"
+                                        >
+                                            Confirm
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                         </div>
                     )}
 
