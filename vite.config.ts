@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
+import vue from "@vitejs/plugin-vue";
 import path from "path";
 
 import federation from "@originjs/vite-plugin-federation";
@@ -12,6 +13,7 @@ export default defineConfig(({ mode }) => ({
     target: 'esnext'
   },
   plugins: [
+    vue(),
     react(),
     federation({
       name: "host",
