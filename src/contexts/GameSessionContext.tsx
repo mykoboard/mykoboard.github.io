@@ -610,13 +610,12 @@ const GameSessionManager: React.FC<{ identity: PlayerIdentity | null, children: 
     }, [state.value, signalingMode, signalingClient]);
 
     const onHostAGame = (playerCount: number = 2) => {
-        let currentBoardId = boardId;
         const isNewSession = state.matches('selection') || state.matches('discovery');
 
         if (isNewSession) {
-            currentBoardId = uuidv4();
-            navigate(`/games/${gameId}/${currentBoardId}`, { replace: true });
-            send({ type: 'HOST', maxPlayers: playerCount, boardId: currentBoardId });
+            const newBoardId = uuidv4();
+            navigate(`/games/${gameId}/${newBoardId}`, { replace: true });
+            send({ type: 'HOST', maxPlayers: playerCount, boardId: newBoardId });
         }
 
         // Capacity check
