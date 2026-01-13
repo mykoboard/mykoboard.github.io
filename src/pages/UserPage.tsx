@@ -9,6 +9,7 @@ import { SessionManager } from "@/lib/sessions";
 import { GameSession } from "@/lib/db";
 import { LobbyPastMatches } from "@/components/lobby/LobbyPastMatches";
 import { useNavigate } from "react-router-dom";
+import { sanitizeAvatarUrl } from "@/lib/utils";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -137,8 +138,8 @@ export default function UserPage() {
                             <div className="flex items-center gap-4">
                                 <div className="relative">
                                     <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shadow-neon">
-                                        {avatar ? (
-                                            <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+                                        {sanitizeAvatarUrl(avatar) ? (
+                                            <img src={sanitizeAvatarUrl(avatar)} alt="Avatar" className="w-full h-full object-cover" />
                                         ) : (
                                             <User className="w-8 h-8 text-primary" />
                                         )}

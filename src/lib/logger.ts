@@ -41,9 +41,10 @@ export const logger = {
         } catch { }
 
         console.log(
-            `%c[NET-IN] %cfrom ${peerId.slice(0, 8)}:`,
+            `%c[NET-IN] %cfrom %s:`,
             'color: #22c55e; font-weight: bold;',
             'color: #64748b;',
+            peerId.slice(0, 8),
             parsed
         );
     },
@@ -57,9 +58,10 @@ export const logger = {
         } catch { }
 
         console.log(
-            `%c[NET-OUT] %cto ${peerId.slice(0, 8)}:`,
+            `%c[NET-OUT] %cto %s:`,
             'color: #3b82f6; font-weight: bold;',
             'color: #64748b;',
+            peerId.slice(0, 8),
             parsed
         );
     },
@@ -68,9 +70,12 @@ export const logger = {
         if (!logger.shouldLog(category)) return;
         const color = type === 'EVENT' ? '#f59e0b' : '#10b981';
         console.log(
-            `%c[${category.toUpperCase()}-${type}] %c${label}`,
+            `%c[%s-%s] %c%s`,
             `color: ${color}; font-weight: bold;`,
+            category.toUpperCase(),
+            type,
             'color: inherit;',
+            label,
             data || ''
         );
     },
@@ -82,9 +87,10 @@ export const logger = {
     sig: (label: string, ...args: any[]) => {
         if (!logger.shouldLog('sig')) return;
         console.log(
-            `%c[SIG] %c${label}`,
+            `%c[SIG] %c%s`,
             'color: #ec4899; font-weight: bold;',
             'color: inherit;',
+            label,
             ...args
         );
     },
@@ -92,9 +98,10 @@ export const logger = {
     webrtc: (label: string, ...args: any[]) => {
         if (!logger.shouldLog('webrtc')) return;
         console.log(
-            `%c[WEBRTC] %c${label}`,
+            `%c[WEBRTC] %c%s`,
             'color: #06b6d4; font-weight: bold;',
             'color: inherit;',
+            label,
             ...args
         );
     },

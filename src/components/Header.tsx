@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { SecureWallet, PlayerIdentity } from "@/lib/wallet";
 import { NavigationMenu, NavigationMenuLink, NavigationMenuItem, NavigationMenuList } from "@/components/ui/navigation-menu";
 import { useNavigate } from "react-router-dom";
+import { sanitizeAvatarUrl } from "@/lib/utils";
 
 export function Header() {
     const navigate = useNavigate();
@@ -45,8 +46,8 @@ export function Header() {
                 onClick={() => navigate("/profile")}
             >
                 <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden border border-primary/20">
-                    {identity?.avatar ? (
-                        <img src={identity.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    {sanitizeAvatarUrl(identity?.avatar) ? (
+                        <img src={sanitizeAvatarUrl(identity?.avatar)} alt="Avatar" className="w-full h-full object-cover" />
                     ) : (
                         <User className="w-5 h-5 text-primary" />
                     )}
