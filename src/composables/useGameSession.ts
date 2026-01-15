@@ -1,163 +1,65 @@
-import { ref, computed, watch, watchEffect, onUnmounted } from 'vue';
+import { ref, computed, watch, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { v4 as uuidv4 } from "uuid";
-import { useMachine } from "@xstate/vue";
-import { lobbyMachine } from "../machines/lobbyMachine";
+import { useSelector } from "@xstate/vue";
 import { Connection, ConnectionStatus } from "../lib/webrtc";
 import { logger } from "../lib/logger";
 import { getGameById } from "../lib/GameRegistry";
-import { toast } from "vue-sonner";
-import { Ledger, createLobbyMessage, isLobbyMessage, PlayerInfo } from "@mykoboard/integration";
-import { SecureWallet, PlayerIdentity } from "../lib/wallet";
-import { SignalingService } from "../lib/signaling";
+import { Ledger, createLobbyMessage, isLobbyMessage, PlayerInfo, createLobbyMessage as createMsg } from "@mykoboard/integration";
+import { SecureWallet } from "../lib/wallet";
 import { SessionManager } from "../lib/sessions";
-import { GameSession } from "../lib/db";
-
-// Global-ish state for the session to mimic the Provider behavior
-const identity = ref<PlayerIdentity | null>(null);
-const isLoading = ref(true);
-const signalingMode = ref<'manual' | 'server' | null>(null);
-const isServerConnecting = ref(false);
-const signalingClient = ref<SignalingService | null>(null);
-const availableOffers = ref<any[]>([]);
-const activeSessions = ref<GameSession[]>([]);
+import {
+    identity,
+    isLoading,
+    signalingClient,
+    activeSessions,
+    lobbyActor,
+    getBoardActor,
+    useLobby
+} from "./useLobby";
 
 export function useGameSession() {
     const route = useRoute();
     const router = useRouter();
+    const { setupSignaling, requestOffers, signalingMode, lobbySend, lobbySnapshot } = useLobby();
 
     const gameId = computed(() => route.params.gameId as string);
     const boardId = computed(() => route.params.boardId as string);
     const game = computed(() => getGameById(gameId.value || ""));
 
-    const { snapshot, send } = useMachine(lobbyMachine, {
-        input: {
-            playerName: identity.value?.name || "Anonymous"
-        },
-        inspect: (inspectionEvent) => {
-            if (inspectionEvent.type === '@xstate.event') {
-                logger.lobby('EVENT', inspectionEvent.event.type, inspectionEvent.event);
-            }
-            if (inspectionEvent.type === '@xstate.snapshot' && inspectionEvent.snapshot.status === 'active') {
-                const snapshotValue = (inspectionEvent.snapshot as any).value;
-                logger.lobby('STATE', JSON.stringify(snapshotValue));
-            }
-        }
+    // Dynamic Board Actor usage
+    const isInsideBoard = computed(() => !!boardId.value);
+
+    // We need a stable reference to the current board actor if it exists
+    const currentBoardActor = computed(() => {
+        if (!boardId.value || boardId.value === 'manual') return null;
+        return getBoardActor(boardId.value, identity.value?.name || "Anonymous", false);
     });
 
-    // Derived properties
-    const isInitiator = computed(() => snapshot.value.context.isInitiator);
-    const isGameStarted = computed(() => snapshot.value.context.isGameStarted);
-    const connections = computed(() => snapshot.value.context.connections);
+    const boardSnapshot = useSelector(currentBoardActor, (s) => s as any);
+
+    // Derived properties from Board Snapshot
+    const isInitiator = computed(() => boardSnapshot.value?.context?.isInitiator || false);
+    const isGameStarted = computed(() => boardSnapshot.value?.context?.isGameStarted || false);
+    const connections = computed(() => boardSnapshot.value?.context?.connections || new Map());
     const connectionList = computed(() => Array.from(connections.value.values()));
-    const connectedPeers = computed(() => connectionList.value.filter(c => c.status === ConnectionStatus.connected));
-    const pendingSignaling = computed(() => connectionList.value.filter(c => c.status !== ConnectionStatus.connected && c.status !== ConnectionStatus.closed));
-    const isConnected = computed(() => snapshot.value.matches('room'));
-    const view = computed(() => (snapshot.value.matches('selection') || snapshot.value.matches('discovery')) ? 'lobby' : 'game');
-
-    // Load identity once
-    const initIdentity = async () => {
-        if (identity.value) return;
-        const wallet = SecureWallet.getInstance();
-        identity.value = await wallet.getIdentity();
-        isLoading.value = false;
-    };
-    initIdentity();
-
-    const lastStatusMap = new Map<string, string>();
-    const lastSignalMap = new Map<string, string>();
-
-    const updateConnection = (connection: Connection) => {
-        const existingStatus = lastStatusMap.get(connection.id);
-        const existingSignal = connection.signal?.toString() || "";
-        const prevSignal = lastSignalMap.get(connection.id);
-
-        if (existingStatus === connection.status && prevSignal === existingSignal) return;
-
-        lastStatusMap.set(connection.id, connection.status);
-        lastSignalMap.set(connection.id, existingSignal);
-
-        send({ type: 'UPDATE_CONNECTION', connection });
-
-        // Setup message listener if not present
-        if (!(connection as any)._hasListener) {
-            connection.addMessageListener((data: string) => {
-                try {
-                    const msg = JSON.parse(data);
-                    if (!isLobbyMessage(msg)) return;
-                    if (msg.type === 'START_GAME') send({ type: 'START_GAME' });
-                    if (msg.type === 'GAME_STARTED') send({ type: 'GAME_STARTED' });
-                    if (msg.type === 'GAME_RESET') send({ type: 'GAME_RESET' });
-                    if (msg.type === 'NEW_BOARD') router.replace(`/games/${gameId.value}/${msg.payload}`);
-                    if (msg.type === 'SYNC_PLAYER_STATUS') send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: msg.payload });
-                    if (msg.type === 'SYNC_PARTICIPANTS') send({ type: 'SYNC_PARTICIPANTS', participants: msg.payload });
-                    if (msg.type === 'SYNC_LEDGER') {
-                        const entries = msg.payload as any[];
-                        for (const entry of entries) {
-                            if (entry.signature && entry.signerPublicKey) {
-                                SecureWallet.verify(entry.action, entry.signature, entry.signerPublicKey).then(isValid => {
-                                    if (!isValid) logger.error("Invalid signature in ledger entry", entry);
-                                });
-                            }
-                        }
-                        send({ type: 'SYNC_LEDGER', ledger: msg.payload });
-                    }
-                } catch { }
-            });
-            (connection as any)._hasListener = true;
-        }
-    };
-
-    onUnmounted(() => {
-        if (isInitiator.value && signalingClient.value) {
-            signalingClient.value.deleteOffer();
-        }
-    });
-
-    window.addEventListener('beforeunload', () => {
-        if (isInitiator.value && signalingClient.value && boardId.value) {
-            signalingClient.value.deleteOffer();
-        }
-    });
-
-    const onHostAGame = (playerCount: number = 2) => {
-        const isNewSession = snapshot.value.matches('selection') || snapshot.value.matches('discovery');
-        if (isNewSession) {
-            const newBoardId = uuidv4();
-            router.replace(`/games/${gameId.value}/${newBoardId}`);
-            send({ type: 'HOST', maxPlayers: playerCount, boardId: newBoardId });
-        }
-
-        const createConnection = () => {
-            const connection = new Connection(updateConnection);
-            connection.onClose = () => send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
-            connection.openDataChannel();
-            connection.prepareOfferSignal(snapshot.value.context.playerName);
-        };
-
-        if (isNewSession) {
-            for (let i = 0; i < playerCount - 1; i++) createConnection();
-        } else {
-            createConnection();
-        }
-    };
-
-    const startGame = () => {
-        if (signalingMode.value === 'server' && signalingClient.value && isInitiator.value) {
-            signalingClient.value.deleteOffer();
-        }
-        send({ type: 'START_GAME' });
-    };
+    const connectedPeers = computed((): Connection[] => connectionList.value.filter((c: any) => c.status === ConnectionStatus.connected) as Connection[]);
+    const pendingSignaling = computed(() => connectionList.value.filter((c: any) => c.status !== ConnectionStatus.connected && c.status !== ConnectionStatus.closed));
+    const isConnected = computed(() => !!boardSnapshot.value && (boardSnapshot.value as any).status !== 'idle');
+    const view = computed(() => isInsideBoard.value ? 'game' : 'lobby');
 
     const playerInfos = computed((): PlayerInfo[] => {
+        if (!boardSnapshot.value) return [];
+        const ctx = (boardSnapshot.value as any).context;
+
         const currentSession = activeSessions.value.find(s => s.boardId === boardId.value);
         const storedParticipants = currentSession?.participants || [];
-        const externalParticipants = (snapshot.value.context.externalParticipants as any[]) || [];
+        const externalParticipants = (ctx.externalParticipants as any[]) || [];
 
         const localParticipant = storedParticipants.find(p => p.isYou);
         const localPlayer: PlayerInfo = {
             id: identity.value?.id || 'local',
-            name: snapshot.value.context.playerName,
+            name: ctx.playerName,
             status: isGameStarted.value ? 'game' : 'lobby',
             isConnected: true,
             isLocal: true,
@@ -174,11 +76,11 @@ export function useGameSession() {
         } else if (externalParticipants.length > 0) {
             const hostData = externalParticipants.find(p => p.isHost);
             if (hostData) {
-                const hostConnection = connectionList.value.find(c => c.status === ConnectionStatus.connected);
+                const hostConnection = (connectedPeers.value as any).find((c: any) => c.status === ConnectionStatus.connected);
                 infos.push({
                     id: hostData.id,
                     name: hostData.name,
-                    status: (hostConnection ? snapshot.value.context.playerStatuses.get(hostConnection.id) : null) || (isGameStarted.value ? 'game' : 'lobby'),
+                    status: (hostConnection ? ctx.playerStatuses.get(hostConnection.id) : null) || (isGameStarted.value ? 'game' : 'lobby'),
                     isConnected: !!hostConnection,
                     isLocal: false,
                     isHost: true
@@ -189,13 +91,13 @@ export function useGameSession() {
 
         // 2. Other participants
         if (isInitiator.value) {
-            connectionList.value.forEach(c => {
+            (connectionList.value as any).forEach((c: any) => {
                 if (!processedIds.has(c.id)) {
                     const storedPeer = storedParticipants.find(p => p.id === c.id);
                     infos.push({
                         id: c.id,
                         name: c.remotePlayerName || storedPeer?.name || "Anonymous",
-                        status: snapshot.value.context.playerStatuses.get(c.id) || 'lobby',
+                        status: ctx.playerStatuses.get(c.id) || 'lobby',
                         isConnected: c.status === ConnectionStatus.connected,
                         isLocal: false,
                         isHost: false
@@ -240,10 +142,98 @@ export function useGameSession() {
         return infos;
     });
 
+    watchEffect(() => {
+        const s = boardSnapshot.value as any;
+        if (s?.status === 'active' && boardId.value && boardId.value !== 'manual') {
+            SessionManager.saveSession({
+                gameId: gameId.value,
+                boardId: boardId.value,
+                playerName: s.context.playerName,
+                gameName: game.value?.name || "Unknown Game",
+                lastPlayed: Date.now(),
+                status: s.matches('finished') ? 'finished' : 'active',
+                ledger: s.context.ledger,
+                participants: playerInfos.value.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    isYou: p.isLocal,
+                    isHost: p.isHost
+                }))
+            });
+        }
+    });
+
+    const lastStatusMap = new Map<string, string>();
+    const lastSignalMap = new Map<string, string>();
+
+    const updateConnection = (connection: Connection) => {
+        const actor = currentBoardActor.value;
+        if (!actor) return;
+
+        const existingStatus = lastStatusMap.get(connection.id);
+        const existingSignal = connection.signal?.toString() || "";
+        const prevSignal = lastSignalMap.get(connection.id);
+
+        if (existingStatus === connection.status && prevSignal === existingSignal) return;
+
+        lastStatusMap.set(connection.id, connection.status);
+        lastSignalMap.set(connection.id, existingSignal);
+
+        actor.send({ type: 'UPDATE_CONNECTION', connection });
+
+        // Setup message listener if not present
+        if (!(connection as any)._hasListener) {
+            connection.addMessageListener((data: string) => {
+                try {
+                    const msg = JSON.parse(data);
+                    if (!isLobbyMessage(msg)) return;
+                    if (msg.type === 'START_GAME') actor.send({ type: 'START_GAME' });
+                    if (msg.type === 'GAME_STARTED') actor.send({ type: 'GAME_STARTED' });
+                    if (msg.type === 'GAME_RESET') actor.send({ type: 'GAME_RESET' });
+                    if (msg.type === 'NEW_BOARD') router.replace(`/games/${gameId.value}/${msg.payload}`);
+                    if (msg.type === 'SYNC_PLAYER_STATUS') actor.send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: msg.payload });
+                    if (msg.type === 'SYNC_PARTICIPANTS') actor.send({ type: 'SYNC_PARTICIPANTS', participants: msg.payload });
+                    if (msg.type === 'SYNC_LEDGER') {
+                        const entries = msg.payload as any[];
+                        for (const entry of entries) {
+                            if (entry.signature && entry.signerPublicKey) {
+                                SecureWallet.verify(entry.action, entry.signature, entry.signerPublicKey).then(isValid => {
+                                    if (!isValid) logger.error("Invalid signature in ledger entry", entry);
+                                });
+                            }
+                        }
+                        actor.send({ type: 'SYNC_LEDGER', ledger: msg.payload });
+                    }
+                } catch { }
+            });
+            (connection as any)._hasListener = true;
+        }
+    };
+
+    const onHostAGame = (playerCount: number = 2) => {
+        if (!isInsideBoard.value) {
+            const newBoardId = uuidv4();
+            router.push(`/games/${gameId.value}/${newBoardId}?maxPlayers=${playerCount}`);
+        } else if (currentBoardActor.value) {
+            const connection = new Connection(updateConnection);
+            connection.onClose = () => currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
+            connection.openDataChannel();
+            connection.prepareOfferSignal(boardSnapshot.value?.context?.playerName || identity.value?.name || "Anonymous");
+        }
+    };
+
+    const startGame = () => {
+        if (signalingMode.value === 'server' && signalingClient.value && isInitiator.value) {
+            signalingClient.value.deleteOffer();
+        }
+        currentBoardActor.value?.send({ type: 'START_GAME' });
+    };
+
     const connectWithOffer = () => {
-        send({ type: 'JOIN' });
+        if (!currentBoardActor.value) return;
+        currentBoardActor.value.send({ type: 'JOIN', boardId: boardId.value });
         const connection = new Connection(updateConnection);
-        connection.onClose = () => send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
+        connection.onClose = () => currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
         connection.status = ConnectionStatus.readyToAccept;
         connection.setDataChannelCallback();
         updateConnection(connection);
@@ -252,7 +242,7 @@ export function useGameSession() {
     const updateOffer = async (connection: Connection, offer: string) => {
         if (!(connection instanceof Connection) || !offer) return;
         try {
-            await connection.acceptOffer(offer, snapshot.value.context.playerName);
+            await connection.acceptOffer(offer, identity.value?.name || "Anonymous");
         } catch (e) {
             logger.error("Failed to accept offer", e);
         }
@@ -269,88 +259,67 @@ export function useGameSession() {
     };
 
     const onFinishGame = () => {
-        send({ type: 'FINISH_GAME' });
+        currentBoardActor.value?.send({ type: 'FINISH_GAME' });
         if (boardId.value) {
             SessionManager.updateStatus(boardId.value, 'finished');
         }
     };
 
     const onAddLedger = async (action: { type: string, payload: any }) => {
-        if (!isInitiator.value) return;
+        if (!isInitiator.value || !currentBoardActor.value) return;
         const wallet = SecureWallet.getInstance();
         const ident = await wallet.getIdentity();
         if (!ident) return;
 
         const signature = await wallet.sign(action);
-        const ledger = Ledger.fromEntries(snapshot.value.context.ledger);
+        const ledger = Ledger.fromEntries((boardSnapshot.value as any)?.context?.ledger || []);
         const entry = await ledger.addEntry({ ...action });
         entry.signature = signature;
         entry.signerPublicKey = ident.publicKey;
 
         const updatedLedger = ledger.getEntries();
-        send({ type: 'SYNC_LEDGER', ledger: updatedLedger });
-        connectedPeers.value.forEach(c => {
+        currentBoardActor.value.send({ type: 'SYNC_LEDGER', ledger: updatedLedger });
+        (connectedPeers.value as any).forEach((c: any) => {
             c.send(JSON.stringify(createLobbyMessage('SYNC_LEDGER', updatedLedger)));
         });
     };
 
-    const onJoinFromList = async (session: any, slot: any) => {
-        send({ type: 'JOIN' });
-        const conn = new Connection(updateConnection);
-        conn.setDataChannelCallback();
-        await conn.acceptOffer(slot.offer, snapshot.value.context.playerName);
-
-        const checkSignal = setInterval(() => {
-            if (conn.signal) {
-                const targetBoardId = session.sessionBoardId || session.boardId || boardId.value;
-                if (targetBoardId) signalingClient.value?.updateBoardId(targetBoardId);
-                signalingClient.value?.sendAnswer(session.connectionId, slot.connectionId, conn.signal, targetBoardId);
-                clearInterval(checkSignal);
-                if (!boardId.value && targetBoardId) router.replace(`/games/${gameId.value}/${targetBoardId}`);
-            }
-        }, 500);
-    };
-
     const handlePlayAgain = () => {
         const newBoardId = uuidv4();
-        connectedPeers.value.forEach(c => {
+        (connectedPeers.value as any).forEach((c: any) => {
             if (c.status === ConnectionStatus.connected) {
                 c.send(JSON.stringify(createLobbyMessage('NEW_BOARD', newBoardId)));
             }
         });
         signalingClient.value?.deleteOffer();
-        send({ type: 'CLOSE_SESSION' });
-        send({ type: 'HOST' });
+        currentBoardActor.value?.send({ type: 'CLOSE_SESSION' });
+
+        // Remove old board actor
+        // We can't easily reach boardActors from here unless we export it or it's in useLobby
+        // SessionManager should still work.
         router.push(`/games/${gameId.value}/${newBoardId}`);
     };
 
-    const onDeleteSession = async (id: string) => {
-        await SessionManager.removeSession(id);
-        activeSessions.value = await SessionManager.getSessions();
-    };
-
     const onAcceptGuest = () => {
-        const guest = snapshot.value.context.pendingGuest;
-        send({ type: 'ACCEPT_GUEST' });
+        const guest = (boardSnapshot.value as any)?.context?.pendingGuest as any;
+        currentBoardActor.value?.send({ type: 'ACCEPT_GUEST' });
         if (guest) updateConnection(guest.connection);
     };
 
-    const onRejectGuest = () => send({ type: 'REJECT_GUEST' });
+    const onRejectGuest = () => currentBoardActor.value?.send({ type: 'REJECT_GUEST' });
 
     const onCancelSignaling = (connection: Connection) => {
         connection.close();
-        send({ type: 'CANCEL_SIGNALING', connectionId: connection.id });
+        currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
     };
 
     const onBackToGames = () => {
         signalingClient.value?.deleteOffer();
-        send({ type: 'CLOSE_SESSION' });
+        currentBoardActor.value?.send({ type: 'CLOSE_SESSION' });
         router.push(`/games/${gameId.value}`);
     };
 
     const onBackToDiscovery = () => {
-        send({ type: 'BACK_TO_LOBBY' });
-        if (signalingMode.value === 'server') signalingClient.value?.requestOffers();
         router.push(`/games/${gameId.value}`);
     };
 
@@ -361,136 +330,83 @@ export function useGameSession() {
     const lastSentSlots = ref("");
 
     watch([isInitiator, signalingMode, signalingClient, boardId, connectedPeers, pendingSignaling], () => {
-        if (!isInitiator.value || signalingMode.value !== 'server' || !signalingClient.value || !boardId.value) return;
+        if (!isInitiator.value || signalingMode.value !== 'server' || !signalingClient.value || !boardId.value) {
+            return;
+        }
 
         if (broadcastTimeout) clearTimeout(broadcastTimeout);
         broadcastTimeout = setTimeout(() => {
             const currentSlots = [
-                ...connectedPeers.value.map(c => ({ connectionId: c.id, offer: c.signal, status: 'taken' as const, peerName: c.remotePlayerName })),
-                ...pendingSignaling.value.filter(c => c.signal).map(c => ({ connectionId: c.id, offer: c.signal, status: 'open' as const }))
+                ...(connectedPeers.value as any).map((c: any) => ({ connectionId: c.id, offer: c.signal, status: 'taken' as const, peerName: c.remotePlayerName })),
+                ...(pendingSignaling.value as any).filter((c: any) => c.signal).map((c: any) => ({ connectionId: c.id, offer: c.signal, status: 'open' as const }))
             ];
 
             if (currentSlots.length > 0) {
                 const slotsString = JSON.stringify(currentSlots);
                 const cacheKey = `${boardId.value}:${slotsString}`;
                 if (cacheKey !== lastSentSlots.value) {
-                    const success = signalingClient.value?.sendOffer(currentSlots, gameId.value!, boardId.value, snapshot.value.context.playerName);
+                    const success = signalingClient.value?.sendOffer(currentSlots, gameId.value!, boardId.value, identity.value?.name || "Anonymous");
                     if (success) lastSentSlots.value = cacheKey;
                 }
             }
         }, 500);
     });
 
-    // 2. Session Persistence
-    watchEffect(() => {
-        if (isConnected.value && gameId.value && boardId.value && boardId.value !== 'manual') {
-            SessionManager.saveSession({
-                gameId: gameId.value,
-                boardId: boardId.value,
-                playerName: snapshot.value.context.playerName,
-                gameName: game.value?.name || "Unknown Game",
-                lastPlayed: Date.now(),
-                status: snapshot.value.matches('room.finished') ? 'finished' : 'active',
-                ledger: snapshot.value.context.ledger,
-                participants: playerInfos.value.map(p => ({
-                    id: p.id,
-                    name: p.name,
-                    isYou: p.isLocal,
-                    isHost: p.isHost
-                }))
-            });
-        }
-    });
+    // 2. Participant Sync (Host Only)
+    watch([isInitiator, playerInfos], () => {
+        if (!isInitiator.value) return;
 
-    // 3. Signaling Lifecycle
-    const connectionBoardId = ref<string | undefined>();
-    watch([signalingMode, snapshot, boardId], async () => {
-        const isActiveLobby = snapshot.value.matches('hosting') || snapshot.value.matches('discovery') || snapshot.value.matches('joining') || snapshot.value.matches('approving');
-        const isHostInRoom = snapshot.value.matches('room') && isInitiator.value;
-        const shouldConnect = signalingMode.value === 'server' && (isActiveLobby || isHostInRoom);
-        const currentBoardId = boardId.value || gameId.value || "";
+        const participants = playerInfos.value.map(p => ({
+            id: p.id,
+            name: p.name,
+            isHost: p.isHost
+        }));
 
-        if (shouldConnect) {
-            if (connectionBoardId.value !== currentBoardId && signalingClient.value?.isConnected) {
-                signalingClient.value.updateBoardId(currentBoardId);
-                connectionBoardId.value = currentBoardId;
-            }
-
-            if ((!signalingClient.value || !signalingClient.value.isConnected) && !isServerConnecting.value) {
-                isServerConnecting.value = true;
+        (connectedPeers.value as any).forEach((c: any) => {
+            if (c.status === ConnectionStatus.connected) {
                 try {
-                    const wallet = SecureWallet.getInstance();
-                    const ident = await wallet.getIdentity();
-                    if (ident) {
-                        const client = new SignalingService(gameId.value || "default", currentBoardId, ident.name, (msg) => {
-                            if (msg.type === 'offerList') availableOffers.value = msg.offers || [];
-                            if (msg.type === 'error') {
-                                logger.error("Signaling error:", msg.message);
-                                toast.error(msg.message || "Signaling error occurred", {
-                                    description: msg.code === 'DUPLICATE_IDENTITY' ? "You are already in this game session." : undefined
-                                });
-                            }
-                            if (msg.type === 'answer') {
-                                const pendingConn = msg.to
-                                    ? connectionList.value.find(c => c.id === msg.to)
-                                    : connectionList.value.find(c => c.status === ConnectionStatus.started);
-
-                                if (pendingConn) {
-                                    if (signalingMode.value === 'server') {
-                                        send({
-                                            type: 'REQUEST_JOIN',
-                                            connectionId: msg.from,
-                                            peerName: msg.peerName || "Anonymous Guest",
-                                            answer: msg.answer,
-                                            connection: pendingConn
-                                        });
-                                    } else {
-                                        pendingConn.acceptAnswer(msg.answer);
-                                        updateConnection(pendingConn);
-                                    }
-                                }
-                            }
-                        });
-                        const challenge = `SIGN_IN:${ident.subscriptionToken}`;
-                        const signature = await wallet.sign(challenge);
-                        await client.connect(ident.subscriptionToken, ident.publicKey, signature);
-                        signalingClient.value = client;
-                        connectionBoardId.value = currentBoardId;
-                    }
+                    c.send(JSON.stringify(createLobbyMessage('SYNC_PARTICIPANTS', participants)));
                 } catch (e) {
-                    logger.error("Signaling connection failed", e);
-                } finally {
-                    isServerConnecting.value = false;
+                    logger.error("Failed to sync participants to peer", c.id, e);
                 }
             }
-        } else if (signalingClient.value) {
-            signalingClient.value.disconnect(isInitiator.value);
-            signalingClient.value = null;
+        });
+    }, { deep: true, immediate: true });
+
+    // 3. Signaling Lifecycle for Board
+    watch([signalingMode, boardId, isInsideBoard], async () => {
+        const shouldConnect = signalingMode.value === 'server' && (isInsideBoard.value || !boardId.value);
+        logger.sig("[WATCH] Signaling Lifecycle update. shouldConnect:", shouldConnect, "mode:", signalingMode.value, "boardId:", boardId.value);
+        if (shouldConnect) {
+            await setupSignaling(gameId.value, boardId.value);
         }
-    });
+    }, { immediate: true });
 
     // 4. Session Restoration
     watch(boardId, async (newId) => {
-        if (newId && newId !== 'manual' && (snapshot.value.matches('selection') || snapshot.value.matches('discovery'))) {
+        if (newId && newId !== 'manual' && isInsideBoard.value) {
             const session = await SessionManager.getSession(newId);
-            if (session && session.ledger.length > 0 && snapshot.value.context.ledger.length === 0) {
-                send({ type: 'LOAD_LEDGER', ledger: session.ledger });
-                send({ type: 'RESUME' });
-                if (session.status === 'finished') setTimeout(() => send({ type: 'FINISH_GAME' }), 10);
+            const actor = getBoardActor(newId, identity.value?.name || "Anonymous", false);
+            const ctx = (actor.getSnapshot() as any).context;
+
+            if (session && session.ledger.length > 0 && ctx.ledger.length === 0) {
+                actor.send({ type: 'LOAD_LEDGER', ledger: session.ledger });
+                actor.send({ type: 'GAME_STARTED' });
+                if (session.status === 'finished') setTimeout(() => actor.send({ type: 'FINISH_GAME' }), 10);
             }
         }
     }, { immediate: true });
 
-    // 5. Refresh offers when entering lobby
-    watch([snapshot, signalingMode, signalingClient], () => {
-        if (signalingMode.value === 'server' && signalingClient.value && (snapshot.value.matches('discovery') || snapshot.value.matches('selection'))) {
-            signalingClient.value.requestOffers();
+    // 5. Offer Refresh
+    watch([view, signalingMode, signalingClient], () => {
+        if (view.value === 'lobby' && signalingMode.value === 'server' && signalingClient.value) {
+            requestOffers();
         }
     });
 
-    // 6. Initial Sync for newcomers
+    // 6. Initial Sync
     watch(connectedPeers, (peers) => {
-        peers.forEach(c => {
+        (peers as any).forEach((c: any) => {
             if (!(c as any)._hasInitialSync) {
                 c.send(JSON.stringify(createLobbyMessage('SYNC_PLAYER_STATUS', view.value)));
                 if (isInitiator.value && boardId.value && boardId.value !== 'manual') {
@@ -504,12 +420,14 @@ export function useGameSession() {
     return {
         identity,
         isLoading,
-        snapshot,
-        send,
+        lobbySnapshot,
+        snapshot: boardSnapshot,
+        send: (ev: any) => currentBoardActor.value?.send(ev),
+        lobbySend,
         signalingMode,
-        isServerConnecting,
+        setSignalingMode: (mode: any) => lobbySend({ type: 'SELECT_MODE', mode }), // bridge for compatibility if needed
         signalingClient,
-        availableOffers,
+        availableOffers: computed(() => (useLobby().availableOffers.value)), // proxy to useLobby
         activeSessions,
         playerInfos,
         connectedPeers,
@@ -523,9 +441,7 @@ export function useGameSession() {
         updateAnswer,
         onFinishGame,
         onAddLedger,
-        onJoinFromList,
         handlePlayAgain,
-        onDeleteSession,
         onAcceptGuest,
         onRejectGuest,
         onCancelSignaling,

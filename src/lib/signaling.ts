@@ -116,7 +116,6 @@ export class SignalingService {
             to: targetP2PId,
             answer: signal,
             peerName: this.peerName,
-            publicKey: this.publicKey || undefined,
             boardId: boardId || this.boardId
         });
     }

@@ -2,7 +2,9 @@
 import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getGameById } from '../lib/GameRegistry'
+import { useLobby } from '../composables/useLobby'
 import { useGameSession } from '../composables/useGameSession'
+import { Connection } from '../lib/webrtc'
 import PreparationPhase from '../components/board/PreparationPhase.vue'
 import ActivePhase from '../components/board/ActivePhase.vue'
 import FinishedPhase from '../components/board/FinishedPhase.vue'
@@ -15,13 +17,22 @@ const boardId = computed(() => route.params.boardId as string)
 const game = computed(() => getGameById(gameId.value || ""))
 
 const {
-    snapshot,
-    send,
     signalingMode,
     signalingClient,
     isServerConnecting,
+    onBackToDiscovery: rawOnBackToDiscovery,
+    onBackToGames: rawOnBackToGames,
+    activeSessions
+} = useLobby()
+
+const onBackToDiscovery = () => rawOnBackToDiscovery(gameId.value)
+const onBackToLobby = () => rawOnBackToGames(gameId.value)
+
+const {
+    snapshot,
+    send,
     playerInfos,
-    connectedPeers,
+    connectedPeers: baseConnectedPeers,
     pendingSignaling,
     isInitiator,
     isGameStarted,
@@ -36,11 +47,16 @@ const {
     onAcceptGuest,
     onRejectGuest,
     onCancelSignaling,
-    onBackToGames,
-    onBackToDiscovery
+    onBackToGames: rawCloseAndBack
 } = useGameSession()
 
-const isFinished = computed(() => snapshot.value.matches('room.finished'))
+const connectedPeers = computed(() => baseConnectedPeers.value as Connection[])
+const onBackToGames = () => {
+    rawCloseAndBack();
+    onBackToDiscovery();
+}
+
+const isFinished = computed(() => (snapshot.value as any)?.matches('finished') || false)
 const isPreparation = computed(() => !isGameStarted.value && !isFinished.value)
 
 const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -51,6 +67,20 @@ const handleBeforeUnload = (e: BeforeUnloadEvent) => {
 }
 
 onMounted(() => {
+    // Initialize state machine based on route
+    // If we're on a board route and board machine is idle, this is a new hosting session
+    if (boardId.value && snapshot.value?.matches('idle')) {
+        const maxPlayers = parseInt(route.query.maxPlayers as string) || 2
+        console.log('[BOARDVIEW] Initializing HOST state for boardId:', boardId.value, 'maxPlayers:', maxPlayers)
+        
+        send({ type: 'HOST', maxPlayers, boardId: boardId.value })
+        
+        // Create connection slots for guests
+        for (let i = 0; i < maxPlayers - 1; i++) {
+            setTimeout(() => onHostAGame(), 100 * (i + 1))
+        }
+    }
+    
     window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
@@ -69,52 +99,52 @@ onUnmounted(() => {
       <div class="animate-fade-in-up">
         <FinishedPhase
           v-if="isFinished"
-          :game-component="game.component"
-          :connected-peers="connectedPeers"
-          :player-infos="playerInfos"
-          :is-initiator="isInitiator"
-          :ledger="snapshot.context.ledger"
-          :on-back-to-lobby="onBackToDiscovery"
+          :GameComponent="game.component"
+          :connectedPeers="connectedPeers"
+          :playerInfos="playerInfos"
+          :isInitiator="isInitiator"
+          :ledger="snapshot?.context?.ledger || []"
+          :onBackToLobby="onBackToDiscovery"
         />
         
         <ActivePhase
           v-else-if="isGameStarted"
-          :game-component="game.component"
-          :connected-peers="connectedPeers"
-          :player-infos="playerInfos"
-          :is-initiator="isInitiator"
-          :ledger="snapshot.context.ledger"
-          :on-add-ledger="onAddLedger"
-          :on-finish-game="onFinishGame"
+          :GameComponent="game.component"
+          :connectedPeers="connectedPeers"
+          :playerInfos="playerInfos"
+          :isInitiator="isInitiator"
+          :ledger="snapshot?.context?.ledger || []"
+          :onAddLedger="onAddLedger"
+          :onFinishGame="onFinishGame"
         />
 
         <PreparationPhase
           v-else
           :state="snapshot"
-          :is-initiator="isInitiator"
-          :signaling-mode="signalingMode"
-          :is-server-connecting="isServerConnecting"
-          :signaling-client="signalingClient"
-          :pending-signaling="pendingSignaling"
-          :on-start-game="startGame"
-          :on-host-agame="onHostAGame"
-          :on-update-offer="updateOffer"
-          :on-update-answer="updateAnswer"
-          :on-close-session="onBackToGames"
-          :on-back-to-lobby="onBackToDiscovery"
-          :on-accept-guest="onAcceptGuest"
-          :on-reject-guest="onRejectGuest"
-          :on-cancel-signaling="onCancelSignaling"
-          :on-remove-player="(id) => send({ type: 'REMOVE_PLAYER', playerId: id })"
-          :player-count="playerInfos.length"
-          :max-players="snapshot.context.maxPlayers"
+          :isInitiator="isInitiator"
+          :signalingMode="signalingMode"
+          :isServerConnecting="isServerConnecting"
+          :signalingClient="signalingClient"
+          :pendingSignaling="pendingSignaling"
+          :onStartGame="startGame"
+          :onHostAGame="onHostAGame"
+          :onUpdateOffer="updateOffer"
+          :onUpdateAnswer="updateAnswer"
+          :onCloseSession="onBackToGames"
+          :onBackToLobby="onBackToDiscovery"
+          :onAcceptGuest="onAcceptGuest"
+          :onRejectGuest="onRejectGuest"
+          :onCancelSignaling="onCancelSignaling"
+          :onRemovePlayer="(id) => send({ type: 'REMOVE_PLAYER', playerId: id })"
+          :playerCount="playerInfos.length"
+          :maxPlayers="snapshot?.context?.maxPlayers || 2"
           :boardId="boardId"
         />
 
         <div class="mt-12 max-w-2xl">
           <PlayerList
             :players="playerInfos"
-            :on-remove="isInitiator ? (id) => send({ type: 'REMOVE_PLAYER', playerId: id }) : undefined"
+            :onRemove="isInitiator ? (id) => send({ type: 'REMOVE_PLAYER', playerId: id }) : undefined"
           />
         </div>
       </div>

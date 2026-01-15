@@ -7,7 +7,7 @@ import PlayerCountSelector from './PlayerCountSelector.vue'
 const props = withDefaults(defineProps<{
   isServerConnecting: boolean
   availableOffers: any[]
-  signalingClient: SignalingService | null
+  signalingClient: any
   onHostAGame: (playerCount?: number) => void
   onJoinFromList: (session: any, slot: any) => void
   minPlayers?: number

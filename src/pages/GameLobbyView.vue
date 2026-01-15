@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowLeft } from 'lucide-vue-next'
 import { getGameById } from '../lib/GameRegistry'
+import { useLobby } from '../composables/useLobby'
 import { useGameSession } from '../composables/useGameSession'
 import Header from '../components/HeaderView.vue'
 import LobbyModeSelection from '../components/lobby/LobbyModeSelection.vue'
@@ -16,16 +17,21 @@ const game = computed(() => getGameById(gameId.value || ""))
 const {
     signalingMode,
     setSignalingMode,
-    snapshot,
-    send,
+    lobbySnapshot,
+    lobbySend,
     signalingClient,
     availableOffers,
     activeSessions,
     isServerConnecting,
+    onDeleteSession,
+    onJoinFromList: rawOnJoinFromList
+} = useLobby()
+
+const onJoinFromList = (session: any, slot: any) => rawOnJoinFromList(gameId.value, session, slot)
+
+const {
     onHostAGame,
     connectWithOffer,
-    onJoinFromList,
-    onDeleteSession
 } = useGameSession()
 </script>
 
@@ -41,14 +47,11 @@ const {
       <div class="animate-fade-in-up">
         <LobbyModeSelection
           v-if="!signalingMode"
-          :on-select-manual="() => {
-            send({ type: 'CLOSE_SESSION' })
+          :onSelectManual="() => {
             setSignalingMode('manual')
           }"
-          :on-select-server="() => {
-            send({ type: 'CLOSE_SESSION' })
+          :onSelectServer="() => {
             setSignalingMode('server')
-            send({ type: 'GOTO_LOBBY' })
           }"
         />
 
@@ -63,21 +66,21 @@ const {
 
           <LobbyManualMode
             v-if="signalingMode === 'manual'"
-            :on-host-agame="onHostAGame"
-            :connect-with-offer="connectWithOffer"
-            :min-players="game.minPlayers"
-            :max-players="game.maxPlayers"
+            :onHostAGame="onHostAGame"
+            :connectWithOffer="connectWithOffer"
+            :minPlayers="game.minPlayers"
+            :maxPlayers="game.maxPlayers"
           />
 
           <LobbyServerMode
             v-if="signalingMode === 'server'"
-            :is-server-connecting="isServerConnecting"
-            :available-offers="availableOffers"
-            :signaling-client="signalingClient"
-            :on-host-agame="onHostAGame"
-            :on-join-from-list="onJoinFromList"
-            :min-players="game.minPlayers"
-            :max-players="game.maxPlayers"
+            :isServerConnecting="isServerConnecting"
+            :availableOffers="availableOffers"
+            :signalingClient="signalingClient"
+            :onHostAGame="onHostAGame"
+            :onJoinFromList="onJoinFromList"
+            :minPlayers="game.minPlayers"
+            :maxPlayers="game.maxPlayers"
           />
         </div>
       </div>

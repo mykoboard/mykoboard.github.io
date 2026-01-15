@@ -243,10 +243,10 @@ function BoardLayout({ cellSize }: { cellSize: number }) {
 
             {/* Center Area */}
             <g transform={`translate(${6 * cellSize}, ${6 * cellSize})`}>
-                <polygon points={`0,0 ${3 * cellSize},0 ${1.5 * cellSize},1.5*cellSize`} fill={COLORS_HEX.green} />
-                <polygon points={`${3 * cellSize},0 ${3 * cellSize},${3 * cellSize} ${1.5 * cellSize},1.5*cellSize`} fill={COLORS_HEX.red} />
-                <polygon points={`${3 * cellSize},${3 * cellSize} 0,${3 * cellSize} ${1.5 * cellSize},1.5*cellSize`} fill={COLORS_HEX.blue} />
-                <polygon points={`0,${3 * cellSize} 0,0 ${1.5 * cellSize},1.5*cellSize`} fill={COLORS_HEX.yellow} />
+                <polygon points={`0,0 ${3 * cellSize},0 ${1.5 * cellSize},${1.5 * cellSize}`} fill={COLORS_HEX.green} />
+                <polygon points={`${3 * cellSize},0 ${3 * cellSize},${3 * cellSize} ${1.5 * cellSize},${1.5 * cellSize}`} fill={COLORS_HEX.red} />
+                <polygon points={`${3 * cellSize},${3 * cellSize} 0,${3 * cellSize} ${1.5 * cellSize},${1.5 * cellSize}`} fill={COLORS_HEX.blue} />
+                <polygon points={`0,${3 * cellSize} 0,0 ${1.5 * cellSize},${1.5 * cellSize}`} fill={COLORS_HEX.yellow} />
             </g>
         </g>
     );

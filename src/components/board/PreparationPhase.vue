@@ -37,7 +37,7 @@ const props = defineProps<{
     boardId?: string;
 }>()
 
-const isRoom = computed(() => props.state.matches('room'))
+const isPreparation = computed(() => props.state.matches('preparation'))
 const isHosting = computed(() => props.state.matches('hosting'))
 const isJoining = computed(() => props.state.matches('joining'))
 const isApproving = computed(() => props.state.matches('approving'))
@@ -78,16 +78,16 @@ const isApproving = computed(() => props.state.matches('approving'))
     </div>
 
     <!-- Session Connection States -->
-    <div v-if="isHosting || isJoining || isRoom || isApproving" class="glass-dark p-10 text-center space-y-8 border border-white/5 shadow-glass-dark rounded-[3rem] animate-zoom-in">
+    <div v-if="isHosting || isJoining || isPreparation || isApproving" class="glass-dark p-10 text-center space-y-8 border border-white/5 shadow-glass-dark rounded-[3rem] animate-zoom-in">
       <div class="space-y-4">
         <div class="inline-flex items-center gap-2 px-4 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-neon transform -translate-y-2">
           {{ (isHosting || isApproving) ? "Broadcasting Session" : isJoining ? "Initializing Node" : "Command Lobby Active" }}
         </div>
         <h2 class="text-4xl font-black text-white uppercase tracking-tighter">
-          {{ isRoom ? "Game Room" : isHosting ? "Link Establishment" : "Connecting..." }}
+          {{ isPreparation ? "Game Room" : isHosting ? "Link Establishment" : "Connecting..." }}
         </h2>
         <p class="text-xs text-white/30 uppercase font-black tracking-widest leading-relaxed max-w-lg mx-auto">
-          <template v-if="isRoom">
+          <template v-if="isPreparation">
             {{ isInitiator ? `Authorize peer nodes or launch protocol when ready (${playerCount}/${maxPlayers}).` : "Waiting for initiator to launch protocol." }}
           </template>
           <template v-else>Synthesizing direct P2P mesh link to session nodes.</template>
@@ -96,7 +96,7 @@ const isApproving = computed(() => props.state.matches('approving'))
 
       <div v-if="isInitiator" class="flex flex-col items-center gap-6">
         <button
-          v-if="isRoom"
+          v-if="isPreparation"
           @click="onStartGame"
           class="w-full max-w-sm h-16 text-sm font-black uppercase tracking-[0.5em] rounded-2xl bg-primary text-primary-foreground shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] transition-all active:scale-[0.98]"
         >
@@ -140,7 +140,7 @@ const isApproving = computed(() => props.state.matches('approving'))
       </div>
 
       <div v-else class="flex flex-col items-center gap-8 py-6">
-        <div v-if="!isRoom" class="relative">
+        <div v-if="!isPreparation" class="relative">
           <div class="animate-spin rounded-full h-20 w-20 border-4 border-primary/5 border-t-primary shadow-neon"></div>
           <div class="absolute inset-0 flex items-center justify-center">
             <div class="h-3 w-3 bg-primary rounded-full animate-pulse shadow-neon"></div>
@@ -148,10 +148,10 @@ const isApproving = computed(() => props.state.matches('approving'))
         </div>
         <div class="space-y-3">
           <h3 class="text-xl font-black text-white uppercase tracking-tight">
-            {{ isRoom ? "Node Synced" : "Bridging Connections" }}
+            {{ isPreparation ? "Node Synced" : "Bridging Connections" }}
           </h3>
           <p class="text-[10px] text-white/30 uppercase tracking-[0.2em] max-w-xs mx-auto font-medium leading-relaxed">
-            {{ isRoom ? "Identity verified. Awaiting initiator's launch command." : "Establishing secure encrypted tunnel to host node." }}
+            {{ isPreparation ? "Identity verified. Awaiting initiator's launch command." : "Establishing secure encrypted tunnel to host node." }}
           </p>
         </div>
         
@@ -213,9 +213,9 @@ const isApproving = computed(() => props.state.matches('approving'))
               v-for="conn in pendingSignaling"
               :key="conn.id"
               :connection="conn"
-              @onOfferChange="onUpdateOffer"
-              @onAnswerChange="onUpdateAnswer"
-              @onCancel="onCancelSignaling"
+              :onOfferChange="onUpdateOffer"
+              :onAnswerChange="onUpdateAnswer"
+              :onCancel="onCancelSignaling"
             />
           </div>
         </div>
@@ -224,14 +224,14 @@ const isApproving = computed(() => props.state.matches('approving'))
       <div v-if="!isInitiator && isJoining && signalingMode === 'manual' && pendingSignaling.length > 0" class="pt-8 border-t border-white/5 text-left">
         <SignalingStep
           :connection="pendingSignaling[0]"
-          @onOfferChange="onUpdateOffer"
-          @onAnswerChange="onUpdateAnswer"
-          @onCancel="onCancelSignaling"
+          :onOfferChange="onUpdateOffer"
+          :onAnswerChange="onUpdateAnswer"
+          :onCancel="onCancelSignaling"
         />
       </div>
     </div>
 
-    <div v-if="!isHosting && !isJoining && !isRoom && !isApproving" class="py-24 flex flex-col items-center justify-center space-y-6 border border-white/5 bg-white/5 rounded-[3rem] backdrop-blur-sm animate-fade-in">
+    <div v-if="!isHosting && !isJoining && !isPreparation && !isApproving" class="py-24 flex flex-col items-center justify-center space-y-6 border border-white/5 bg-white/5 rounded-[3rem] backdrop-blur-sm animate-fade-in">
       <div class="relative">
         <div class="h-20 w-20 bg-white/5 rounded-full flex items-center justify-center transition-transform hover:scale-110 duration-500">
           <div class="h-4 w-4 bg-white/10 rounded-full animate-ping"></div>

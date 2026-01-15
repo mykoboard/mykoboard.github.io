@@ -116,7 +116,8 @@ export const handler = async (event) => {
                 from: connectionId,
                 to: to,
                 answer: answer,
-                peerName: peerName
+                peerName: peerName,
+                boardId: boardId // Forward boardId to host
             });
 
             return { statusCode: 200 };
