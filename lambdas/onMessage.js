@@ -32,6 +32,35 @@ export const handler = async (event) => {
     try {
         // 1️⃣ Offer (Combined Slots)
         if (type === "offer") {
+            let existingParticipants = [];
+
+            // Adjust tracking: prevent duplicated sessions for same boardId
+            if (boardId) {
+                const existingOffers = await ddb.send(new ScanCommand({
+                    TableName: TABLE_NAME,
+                    FilterExpression: "boardId = :bid AND #status = :waiting",
+                    ExpressionAttributeNames: { "#status": "status" },
+                    ExpressionAttributeValues: {
+                        ":bid": { S: boardId },
+                        ":waiting": { S: "waiting" }
+                    }
+                }));
+
+                for (const item of existingOffers.Items || []) {
+                    // Preserve existing participants from the old entry
+                    if (item.participants?.L && item.participants.L.length > 0) {
+                        existingParticipants = item.participants.L;
+                    }
+
+                    if (item.connectionId.S !== connectionId) {
+                        await ddb.send(new DeleteItemCommand({
+                            TableName: TABLE_NAME,
+                            Key: { connectionId: { S: item.connectionId.S } }
+                        }));
+                    }
+                }
+            }
+
             await ddb.send(new PutItemCommand({
                 TableName: TABLE_NAME,
                 Item: {
@@ -42,6 +71,7 @@ export const handler = async (event) => {
                     publicKey: { S: publicKey || "anonymous" },
                     status: { S: "waiting" },
                     slots: { S: JSON.stringify(slots || []) },
+                    participants: { L: existingParticipants }, // Carry over participants
                     timestamp: { N: Date.now().toString() }
                 }
             }));
@@ -67,6 +97,11 @@ export const handler = async (event) => {
                 gameId: item.gameId?.S,
                 boardId: item.boardId?.S,
                 slots: JSON.parse(item.slots.S),
+                participants: item.participants?.L?.map(p => ({
+                    connectionId: p.M.connectionId?.S,
+                    peerName: p.M.peerName?.S,
+                    publicKey: p.M.publicKey?.S
+                })) || []
             }));
 
             await sendMessage(client, connectionId, { type: "offerList", offers });
@@ -76,18 +111,25 @@ export const handler = async (event) => {
         // 3️⃣ Answer (Standard)
         if (type === "answer") {
             // Check if user is already in this game (duplicate join prevention)
-            if (publicKey && boardId) {
+            if (publicKey && publicKey !== "anonymous" && boardId) {
                 const existing = await ddb.send(new ScanCommand({
                     TableName: TABLE_NAME,
-                    FilterExpression: "boardId = :bid AND publicKey = :pk AND connectionId <> :cid",
+                    FilterExpression: "boardId = :bid",
                     ExpressionAttributeValues: {
-                        ":bid": { S: boardId },
-                        ":pk": { S: publicKey },
-                        ":cid": { S: connectionId }
+                        ":bid": { S: boardId }
                     }
                 }));
 
-                if (existing.Items && existing.Items.length > 0) {
+                // More refined check since Scan filter on List of Maps is tricky
+                const isDuplicate = existing.Items?.some(item => {
+                    // Check if host has this identity
+                    if (item.publicKey?.S === publicKey && item.connectionId?.S !== connectionId) return true;
+                    // Check if any existing participant has this identity
+                    const parts = item.participants?.L || [];
+                    return parts.some(p => p.M?.publicKey?.S === publicKey && p.M?.connectionId?.S !== connectionId);
+                });
+
+                if (isDuplicate) {
                     await sendMessage(client, connectionId, {
                         type: "error",
                         code: "DUPLICATE_IDENTITY",
@@ -97,28 +139,46 @@ export const handler = async (event) => {
                 }
             }
 
-            // Store guest as participant to prevent others from using same identity
-            await ddb.send(new PutItemCommand({
-                TableName: TABLE_NAME,
-                Item: {
-                    connectionId: { S: connectionId },
-                    gameId: { S: gameId || "default" },
-                    boardId: { S: boardId || "default" },
-                    peerName: { S: peerName || "unknown" },
-                    publicKey: { S: publicKey || "anonymous" },
-                    status: { S: "participant" },
-                    timestamp: { N: Date.now().toString() }
+            // Update host's offer entry with new participant
+            // We use target (host's connection ID) to update the row
+            if (target) {
+                try {
+                    await ddb.send(new UpdateItemCommand({
+                        TableName: TABLE_NAME,
+                        Key: { connectionId: { S: target } },
+                        UpdateExpression: "SET participants = list_append(if_not_exists(participants, :empty_list), :new_participant)",
+                        ExpressionAttributeValues: {
+                            ":new_participant": {
+                                L: [{
+                                    M: {
+                                        connectionId: { S: connectionId },
+                                        peerName: { S: peerName || "unknown" },
+                                        publicKey: { S: publicKey || "anonymous" },
+                                        timestamp: { N: Date.now().toString() }
+                                    }
+                                }]
+                            },
+                            ":empty_list": { L: [] }
+                        },
+                        // Ensure we only update rows that are actually offers
+                        ConditionExpression: "attribute_exists(slots)"
+                    }));
+                } catch (updateErr) {
+                    console.error("UpdateItem failed:", updateErr);
+                    // If target doesn't exist or is not an offer, we still want to forward the message
+                    // but the tracking is lost. We continue to avoid breaking the P2P connection.
                 }
-            }));
 
-            await sendMessage(client, target, {
-                type: "answer",
-                from: connectionId,
-                to: to,
-                answer: answer,
-                peerName: peerName,
-                boardId: boardId // Forward boardId to host
-            });
+                await sendMessage(client, target, {
+                    type: "answer",
+                    from: connectionId,
+                    to: to,
+                    answer: answer,
+                    peerName: peerName,
+                    boardId: boardId,
+                    publicKey: publicKey
+                });
+            }
 
             return { statusCode: 200 };
         }

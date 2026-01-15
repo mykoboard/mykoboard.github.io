@@ -148,8 +148,13 @@ export function useLobby() {
                     const client = new SignalingService(gameId || "default", currentBoardId, ident.name, (msg) => {
                         if (msg.type === 'offerList') availableOffers.value = msg.offers || [];
                         if (msg.type === 'error') {
-                            logger.error("Signaling error:", msg.message);
+                            logger.error("Signaling error:", msg.message || msg.code);
                             toast.error(msg.message || "Signaling error occurred");
+
+                            // Redirect back to lobby if join was rejected due to duplicate identity
+                            if (msg.code === 'DUPLICATE_IDENTITY') {
+                                router.replace(`/games/${gameId}`);
+                            }
                         }
                         if (msg.type === 'answer') {
                             logger.sig("Received answer message from Guest. msg.boardId:", msg.boardId, "connectionBoardId:", connectionBoardId.value);
