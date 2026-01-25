@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid';
 
 const DB_NAME = 'mykoboard_wallet';
 const STORE_NAME = 'identity';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export interface PlayerIdentity {
     id: string;

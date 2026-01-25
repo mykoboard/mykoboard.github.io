@@ -20,7 +20,7 @@ export interface GameSession {
 
 const DB_NAME = 'MykoboardDB';
 const STORE_NAME = 'games';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export class MykoboardDB {
     private db: IDBDatabase | null = null;
