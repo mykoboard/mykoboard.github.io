@@ -23,9 +23,7 @@ const router = createRouter({
         },
         {
             path: '/games/:gameId',
-            name: 'lobby',
-            component: () => import('../pages/GameLobbyView.vue'),
-            meta: { requiresAuth: true, requiresSession: true }
+            redirect: '/games'
         },
         {
             path: '/games/:gameId/:boardId',

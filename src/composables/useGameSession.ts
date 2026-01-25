@@ -17,7 +17,7 @@ import {
     activeSessions,
     lobbyActor,
     getBoardActor
-} from "./useLobby";
+} from "./sharedState";
 
 export function useGameSession() {
     const route = useRoute();

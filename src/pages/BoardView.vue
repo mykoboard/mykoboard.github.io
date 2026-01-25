@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getGameById } from '../lib/GameRegistry'
-import { useLobby } from '../composables/useLobby'
 import { useGameSession } from '../composables/useGameSession'
 import { Connection } from '../lib/webrtc'
 import { db } from '../lib/db'
@@ -12,22 +11,17 @@ import FinishedPhase from '../components/board/FinishedPhase.vue'
 import PlayerList from '../components/board/Players.vue'
 
 const route = useRoute()
+const router = useRouter()
 const gameId = computed(() => route.params.gameId as string)
 const boardId = computed(() => route.params.boardId as string)
 
 const game = computed(() => getGameById(gameId.value || ""))
 
-const {
-    signalingMode,
-    signalingClient,
-    isServerConnecting,
-    onBackToDiscovery: rawOnBackToDiscovery,
-    onBackToGames: rawOnBackToGames,
-    activeSessions
-} = useLobby()
+const onBackToDiscovery = () => router.push('/games')
+const onBackToLobby = () => router.push('/games')
 
-const onBackToDiscovery = () => rawOnBackToDiscovery(gameId.value)
-const onBackToLobby = () => rawOnBackToGames(gameId.value)
+// Always use server mode for signaling
+const signalingMode = 'server' as const
 
 const {
     snapshot,
@@ -52,7 +46,9 @@ const {
     onAcceptGuest,
     onRejectGuest,
     onCancelSignaling,
-    onBackToGames: rawCloseAndBack
+    onBackToGames: rawCloseAndBack,
+    signalingClient,
+    isServerConnecting
 } = useGameSession()
 
 const connectedPeers = computed(() => baseConnectedPeers.value as Connection[])
