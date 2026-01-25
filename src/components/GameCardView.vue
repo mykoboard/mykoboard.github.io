@@ -3,6 +3,7 @@ import { Star } from 'lucide-vue-next'
 import { v4 as uuidv4 } from 'uuid'
 import { useRouter } from 'vue-router'
 import { useLobby } from '../composables/useLobby'
+import { db } from '../lib/db'
 
 interface Game {
     id: string;
@@ -23,10 +24,15 @@ const emit = defineEmits<{
 const router = useRouter()
 const { setSignalingMode } = useLobby()
 
-const goToBoard = () => {
+const goToBoard = async () => {
     const boardId = uuidv4()
+    const maxPlayers = 2 // Default for now
+    
+    // Mark this session as hosted by this user
+    await db.markAsHosting(boardId, props.game.id, maxPlayers)
+    
     setSignalingMode('server')
-    router.push(`/games/${props.game.id}/${boardId}`)
+    router.push(`/games/${props.game.id}/${boardId}?maxPlayers=${maxPlayers}`)
 }
 </script>
 

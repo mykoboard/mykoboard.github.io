@@ -8,20 +8,39 @@ import { getGameById } from "../lib/GameRegistry";
 import { Ledger, createLobbyMessage, isLobbyMessage, PlayerInfo, createLobbyMessage as createMsg } from "@mykoboard/integration";
 import { SecureWallet } from "../lib/wallet";
 import { SessionManager } from "../lib/sessions";
+import { SignalingService } from "../lib/signaling";
+import { toast } from "vue-sonner";
+import { db } from "../lib/db";
 import {
     identity,
     isLoading,
-    signalingClient,
     activeSessions,
     lobbyActor,
-    getBoardActor,
-    useLobby
+    getBoardActor
 } from "./useLobby";
 
 export function useGameSession() {
     const route = useRoute();
     const router = useRouter();
-    const { setupSignaling, requestOffers, signalingMode, lobbySend, lobbySnapshot } = useLobby();
+
+    // Local signaling state (moved from useLobby)
+    const signalingClient = ref<SignalingService | null>(null);
+    const isServerConnecting = ref(false);
+    const connectionBoardId = ref<string>("");
+    const hasRegistered = ref(false); // Track if we've already registered
+
+    // Pending join requests (for host approval)
+    interface PendingJoinRequest {
+        connectionId: string;
+        peerName: string;
+        publicKey: string;
+        encryptionPublicKey?: string;
+        timestamp: number;
+    }
+    const pendingJoinRequests = ref<PendingJoinRequest[]>([]);
+
+    // Track pending connections waiting for answers
+    const pendingConnections = ref<Map<string, Connection>>(new Map());
 
     const gameId = computed(() => route.params.gameId as string);
     const boardId = computed(() => route.params.boardId as string);
@@ -210,20 +229,254 @@ export function useGameSession() {
         }
     };
 
-    const onHostAGame = (playerCount: number = 2) => {
-        if (!isInsideBoard.value) {
-            const newBoardId = uuidv4();
-            router.push(`/games/${gameId.value}/${newBoardId}?maxPlayers=${playerCount}`);
-        } else if (currentBoardActor.value) {
-            const connection = new Connection(updateConnection);
-            connection.onClose = () => currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
-            connection.openDataChannel();
-            connection.prepareOfferSignal(boardSnapshot.value?.context?.playerName || identity.value?.name || "Anonymous");
+    // Signaling Setup (moved from useLobby)
+    const setupSignaling = async (gameId: string, boardId?: string) => {
+        const currentBoardId = boardId || gameId;
+        logger.sig("setupSignaling called with gameId:", gameId, "boardId:", boardId, "resolved currentBoardId:", currentBoardId);
+        if (!currentBoardId) return;
+
+        if (connectionBoardId.value !== currentBoardId && signalingClient.value?.isConnected) {
+            logger.sig("Switching signaling board assignment from", connectionBoardId.value, "to", currentBoardId);
+            signalingClient.value.updateBoardId(currentBoardId);
+            connectionBoardId.value = currentBoardId;
+        }
+
+        if ((!signalingClient.value || !signalingClient.value.isConnected) && !isServerConnecting.value) {
+            isServerConnecting.value = true;
+            try {
+                const wallet = SecureWallet.getInstance();
+                const ident = await wallet.getIdentity();
+                if (ident) {
+                    const client = new SignalingService(gameId || "default", currentBoardId, ident.name, (msg) => {
+                        // Handle error messages
+                        if (msg.type === 'error') {
+                            logger.error("Signaling error:", msg.message || msg.code);
+                            toast.error(msg.message || "Signaling error occurred");
+
+                            if (msg.code === 'DUPLICATE_IDENTITY') {
+                                router.replace(`/games/${gameId}`);
+                            }
+                        }
+
+                        // Handle peerJoined: Guest has joined and wants to connect
+                        if (msg.type === 'peerJoined') {
+                            logger.sig("Peer joined:", msg.peerName, "publicKey:", msg.publicKey);
+
+                            // Add to pending join requests for host approval
+                            pendingJoinRequests.value.push({
+                                connectionId: msg.from!,
+                                peerName: msg.peerName || "Guest",
+                                publicKey: msg.publicKey!,
+                                encryptionPublicKey: msg.encryptionPublicKey,
+                                timestamp: Date.now()
+                            });
+                        }
+
+                        // Handle offer: Host has sent WebRTC offer
+                        if (msg.type === 'offer') {
+                            logger.sig("Received offer from host:", msg.from);
+                            const targetId = msg.boardId || connectionBoardId.value;
+                            if (!targetId) {
+                                logger.error("No valid target board UUID for offer message");
+                                return;
+                            }
+
+                            // Create connection and accept offer
+                            const actor = getBoardActor(targetId, ident.name, false);
+                            const connection = new Connection((c) => {
+                                actor.send({ type: 'UPDATE_CONNECTION', connection: c });
+                            });
+
+                            // Add message listener to route messages to board actor
+                            connection.addMessageListener((data: string) => {
+                                try {
+                                    const message = JSON.parse(data);
+                                    if (!isLobbyMessage(message)) return;
+                                    if (message.type === 'START_GAME') actor.send({ type: 'START_GAME' });
+                                    if (message.type === 'GAME_STARTED') actor.send({ type: 'GAME_STARTED' });
+                                    if (message.type === 'GAME_RESET') actor.send({ type: 'GAME_RESET' });
+                                    if (message.type === 'NEW_BOARD') router.replace(`/games/${gameId.value}/${message.payload}`);
+                                    if (message.type === 'SYNC_PLAYER_STATUS') actor.send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: message.payload });
+                                    if (message.type === 'SYNC_PARTICIPANTS') actor.send({ type: 'SYNC_PARTICIPANTS', participants: message.payload });
+                                    if (message.type === 'SYNC_LEDGER') {
+                                        const entries = message.payload as any[];
+                                        for (const entry of entries) {
+                                            if (entry.signature && entry.signerPublicKey) {
+                                                SecureWallet.verify(entry.action, entry.signature, entry.signerPublicKey).then(isValid => {
+                                                    if (!isValid) logger.error("Invalid signature in ledger entry", entry);
+                                                });
+                                            }
+                                        }
+                                        actor.send({ type: 'SYNC_LEDGER', ledger: entries });
+                                    }
+                                } catch (e) {
+                                    logger.error("Failed to parse message:", e);
+                                }
+                            });
+
+                            connection.onClose = () => {
+                                actor.send({
+                                    type: 'PEER_DISCONNECTED',
+                                    connectionId: connection.id
+                                });
+                            };
+
+                            connection.setDataChannelCallback();
+
+                            // Accept the offer and generate answer
+                            connection.acceptOffer(msg.offer, ident.name).then(() => {
+                                // Wait for answer to be ready and send it
+                                const checkAnswer = setInterval(() => {
+                                    if (connection.signal && signalingClient.value) {
+                                        clearInterval(checkAnswer);
+
+                                        logger.sig("Sending answer to host:", msg.from);
+                                        signalingClient.value.guestAnswer(
+                                            msg.from!,
+                                            ident.publicKey,
+                                            connection.signal,
+                                            undefined // iv
+                                        );
+                                    }
+                                }, 100);
+                            }).catch(e => {
+                                logger.error("Failed to accept offer and generate answer:", e);
+                            });
+                        }
+
+                        // Handle answer: Guest has sent WebRTC answer
+                        if (msg.type === 'answer') {
+                            logger.sig("Received answer from guest:", msg.from, "publicKey:", msg.publicKey);
+
+                            // Find the pending connection
+                            const connection = pendingConnections.value.get(msg.from!);
+                            if (connection && msg.answer) {
+                                logger.sig("Applying answer to connection:", msg.from);
+                                try {
+                                    connection.acceptAnswer(msg.answer);
+                                    logger.sig("WebRTC connection established with:", msg.from);
+                                    pendingConnections.value.delete(msg.from!);
+                                } catch (e) {
+                                    logger.error("Failed to accept answer:", e);
+                                }
+                            } else {
+                                logger.error("No pending connection found for:", msg.from);
+                            }
+                        }
+                    });
+                    const challenge = `SIGN_IN:${ident.subscriptionToken}`;
+                    const signature = await wallet.sign(challenge);
+                    await client.connect(ident.subscriptionToken, ident.publicKey, signature);
+                    signalingClient.value = client;
+                    connectionBoardId.value = currentBoardId;
+                }
+            } catch (err) {
+                logger.error("Failed to connect to signaling server:", err);
+            } finally {
+                isServerConnecting.value = false;
+            }
         }
     };
 
+    // New Flow: Host registers session without creating WebRTC offers
+    const onHostAGame = async (playerCount: number = 2) => {
+        if (!isInsideBoard.value) {
+            const newBoardId = uuidv4();
+            router.push(`/games/${gameId.value}/${newBoardId}?maxPlayers=${playerCount}`);
+        } else if (currentBoardActor.value && boardId.value) {
+            // This is called manually, not used for auto-registration
+            logger.sig("Manual onHostAGame called (not used in new flow)");
+        }
+    };
+
+    // New Flow: Guest joins existing session
+    const onJoinAsGuest = async () => {
+        if (!boardId.value || !signalingClient.value?.isConnected) {
+            logger.error("Cannot join as guest: missing boardId or signaling not connected");
+            return;
+        }
+
+        const wallet = SecureWallet.getInstance();
+        const ident = await wallet.getIdentity();
+        if (ident) {
+            logger.sig("Sending guestJoin for boardId:", boardId.value);
+            signalingClient.value.guestJoin(
+                boardId.value,
+                ident.name,
+                ident.publicKey,
+                ident.publicKey // Using publicKey as encryption key for now
+            );
+        }
+    };
+
+    // Check if a publicKey is in the friends list
+    const isFriend = async (publicKey: string): Promise<boolean> => {
+        const friends = await db.getAllFriends();
+        return friends.some(f => f.publicKey === publicKey);
+    };
+
+    // Host approves a pending join request
+    const onApprovePeer = async (request: PendingJoinRequest) => {
+        logger.sig("Approving peer:", request.peerName, "publicKey:", request.publicKey);
+
+        // Remove from pending list
+        pendingJoinRequests.value = pendingJoinRequests.value.filter(
+            r => r.connectionId !== request.connectionId
+        );
+
+        // Create WebRTC connection and offer
+        const connection = new Connection((c) => {
+            currentBoardActor.value?.send({ type: 'UPDATE_CONNECTION', connection: c });
+        });
+
+        connection.onClose = () => {
+            currentBoardActor.value?.send({
+                type: 'PEER_DISCONNECTED',
+                connectionId: connection.id
+            });
+            pendingConnections.value.delete(request.connectionId);
+        };
+
+        connection.openDataChannel();
+        await connection.prepareOfferSignal(
+            boardSnapshot.value?.context?.playerName || identity.value?.name || "Anonymous"
+        );
+
+        // Store connection for when answer arrives
+        pendingConnections.value.set(request.connectionId, connection);
+
+        // Wait for the offer to be ready
+        const checkOffer = setInterval(() => {
+            if (connection.signal && signalingClient.value) {
+                clearInterval(checkOffer);
+
+                // Send hostOffer to the guest
+                const wallet = SecureWallet.getInstance();
+                wallet.getIdentity().then(ident => {
+                    if (ident && signalingClient.value) {
+                        signalingClient.value.hostOffer(
+                            request.connectionId,
+                            request.publicKey,
+                            connection.signal,
+                            ident.publicKey, // encryptionPublicKey
+                            undefined // iv
+                        );
+                    }
+                });
+            }
+        }, 100);
+    };
+
+    // Host rejects a pending join request
+    const onRejectPeer = (request: PendingJoinRequest) => {
+        logger.sig("Rejecting peer:", request.peerName);
+        pendingJoinRequests.value = pendingJoinRequests.value.filter(
+            r => r.connectionId !== request.connectionId
+        );
+    };
+
     const startGame = () => {
-        if (signalingMode.value === 'server' && signalingClient.value && isInitiator.value) {
+        if (signalingClient.value && isInitiator.value) {
             signalingClient.value.deleteOffer();
         }
         currentBoardActor.value?.send({ type: 'START_GAME' });
@@ -325,34 +578,7 @@ export function useGameSession() {
 
     // --- WATCHERS & SIDE EFFECTS ---
 
-    // 1. Signaling Broadcast (Host Only)
-    let broadcastTimeout: NodeJS.Timeout | null = null;
-    const lastSentSlots = ref("");
-
-    watch([isInitiator, signalingMode, signalingClient, boardId, connectedPeers, pendingSignaling], () => {
-        if (!isInitiator.value || signalingMode.value !== 'server' || !signalingClient.value || !boardId.value) {
-            return;
-        }
-
-        if (broadcastTimeout) clearTimeout(broadcastTimeout);
-        broadcastTimeout = setTimeout(() => {
-            const currentSlots = [
-                ...(connectedPeers.value as any).map((c: any) => ({ connectionId: c.id, offer: c.signal, status: 'taken' as const, peerName: c.remotePlayerName })),
-                ...(pendingSignaling.value as any).filter((c: any) => c.signal).map((c: any) => ({ connectionId: c.id, offer: c.signal, status: 'open' as const }))
-            ];
-
-            if (currentSlots.length > 0) {
-                const slotsString = JSON.stringify(currentSlots);
-                const cacheKey = `${boardId.value}:${slotsString}`;
-                if (cacheKey !== lastSentSlots.value) {
-                    const success = signalingClient.value?.sendOffer(currentSlots, gameId.value!, boardId.value, identity.value?.name || "Anonymous");
-                    if (success) lastSentSlots.value = cacheKey;
-                }
-            }
-        }, 500);
-    });
-
-    // 2. Participant Sync (Host Only)
+    // 1. Participant Sync (Host Only)
     watch([isInitiator, playerInfos], () => {
         if (!isInitiator.value) return;
 
@@ -373,14 +599,51 @@ export function useGameSession() {
         });
     }, { deep: true, immediate: true });
 
-    // 3. Signaling Lifecycle for Board
-    watch([signalingMode, boardId, isInsideBoard], async () => {
-        const shouldConnect = signalingMode.value === 'server' && (isInsideBoard.value || !boardId.value);
-        logger.sig("[WATCH] Signaling Lifecycle update. shouldConnect:", shouldConnect, "mode:", signalingMode.value, "boardId:", boardId.value);
+    // Signaling Lifecycle for Board
+    watch([boardId, isInsideBoard], async () => {
+        const shouldConnect = isInsideBoard.value && boardId.value;
+        logger.sig("[WATCH] Signaling Lifecycle update. shouldConnect:", shouldConnect, "boardId:", boardId.value);
         if (shouldConnect) {
             await setupSignaling(gameId.value, boardId.value);
         }
     }, { immediate: true });
+
+    // Auto-register when signaling connects
+    // Use board machine state to determine host vs guest
+    watch([signalingClient, boardSnapshot, boardId], async () => {
+        if (!signalingClient.value?.isConnected || !boardId.value || hasRegistered.value) return;
+
+        const wallet = SecureWallet.getInstance();
+        const ident = await wallet.getIdentity();
+        if (!ident) return;
+
+        const state = boardSnapshot.value;
+        if (!state) return;
+
+        // Check the actual state machine state to determine role
+        const isHosting = state.matches('hosting') || state.matches('preparation');
+        const isJoining = state.matches('joining');
+
+        if (isHosting && state.context.isInitiator) {
+            logger.sig("Auto-registering as HOST for boardId:", boardId.value, "state:", state.value);
+            signalingClient.value.hostRegister(
+                boardId.value,
+                gameId.value,
+                ident.name,
+                ident.publicKey
+            );
+            hasRegistered.value = true;
+        } else if (isJoining || !state.context.isInitiator) {
+            logger.sig("Auto-joining as GUEST for boardId:", boardId.value, "state:", state.value);
+            signalingClient.value.guestJoin(
+                boardId.value,
+                ident.name,
+                ident.publicKey,
+                ident.publicKey // Using publicKey as encryption key for now
+            );
+            hasRegistered.value = true;
+        }
+    });
 
     // 4. Session Restoration
     watch(boardId, async (newId) => {
@@ -397,12 +660,7 @@ export function useGameSession() {
         }
     }, { immediate: true });
 
-    // 5. Offer Refresh
-    watch([view, signalingMode, signalingClient], () => {
-        if (view.value === 'lobby' && signalingMode.value === 'server' && signalingClient.value) {
-            requestOffers();
-        }
-    });
+
 
     // 6. Initial Sync
     watch(connectedPeers, (peers) => {
@@ -420,14 +678,11 @@ export function useGameSession() {
     return {
         identity,
         isLoading,
-        lobbySnapshot,
         snapshot: boardSnapshot,
         send: (ev: any) => currentBoardActor.value?.send(ev),
-        lobbySend,
-        signalingMode,
-        setSignalingMode: (mode: any) => lobbySend({ type: 'SELECT_MODE', mode }), // bridge for compatibility if needed
         signalingClient,
-        availableOffers: computed(() => (useLobby().availableOffers.value)), // proxy to useLobby
+        isServerConnecting,
+        pendingJoinRequests,
         activeSessions,
         playerInfos,
         connectedPeers,
@@ -435,6 +690,10 @@ export function useGameSession() {
         isInitiator,
         isGameStarted,
         onHostAGame,
+        onJoinAsGuest,
+        isFriend,
+        onApprovePeer,
+        onRejectPeer,
         startGame,
         connectWithOffer,
         updateOffer,
@@ -445,7 +704,7 @@ export function useGameSession() {
         onAcceptGuest,
         onRejectGuest,
         onCancelSignaling,
-        onBackToGames,
-        onBackToDiscovery,
+        onBackToGames: () => router.push(`/games/${gameId.value}`),
+        onBackToDiscovery: () => router.push(`/games/${gameId.value}`),
     };
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { UserPlus, Globe, LogIn, CheckCircle2, Clipboard, AlertTriangle } from 'lucide-vue-next'
+import { ref, computed, watch } from 'vue'
+import { UserPlus, Globe, LogIn, CheckCircle2, Clipboard, AlertTriangle, Link, Copy, Check } from 'lucide-vue-next'
 import { 
   AlertDialogRoot, 
   AlertDialogTrigger, 
@@ -15,6 +15,14 @@ import {
 import SignalingStep from './SignalingStep.vue'
 import type { Connection } from '../../lib/webrtc'
 
+interface PendingJoinRequest {
+    connectionId: string;
+    peerName: string;
+    publicKey: string;
+    encryptionPublicKey?: string;
+    timestamp: number;
+}
+
 const props = defineProps<{
     state: any;
     isInitiator: boolean;
@@ -22,6 +30,8 @@ const props = defineProps<{
     isServerConnecting: boolean;
     signalingClient: any;
     pendingSignaling: Connection[];
+    pendingJoinRequests?: PendingJoinRequest[];
+    isFriend?: (publicKey: string) => Promise<boolean>;
     onStartGame: () => void;
     onHostAGame: () => void;
     onUpdateOffer: (connection: Connection, offer: string) => void;
@@ -30,12 +40,59 @@ const props = defineProps<{
     onBackToLobby: () => void;
     onAcceptGuest: () => void;
     onRejectGuest: () => void;
+    onApprovePeer?: (request: PendingJoinRequest) => void;
+    onRejectPeer?: (request: PendingJoinRequest) => void;
     onCancelSignaling: (connection: Connection) => void;
     onRemovePlayer: (id: string) => void;
     playerCount: number;
     maxPlayers: number;
     boardId?: string;
+    gameId?: string;
 }>()
+
+const friendStatus = ref<Record<string, boolean>>({})
+
+// Check friend status for each pending request
+const checkFriendStatus = async (publicKey: string) => {
+    if (props.isFriend) {
+        friendStatus.value[publicKey] = await props.isFriend(publicKey)
+    }
+}
+
+// Truncate public key for display
+const truncateKey = (key: string) => {
+    if (key.length <= 20) return key
+    return `${key.substring(0, 10)}...${key.substring(key.length - 10)}`
+}
+
+const isCopied = ref(false)
+
+const sessionLink = computed(() => {
+    return `${window.location.origin}${window.location.pathname}#/games/${props.gameId}/${props.boardId}`
+})
+
+const handleCopyLink = async () => {
+    try {
+        await navigator.clipboard.writeText(sessionLink.value)
+        isCopied.value = true
+        setTimeout(() => {
+            isCopied.value = false
+        }, 2000)
+    } catch (err) {
+        console.error('Failed to copy link:', err)
+    }
+}
+
+// Watch for new pending join requests and check friend status
+watch(() => props.pendingJoinRequests, (requests) => {
+    if (requests) {
+        requests.forEach(request => {
+            if (!(request.publicKey in friendStatus.value)) {
+                checkFriendStatus(request.publicKey)
+            }
+        })
+    }
+}, { deep: true, immediate: true })
 
 const isPreparation = computed(() => props.state.matches('preparation'))
 const isHosting = computed(() => props.state.matches('hosting'))
@@ -73,6 +130,52 @@ const isApproving = computed(() => props.state.matches('approving'))
           >
             Grant Access
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pending Join Requests (New Flow) -->
+    <div v-if="isInitiator && pendingJoinRequests && pendingJoinRequests.length > 0" class="glass-dark p-8 border border-primary/20 shadow-glass-dark rounded-[2.5rem] animate-zoom-in space-y-6">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
+          <UserPlus class="w-6 h-6 text-primary" />
+        </div>
+        <div class="space-y-1">
+          <h2 class="text-2xl font-black text-white uppercase tracking-tight">Join Requests</h2>
+          <p class="text-white/40 uppercase tracking-widest text-[10px] font-medium">
+            {{ pendingJoinRequests.length }} {{ pendingJoinRequests.length === 1 ? 'peer' : 'peers' }} waiting for approval
+          </p>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <div v-for="request in pendingJoinRequests" :key="request.connectionId" class="glass-darker p-6 rounded-2xl border border-white/5 space-y-4">
+          <div class="flex items-start justify-between">
+            <div class="space-y-2">
+              <div class="flex items-center gap-2">
+                <span class="text-lg font-black text-white">{{ request.peerName }}</span>
+                <span v-if="friendStatus[request.publicKey]" class="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-[9px] font-black uppercase tracking-wider">
+                  Friend
+                </span>
+              </div>
+              <p class="text-xs text-white/40 font-mono">{{ truncateKey(request.publicKey) }}</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <button
+              @click="onRejectPeer && onRejectPeer(request)"
+              class="h-12 rounded-xl border border-white/10 text-white/60 hover:text-rose-500 hover:bg-rose-500/10 hover:border-rose-500/30 font-black uppercase tracking-widest text-xs transition-all"
+            >
+              Reject
+            </button>
+            <button
+              @click="onApprovePeer && onApprovePeer(request)"
+              class="h-12 rounded-xl bg-primary text-primary-foreground shadow-neon hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] font-black uppercase tracking-widest text-xs transition-all"
+            >
+              Approve
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -191,21 +294,50 @@ const isApproving = computed(() => props.state.matches('approving'))
         </AlertDialogRoot>
       </div>
 
-      <!-- Signaling UI -->
+      <!-- Session Shareability & Manual Signaling -->
       <div v-if="isInitiator" class="pt-8 border-t border-white/5 space-y-6">
-        <div v-if="signalingMode === 'server'" class="p-8 text-center space-y-4 bg-primary/5 border border-primary/20 rounded-3xl shadow-neon-sm animate-pulse">
-          <div class="h-12 w-12 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto border border-primary/20">
-            <Globe :class="['w-6 h-6 text-primary', !isServerConnecting ? 'animate-pulse' : '']" />
+        <!-- Share Link (Server Mode) -->
+        <div v-if="signalingMode === 'server'" class="glass-dark p-8 rounded-[2rem] border border-white/10 shadow-glass-dark space-y-6 group hover:border-primary/30 transition-all duration-500">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
+                <Link class="w-5 h-5 text-primary" />
+              </div>
+              <div class="text-left">
+                <h3 class="text-sm font-black text-white uppercase tracking-wider">Share Session Link</h3>
+                <p class="text-[10px] text-white/30 uppercase tracking-widest font-medium">Link this node to the discovery mesh</p>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-2 px-3 py-1 bg-primary/5 border border-primary/20 rounded-full">
+              <div class="w-1.5 h-1.5 bg-primary rounded-full animate-pulse shadow-neon" />
+              <span class="text-[9px] font-black text-primary uppercase tracking-widest">Live Broadcast</span>
+            </div>
           </div>
-          <div class="space-y-1">
-            <h3 class="font-black text-primary text-xs uppercase tracking-widest">Active Discovery Broadcast</h3>
-            <p class="text-[10px] text-white/30 uppercase tracking-widest">Lobby is visible on global discovery mesh.</p>
-            <p v-if="!signalingClient?.isConnected && !isServerConnecting" class="text-[10px] text-rose-500 mt-2 font-black uppercase tracking-widest">
-              Link Lost: Discovery Offline
-            </p>
+
+          <div class="relative flex items-center gap-3">
+            <div class="flex-grow bg-black/40 border border-white/10 rounded-xl px-4 py-3.5 font-mono text-[11px] text-white/60 truncate transition-all group-hover:bg-black/60 group-hover:border-white/20">
+              {{ sessionLink }}
+            </div>
+            <button
+              @click="handleCopyLink"
+              class="shrink-0 h-12 px-6 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-[10px] shadow-neon hover:shadow-[0_0_25px_rgba(16,185,129,0.4)] transition-all active:scale-95 flex items-center gap-2"
+            >
+              <transition mode="out-in" name="fade">
+                <div v-if="isCopied" key="check" class="flex items-center gap-2 animate-bounce-short">
+                  <Check class="w-4 h-4" />
+                  COPIED
+                </div>
+                <div v-else key="copy" class="flex items-center gap-2">
+                  <Copy class="w-4 h-4" />
+                  COPY LINK
+                </div>
+              </transition>
+            </button>
           </div>
         </div>
 
+        <!-- Manual Signaling -->
         <div v-if="signalingMode === 'manual' && pendingSignaling.length > 0" class="space-y-4 text-left">
           <h3 class="text-[11px] font-black text-white/20 uppercase tracking-[0.3em] px-1">Pending Link Authentications</h3>
           <div class="grid grid-cols-1 gap-6">
@@ -281,5 +413,20 @@ const isApproving = computed(() => props.state.matches('approving'))
 
 .animate-zoom-in {
   animation: zoom-in 0.5s ease-out forwards;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+@keyframes bounce-short {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.animate-bounce-short {
+  animation: bounce-short 0.4s ease-out;
 }
 </style>

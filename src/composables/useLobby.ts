@@ -82,50 +82,7 @@ export function useLobby() {
     };
     loadSessions();
 
-    const onJoinFromList = async (gameId: string, session: any, slot: any) => {
-        const targetBoardId = session.sessionBoardId || session.boardId;
-        if (!targetBoardId) return;
 
-        const actor = getBoardActor(targetBoardId, identity.value?.name || "Anonymous", false);
-        actor.send({ type: 'JOIN', boardId: targetBoardId });
-
-        const conn = new Connection((c) => {
-            actor.send({ type: 'UPDATE_CONNECTION', connection: c });
-
-            // Re-setup message listener since this is a new connection callback scope
-            if (!(c as any)._hasListener) {
-                c.addMessageListener((data: string) => {
-                    try {
-                        const msg = JSON.parse(data);
-                        if (!isLobbyMessage(msg)) return;
-                        if (msg.type === 'START_GAME') actor.send({ type: 'START_GAME' });
-                        if (msg.type === 'GAME_STARTED') actor.send({ type: 'GAME_STARTED' });
-                        if (msg.type === 'GAME_RESET') actor.send({ type: 'GAME_RESET' });
-                        // Navigation handled in BoardView or global watcher? 
-                        // For now we rely on the component using useGameSession to handle navigation if boardId changes
-                        if (msg.type === 'NEW_BOARD') router.replace(`/games/${gameId}/${msg.payload}`);
-                        if (msg.type === 'SYNC_PLAYER_STATUS') actor.send({ type: 'SET_PLAYER_STATUS', playerId: c.id, status: msg.payload });
-                        if (msg.type === 'SYNC_PARTICIPANTS') actor.send({ type: 'SYNC_PARTICIPANTS', participants: msg.payload });
-                        if (msg.type === 'SYNC_LEDGER') actor.send({ type: 'SYNC_LEDGER', ledger: msg.payload });
-                    } catch { }
-                });
-                (c as any)._hasListener = true;
-            }
-        });
-
-        conn.setDataChannelCallback();
-        await conn.acceptOffer(slot.offer, identity.value?.name || "Anonymous");
-
-        const checkSignal = setInterval(() => {
-            if (conn.signal) {
-                if (targetBoardId) signalingClient.value?.updateBoardId(targetBoardId);
-                signalingClient.value?.sendAnswer(session.connectionId, slot.connectionId, conn.signal, targetBoardId);
-                clearInterval(checkSignal);
-                // Navigation to board
-                router.replace(`/games/${gameId}/${targetBoardId}`);
-            }
-        }, 500);
-    };
 
     // Signaling Lifecycle (Global)
     const setupSignaling = async (gameId: string, boardId?: string) => {
@@ -146,7 +103,7 @@ export function useLobby() {
                 const ident = await wallet.getIdentity();
                 if (ident) {
                     const client = new SignalingService(gameId || "default", currentBoardId, ident.name, (msg) => {
-                        if (msg.type === 'offerList') availableOffers.value = msg.offers || [];
+                        // Handle error messages
                         if (msg.type === 'error') {
                             logger.error("Signaling error:", msg.message || msg.code);
                             toast.error(msg.message || "Signaling error occurred");
@@ -156,37 +113,59 @@ export function useLobby() {
                                 router.replace(`/games/${gameId}`);
                             }
                         }
-                        if (msg.type === 'answer') {
-                            logger.sig("Received answer message from Guest. msg.boardId:", msg.boardId, "connectionBoardId:", connectionBoardId.value);
+
+                        // Handle peerJoined: Guest has joined and wants to connect
+                        if (msg.type === 'peerJoined') {
+                            logger.sig("Peer joined:", msg.peerName, "publicKey:", msg.publicKey);
+                            const actor = getBoardActor(currentBoardId, ident.name, false);
+                            actor.send({
+                                type: 'PEER_JOIN_REQUEST',
+                                connectionId: msg.from,
+                                peerName: msg.peerName,
+                                publicKey: msg.publicKey,
+                                encryptionPublicKey: msg.encryptionPublicKey
+                            });
+                        }
+
+                        // Handle offer: Host has sent WebRTC offer
+                        if (msg.type === 'offer') {
+                            logger.sig("Received offer from host:", msg.from);
                             const targetId = msg.boardId || connectionBoardId.value;
-
-                            if (!targetId || targetId === gameId) {
-                                logger.error("No valid target board UUID for answer message. Falling back to connectionBoardId:", connectionBoardId.value);
-                                // If msg.boardId is missing, we MUST have a valid connectionBoardId that isn't the gameId
-                                if (connectionBoardId.value === gameId) {
-                                    logger.error("Abort routing: targetId matches gameId exactly. This would create a zombie actor.");
-                                    return;
-                                }
+                            if (!targetId) {
+                                logger.error("No valid target board UUID for offer message");
+                                return;
                             }
 
-                            logger.sig("Routing answer to actor:", targetId);
-                            const actor = getBoardActor(targetId!, ident.name, false);
-                            const ctx = (actor.getSnapshot() as any).context;
+                            const actor = getBoardActor(targetId, ident.name, false);
+                            actor.send({
+                                type: 'RECEIVE_OFFER',
+                                connectionId: msg.from,
+                                offer: msg.offer,
+                                peerName: msg.peerName,
+                                publicKey: msg.publicKey,
+                                encryptionPublicKey: msg.encryptionPublicKey,
+                                iv: msg.iv
+                            });
+                        }
 
-                            const connectionsIter = Array.from(ctx.connections.values()) as any[];
-                            const pendingConn = msg.to
-                                ? connectionsIter.find((c: any) => c.id === msg.to)
-                                : connectionsIter.find((c: any) => c.status === ConnectionStatus.started);
-
-                            if (pendingConn) {
-                                actor.send({
-                                    type: 'REQUEST_JOIN',
-                                    connectionId: msg.from,
-                                    peerName: msg.peerName || "Anonymous Guest",
-                                    answer: msg.answer,
-                                    connection: pendingConn
-                                });
+                        // Handle answer: Guest has sent WebRTC answer
+                        if (msg.type === 'answer') {
+                            logger.sig("Received answer from guest:", msg.from, "publicKey:", msg.publicKey);
+                            const targetId = msg.boardId || connectionBoardId.value;
+                            if (!targetId) {
+                                logger.error("No valid target board UUID for answer message");
+                                return;
                             }
+
+                            const actor = getBoardActor(targetId, ident.name, false);
+                            actor.send({
+                                type: 'RECEIVE_ANSWER',
+                                connectionId: msg.from,
+                                answer: msg.answer,
+                                peerName: msg.peerName,
+                                publicKey: msg.publicKey,
+                                iv: msg.iv
+                            });
                         }
                     });
                     const challenge = `SIGN_IN:${ident.subscriptionToken}`;
@@ -203,11 +182,7 @@ export function useLobby() {
         }
     };
 
-    const requestOffers = () => {
-        if (signalingMode.value === 'server' && signalingClient.value) {
-            signalingClient.value.requestOffers();
-        }
-    };
+
 
     const onBackToDiscovery = (gameId: string) => {
         router.push(`/games/${gameId}`);
@@ -227,9 +202,7 @@ export function useLobby() {
         activeSessions,
         onDeleteSession,
         isServerConnecting,
-        onJoinFromList,
         setupSignaling,
-        requestOffers,
         onBackToDiscovery,
         onBackToGames
     };

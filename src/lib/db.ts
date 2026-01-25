@@ -25,10 +25,18 @@ export interface Friend {
     addedAt: number;
 }
 
+export interface HostedSession {
+    boardId: string; // Primary key
+    gameId: string;
+    createdAt: number;
+    maxPlayers: number;
+}
+
 const DB_NAME = 'MykoboardDB';
 const STORE_NAME = 'games';
 const FRIENDS_STORE = 'friends';
-const DB_VERSION = 3;
+const HOSTED_SESSIONS_STORE = 'hostedSessions';
+const DB_VERSION = 4; // Increment for new store
 
 export class MykoboardDB {
     private db: IDBDatabase | null = null;
@@ -46,6 +54,9 @@ export class MykoboardDB {
                 }
                 if (!db.objectStoreNames.contains(FRIENDS_STORE)) {
                     db.createObjectStore(FRIENDS_STORE, { keyPath: 'id' });
+                }
+                if (!db.objectStoreNames.contains(HOSTED_SESSIONS_STORE)) {
+                    db.createObjectStore(HOSTED_SESSIONS_STORE, { keyPath: 'boardId' });
                 }
             };
 
@@ -156,6 +167,63 @@ export class MykoboardDB {
             const request = store.delete(id);
 
             request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // Hosted Sessions Management
+    async markAsHosting(boardId: string, gameId: string, maxPlayers: number): Promise<void> {
+        const db = await this.getDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(HOSTED_SESSIONS_STORE, 'readwrite');
+            const store = transaction.objectStore(HOSTED_SESSIONS_STORE);
+            const session: HostedSession = {
+                boardId,
+                gameId,
+                createdAt: Date.now(),
+                maxPlayers
+            };
+            const request = store.put(session);
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async isHosting(boardId: string): Promise<boolean> {
+        const db = await this.getDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(HOSTED_SESSIONS_STORE, 'readonly');
+            const store = transaction.objectStore(HOSTED_SESSIONS_STORE);
+            const request = store.get(boardId);
+
+            request.onsuccess = () => resolve(!!request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async cleanupOldHostedSessions(): Promise<void> {
+        const db = await this.getDB();
+        const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(HOSTED_SESSIONS_STORE, 'readwrite');
+            const store = transaction.objectStore(HOSTED_SESSIONS_STORE);
+            const request = store.openCursor();
+
+            request.onsuccess = (event) => {
+                const cursor = (event.target as IDBRequest).result;
+                if (cursor) {
+                    const session = cursor.value as HostedSession;
+                    if (session.createdAt < oneDayAgo) {
+                        cursor.delete();
+                    }
+                    cursor.continue();
+                } else {
+                    resolve();
+                }
+            };
+
             request.onerror = () => reject(request.error);
         });
     }

@@ -10,18 +10,22 @@ export type SignalingSlot = {
 
 export type SignalingMessage = {
     action: 'sendMessage'; // Required for AWS API Gateway routing
-    type: 'register' | 'offer' | 'listOffers' | 'offerList' | 'answer' | 'deleteOffer';
+    type: 'hostRegister' | 'guestJoin' | 'hostOffer' | 'guestAnswer' | 'deleteOffer' |
+    'peerJoined' | 'offer' | 'answer' | 'error';
     from?: string;
     to?: string;
     target?: string;
     peerName?: string;
     offer?: any;
-    slots?: SignalingSlot[];
-    offers?: any[];
     answer?: any;
     boardId?: string;
     gameId?: string;
     publicKey?: string;
+    guestPublicKey?: string;
+    encryptionPublicKey?: string;
+    iv?: string;
+    code?: string;
+    message?: string;
 };
 
 export class SignalingService {
@@ -88,36 +92,57 @@ export class SignalingService {
         });
     }
 
-    sendOffer(slots: SignalingSlot[], gameId: string, boardId: string, peerName: string): boolean {
-        logger.sig("Broadcasting combined offer for game:", this.gameId, "board:", boardId, "slots:", slots.length);
+    // New Flow: Host registers session without WebRTC offers
+    hostRegister(boardId: string, gameId: string, peerName: string, publicKey: string): boolean {
+        logger.sig("Registering as host for board:", boardId);
         return this.send({
-            type: 'offer',
-            slots: slots,
-            gameId: this.gameId,
-            boardId: boardId,
-            peerName: peerName,
-            publicKey: this.publicKey || undefined
+            type: 'hostRegister',
+            boardId,
+            gameId,
+            peerName,
+            publicKey
         });
     }
 
-    requestOffers(): boolean {
-        logger.sig("Requesting active offers for game:", this.gameId);
+    // New Flow: Guest joins session
+    guestJoin(boardId: string, peerName: string, publicKey: string, encryptionPublicKey?: string): boolean {
+        logger.sig("Joining as guest for board:", boardId);
         return this.send({
-            type: 'listOffers',
-            gameId: this.gameId
+            type: 'guestJoin',
+            boardId,
+            peerName,
+            publicKey,
+            encryptionPublicKey
         });
     }
 
-    sendAnswer(targetWebSocketId: string, targetP2PId: string, signal: Signal, boardId?: string): boolean {
-        logger.sig("Sending answer to host:", targetWebSocketId, "for P2P slot:", targetP2PId);
+    // New Flow: Host sends offer to specific guest
+    hostOffer(targetConnectionId: string, guestPublicKey: string, offer: any, encryptionPublicKey?: string, iv?: string): boolean {
+        logger.sig("Sending offer to guest:", targetConnectionId);
         return this.send({
-            type: 'answer',
-            target: targetWebSocketId,
-            to: targetP2PId,
-            answer: signal,
+            type: 'hostOffer',
+            target: targetConnectionId,
+            guestPublicKey,
+            offer,
             peerName: this.peerName,
-            boardId: boardId || this.boardId,
-            publicKey: this.publicKey || undefined
+            publicKey: this.publicKey || undefined,
+            encryptionPublicKey,
+            iv,
+            boardId: this.boardId
+        });
+    }
+
+    // New Flow: Guest sends answer to host
+    guestAnswer(targetConnectionId: string, publicKey: string, answer: any, iv?: string): boolean {
+        logger.sig("Sending answer to host:", targetConnectionId);
+        return this.send({
+            type: 'guestAnswer',
+            target: targetConnectionId,
+            publicKey,
+            answer,
+            peerName: this.peerName,
+            iv,
+            boardId: this.boardId
         });
     }
 

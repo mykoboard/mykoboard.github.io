@@ -5,6 +5,7 @@ import { getGameById } from '../lib/GameRegistry'
 import { useLobby } from '../composables/useLobby'
 import { useGameSession } from '../composables/useGameSession'
 import { Connection } from '../lib/webrtc'
+import { db } from '../lib/db'
 import PreparationPhase from '../components/board/PreparationPhase.vue'
 import ActivePhase from '../components/board/ActivePhase.vue'
 import FinishedPhase from '../components/board/FinishedPhase.vue'
@@ -34,9 +35,13 @@ const {
     playerInfos,
     connectedPeers: baseConnectedPeers,
     pendingSignaling,
+    pendingJoinRequests,
     isInitiator,
     isGameStarted,
     onHostAGame,
+    isFriend,
+    onApprovePeer,
+    onRejectPeer,
     connectWithOffer,
     updateOffer,
     updateAnswer,
@@ -66,18 +71,24 @@ const handleBeforeUnload = (e: BeforeUnloadEvent) => {
     }
 }
 
-onMounted(() => {
-    // Initialize state machine based on route
-    // If we're on a board route and board machine is idle, this is a new hosting session
+onMounted(async () => {
+    // Cleanup old hosted sessions on mount
+    await db.cleanupOldHostedSessions()
+    
+    // Initialize state machine based on route and hosting status
     if (boardId.value && snapshot.value?.matches('idle')) {
-        const maxPlayers = parseInt(route.query.maxPlayers as string) || 2
-        console.log('[BOARDVIEW] Initializing HOST state for boardId:', boardId.value, 'maxPlayers:', maxPlayers)
+        // Check if this user is hosting this boardId
+        const isHostingSession = await db.isHosting(boardId.value)
         
-        send({ type: 'HOST', maxPlayers, boardId: boardId.value })
-        
-        // Create connection slots for guests
-        for (let i = 0; i < maxPlayers - 1; i++) {
-            setTimeout(() => onHostAGame(), 100 * (i + 1))
+        if (isHostingSession) {
+            // User is the host
+            const maxPlayers = parseInt(route.query.maxPlayers as string) || 2
+            console.log('[BOARDVIEW] Initializing HOST state for boardId:', boardId.value, 'maxPlayers:', maxPlayers)
+            send({ type: 'HOST', maxPlayers, boardId: boardId.value })
+        } else {
+            // User is a guest joining via link
+            console.log('[BOARDVIEW] Initializing GUEST state for boardId:', boardId.value)
+            send({ type: 'JOIN', boardId: boardId.value })
         }
     }
     
@@ -126,6 +137,8 @@ onUnmounted(() => {
           :isServerConnecting="isServerConnecting"
           :signalingClient="signalingClient"
           :pendingSignaling="pendingSignaling"
+          :pendingJoinRequests="pendingJoinRequests"
+          :isFriend="isFriend"
           :onStartGame="startGame"
           :onHostAGame="onHostAGame"
           :onUpdateOffer="updateOffer"
@@ -134,11 +147,14 @@ onUnmounted(() => {
           :onBackToLobby="onBackToDiscovery"
           :onAcceptGuest="onAcceptGuest"
           :onRejectGuest="onRejectGuest"
+          :onApprovePeer="onApprovePeer"
+          :onRejectPeer="onRejectPeer"
           :onCancelSignaling="onCancelSignaling"
           :onRemovePlayer="(id) => send({ type: 'REMOVE_PLAYER', playerId: id })"
           :playerCount="playerInfos.length"
           :maxPlayers="snapshot?.context?.maxPlayers || 2"
           :boardId="boardId"
+          :gameId="gameId"
         />
 
         <div class="mt-12 max-w-2xl">
