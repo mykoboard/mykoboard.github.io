@@ -18,9 +18,17 @@ export interface GameSession {
     participants?: GameParticipant[];
 }
 
+export interface Friend {
+    id: string; // Node Identifier
+    publicKey: string;
+    name: string; // Display Name
+    addedAt: number;
+}
+
 const DB_NAME = 'MykoboardDB';
 const STORE_NAME = 'games';
-const DB_VERSION = 2;
+const FRIENDS_STORE = 'friends';
+const DB_VERSION = 3;
 
 export class MykoboardDB {
     private db: IDBDatabase | null = null;
@@ -35,6 +43,9 @@ export class MykoboardDB {
                 const db = (event.target as IDBOpenDBRequest).result;
                 if (!db.objectStoreNames.contains(STORE_NAME)) {
                     db.createObjectStore(STORE_NAME, { keyPath: 'boardId' });
+                }
+                if (!db.objectStoreNames.contains(FRIENDS_STORE)) {
+                    db.createObjectStore(FRIENDS_STORE, { keyPath: 'id' });
                 }
             };
 
@@ -107,6 +118,42 @@ export class MykoboardDB {
             const transaction = db.transaction(STORE_NAME, 'readwrite');
             const store = transaction.objectStore(STORE_NAME);
             const request = store.clear();
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async addFriend(friend: Friend): Promise<void> {
+        const db = await this.getDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(FRIENDS_STORE, 'readwrite');
+            const store = transaction.objectStore(FRIENDS_STORE);
+            const request = store.put(friend);
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async getAllFriends(): Promise<Friend[]> {
+        const db = await this.getDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(FRIENDS_STORE, 'readonly');
+            const store = transaction.objectStore(FRIENDS_STORE);
+            const request = store.getAll();
+
+            request.onsuccess = () => resolve(request.result as Friend[]);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async deleteFriend(id: string): Promise<void> {
+        const db = await this.getDB();
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(FRIENDS_STORE, 'readwrite');
+            const store = transaction.objectStore(FRIENDS_STORE);
+            const request = store.delete(id);
 
             request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);
