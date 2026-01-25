@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { Star } from 'lucide-vue-next'
+import { v4 as uuidv4 } from 'uuid'
 import { useRouter } from 'vue-router'
+import { useLobby } from '../composables/useLobby'
 
 interface Game {
     id: string;
@@ -19,8 +21,12 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const { setSignalingMode } = useLobby()
+
 const goToBoard = () => {
-    router.push('/games/' + props.game.id)
+    const boardId = uuidv4()
+    setSignalingMode('server')
+    router.push(`/games/${props.game.id}/${boardId}`)
 }
 </script>
 
