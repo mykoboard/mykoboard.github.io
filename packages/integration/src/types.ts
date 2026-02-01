@@ -7,6 +7,7 @@ export interface PlayerInfo {
     isConnected: boolean;
     isLocal: boolean;
     isHost: boolean;
+    publicKey?: string; // Public key for identity management
 }
 
 export interface SimpleConnection {

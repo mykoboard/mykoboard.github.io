@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, Key, Fingerprint, Sparkles, Save, Shield, History, AlertTriangle, Trash2 } from 'lucide-vue-next'
+import { User, Key, Fingerprint, Sparkles, Save, Shield, History, AlertTriangle, Trash2, Users } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import Header from '../components/HeaderView.vue'
 import Input from '../components/ui/Input.vue'
@@ -9,6 +9,7 @@ import PastMatches from '../components/PastMatchesView.vue'
 import { SecureWallet, type PlayerIdentity } from '../lib/wallet'
 import { SessionManager } from '../lib/sessions'
 import { sanitizeAvatarUrl } from '../lib/utils'
+import { db, type KnownIdentity } from '../lib/db'
 import { 
   AlertDialogRoot, 
   AlertDialogTrigger, 
@@ -29,6 +30,10 @@ const token = ref("")
 const isSaving = ref(false)
 const isClearing = ref(false)
 const activeSessions = ref<any[]>([])
+const knownIdentities = ref<KnownIdentity[]>([])
+const newIdentityName = ref('')
+const newIdentityPublicKey = ref('')
+const isAddingIdentity = ref(false)
 
 onMounted(async () => {
     const wallet = SecureWallet.getInstance()
@@ -40,6 +45,7 @@ onMounted(async () => {
         token.value = id.subscriptionToken
     }
     activeSessions.value = await SessionManager.getSessions()
+    knownIdentities.value = await db.getAllKnownIdentities()
 })
 
 const hasChanges = computed(() => {
@@ -91,6 +97,50 @@ const handleClearAllData = async () => {
         toast.error("Wipe Operation Failed")
     } finally {
         isClearing.value = false
+    }
+}
+
+const handleAddKnownIdentity = async () => {
+    if (!newIdentityName.value.trim()) {
+        toast.error('Name required')
+        return
+    }
+    if (!newIdentityPublicKey.value.trim()) {
+        toast.error('Public key required')
+        return
+    }
+    
+    isAddingIdentity.value = true
+    try {
+        const newIdentity: KnownIdentity = {
+            id: `identity-${Date.now()}`,
+            name: newIdentityName.value.trim(),
+            publicKey: newIdentityPublicKey.value.trim(),
+            addedAt: Date.now()
+        }
+        await db.addKnownIdentity(newIdentity)
+        knownIdentities.value = await db.getAllKnownIdentities()
+        newIdentityName.value = ''
+        newIdentityPublicKey.value = ''
+        toast.success('Known Identity Added', {
+            description: `${newIdentity.name} has been added to your network.`
+        })
+    } catch (error) {
+        toast.error('Failed to add identity')
+    } finally {
+        isAddingIdentity.value = false
+    }
+}
+
+const handleRemoveKnownIdentity = async (id: string, name: string) => {
+    try {
+        await db.deleteKnownIdentity(id)
+        knownIdentities.value = await db.getAllKnownIdentities()
+        toast.success('Identity Removed', {
+            description: `${name} has been removed from your network.`
+        })
+    } catch (error) {
+        toast.error('Failed to remove identity')
     }
 }
 </script>
@@ -196,6 +246,87 @@ const handleClearAllData = async () => {
           </div>
           <div class="max-w-3xl">
             <PastMatches :active-sessions="activeSessions" @delete-session="onDeleteSession" />
+          </div>
+        </div>
+
+        <!-- Known Identities Section -->
+        <div class="space-y-8 pt-8">
+          <div class="flex items-center gap-4">
+            <div class="p-3 bg-primary/10 rounded-2xl border border-primary/20 shadow-neon">
+              <Users class="w-6 h-6 text-primary" />
+            </div>
+            <h2 class="text-3xl font-black tracking-tight text-white uppercase">
+              Known <span class="text-gradient">Identities</span>
+            </h2>
+          </div>
+
+          <!-- Add New Identity Form -->
+          <div class="glass-dark p-6 rounded-3xl border border-white/5 space-y-6">
+            <h3 class="text-lg font-bold text-white uppercase tracking-tight">Add New Identity</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <label class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Display Name</label>
+                <Input 
+                  v-model="newIdentityName" 
+                  placeholder="Enter player name..." 
+                  className="h-12 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-bold" 
+                />
+              </div>
+              <div class="space-y-2">
+                <label class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Public Key</label>
+                <Input 
+                  v-model="newIdentityPublicKey" 
+                  placeholder="04..." 
+                  className="h-12 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-mono text-sm" 
+                />
+              </div>
+            </div>
+            <button
+              @click="handleAddKnownIdentity"
+              :disabled="isAddingIdentity || !newIdentityName.trim() || !newIdentityPublicKey.trim()"
+              class="w-full h-12 text-xs font-black uppercase tracking-[0.2em] rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ isAddingIdentity ? 'ADDING...' : 'ADD IDENTITY' }}
+            </button>
+          </div>
+
+          <!-- List of Known Identities -->
+          <div v-if="knownIdentities.length > 0" class="space-y-4">
+            <div 
+              v-for="identity in knownIdentities" 
+              :key="identity.id"
+              class="glass-dark p-6 rounded-3xl border border-white/5 hover:border-primary/20 transition-all duration-300"
+            >
+              <div class="flex items-start justify-between gap-4">
+                <div class="flex-1 space-y-3">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                      <User class="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <h4 class="text-lg font-bold text-white">{{ identity.name }}</h4>
+                      <p class="text-[10px] text-white/40 uppercase tracking-wider">Added {{ new Date(identity.addedAt).toLocaleDateString() }}</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-2 bg-white/5 p-3 rounded-xl border border-white/10">
+                    <Key class="w-4 h-4 text-primary/60 shrink-0 mt-0.5" />
+                    <code class="text-[11px] text-white/50 break-all select-all font-mono">{{ identity.publicKey }}</code>
+                  </div>
+                </div>
+                <button
+                  @click="handleRemoveKnownIdentity(identity.id, identity.name)"
+                  class="p-3 rounded-xl border border-white/10 text-white/60 hover:text-rose-500 hover:bg-rose-500/10 hover:border-rose-500/30 transition-all"
+                  title="Remove identity"
+                >
+                  <Trash2 class="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div v-else class="glass-dark p-8 rounded-3xl border border-white/5 text-center">
+            <Users class="w-12 h-12 text-white/20 mx-auto mb-3" />
+            <p class="text-white/40 font-medium">No known identities yet</p>
+            <p class="text-white/30 text-sm mt-1">Add players you've played with to quickly identify them in future games</p>
           </div>
         </div>
 

@@ -16,6 +16,7 @@ export class Connection {
   peerConnection: RTCPeerConnection
   localPlayerName: string
   remotePlayerName: string
+  remotePublicKey?: string
   dataChannel: RTCDataChannel
   iceCandidates: RTCIceCandidate[]
   status: ConnectionStatus
@@ -111,6 +112,7 @@ export class Connection {
   }
 
   async prepareOfferSignal(playerName: string) {
+    console.log('[WebRTC] prepareOfferSignal - playerName:', playerName);
     this.localPlayerName = playerName;
     this.status = ConnectionStatus.new;
 
@@ -143,8 +145,9 @@ export class Connection {
 
   async acceptOffer(offerSignal: string | Signal, acceptingPlayerName: string) {
     const signal = typeof offerSignal === 'string' ? Signal.fromString(offerSignal) : offerSignal;
+    console.log('[WebRTC] acceptOffer - acceptingPlayerName:', acceptingPlayerName);
 
-    // Store Host's name
+    // Store Host's name (public key will come from signaling server)
     this.remotePlayerName = signal.playerName;
     // Store our name (Guest)
     this.localPlayerName = acceptingPlayerName;
@@ -159,7 +162,6 @@ export class Connection {
       const answer = await this.peerConnection.createAnswer();
       await this.peerConnection.setLocalDescription(answer);
       this.status = ConnectionStatus.answered;
-      // When generating the answer, we include our own name (the guest) in the signal
       this.updateSignal();
       this.updateView(this);
 
@@ -176,10 +178,11 @@ export class Connection {
   async acceptAnswer(answerSignal: string | Signal) {
     const connectionSignal = typeof answerSignal === 'string' ? Signal.fromString(answerSignal) : answerSignal;
     logger.webrtc(this.id + ': Accepting answer signal from ' + connectionSignal.playerName);
+    console.log('[WebRTC] acceptAnswer - Guest name:', connectionSignal.playerName);
 
     try {
       await this.peerConnection.setRemoteDescription(connectionSignal.session);
-      // Store Guest's name
+      // Store Guest's name (public key will come from signaling server)
       this.remotePlayerName = connectionSignal.playerName;
 
       if (connectionSignal.iceCandidates) {
@@ -208,21 +211,21 @@ export class Connection {
 }
 
 export class Signal {
-  session: RTCSessionDescriptionInit
-  connectionId: string
-  playerName: string
-  iceCandidates: RTCIceCandidate[]
+  connectionId: string;
+  session: RTCSessionDescriptionInit;
+  playerName: string;
+  iceCandidates: RTCIceCandidate[];
 
   constructor(
     connectionId: string,
     session: RTCSessionDescriptionInit,
     playerName: string,
-    iceCandidates: RTCIceCandidate[],
+    iceCandidates: RTCIceCandidate[]
   ) {
     this.session = session;
     this.connectionId = connectionId;
     this.playerName = playerName;
-    this.iceCandidates = iceCandidates
+    this.iceCandidates = iceCandidates;
   }
 
   toString(): string {

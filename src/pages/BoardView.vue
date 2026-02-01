@@ -4,11 +4,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { getGameById } from '../lib/GameRegistry'
 import { useGameSession } from '../composables/useGameSession'
 import { Connection } from '../lib/webrtc'
-import { db } from '../lib/db'
+import { db, type KnownIdentity } from '../lib/db'
+import { toast } from 'vue-sonner'
 import PreparationPhase from '../components/board/PreparationPhase.vue'
 import ActivePhase from '../components/board/ActivePhase.vue'
 import FinishedPhase from '../components/board/FinishedPhase.vue'
-import PlayerList from '../components/board/Players.vue'
+import Players from '../components/board/Players.vue'
+import type { PlayerInfo } from '@mykoboard/integration'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,9 +35,10 @@ const {
     isInitiator,
     isGameStarted,
     onHostAGame,
-    isFriend,
+    isKnownIdentity,
     onApprovePeer,
     onRejectPeer,
+    saveIdentityOnApprove,
     connectWithOffer,
     updateOffer,
     updateAnswer,
@@ -50,6 +53,30 @@ const {
     signalingClient,
     isServerConnecting
 } = useGameSession()
+
+const handleSavePlayerIdentity = async (player: PlayerInfo) => {
+    console.log('[BoardView] handleSavePlayerIdentity called for:', player.name, 'publicKey:', player.publicKey)
+    
+    if (!player.publicKey) {
+        console.warn('[BoardView] Cannot save - no public key')
+        return
+    }
+    
+    const newIdentity: KnownIdentity = {
+        id: `identity-${Date.now()}`,
+        name: player.name,
+        publicKey: player.publicKey,
+        addedAt: Date.now()
+    }
+    
+    console.log('[BoardView] Saving identity to DB:', newIdentity)
+    await db.addKnownIdentity(newIdentity)
+    
+    console.log('[BoardView] Identity saved successfully')
+    toast.success('Identity Saved', {
+        description: `${player.name} has been added to your known identities.`
+    })
+}
 
 const connectedPeers = computed(() => baseConnectedPeers.value as Connection[])
 const onBackToGames = () => {
@@ -134,7 +161,7 @@ onUnmounted(() => {
           :signalingClient="signalingClient"
           :pendingSignaling="pendingSignaling"
           :pendingJoinRequests="pendingJoinRequests"
-          :isFriend="isFriend"
+          :isKnownIdentity="isKnownIdentity"
           :onStartGame="startGame"
           :onHostAGame="onHostAGame"
           :onUpdateOffer="updateOffer"
@@ -145,6 +172,7 @@ onUnmounted(() => {
           :onRejectGuest="onRejectGuest"
           :onApprovePeer="onApprovePeer"
           :onRejectPeer="onRejectPeer"
+          :onSaveIdentity="saveIdentityOnApprove"
           :onCancelSignaling="onCancelSignaling"
           :onRemovePlayer="(id) => send({ type: 'REMOVE_PLAYER', playerId: id })"
           :playerCount="playerInfos.length"
@@ -154,9 +182,11 @@ onUnmounted(() => {
         />
 
         <div class="mt-12 max-w-2xl">
-          <PlayerList
+          <Players 
             :players="playerInfos"
             :onRemove="isInitiator ? (id) => send({ type: 'REMOVE_PLAYER', playerId: id }) : undefined"
+            :onSaveIdentity="handleSavePlayerIdentity"
+            :isKnownIdentity="isKnownIdentity"
           />
         </div>
       </div>

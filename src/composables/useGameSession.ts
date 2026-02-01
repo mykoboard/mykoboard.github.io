@@ -2,7 +2,7 @@ import { ref, computed, watch, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { v4 as uuidv4 } from "uuid";
 import { useSelector } from "@xstate/vue";
-import { Connection, ConnectionStatus } from "../lib/webrtc";
+import { Connection, ConnectionStatus, Signal } from "../lib/webrtc";
 import { logger } from "../lib/logger";
 import { getGameById } from "../lib/GameRegistry";
 import { Ledger, createLobbyMessage, isLobbyMessage, PlayerInfo, createLobbyMessage as createMsg } from "@mykoboard/integration";
@@ -10,7 +10,7 @@ import { SecureWallet } from "../lib/wallet";
 import { SessionManager } from "../lib/sessions";
 import { SignalingService } from "../lib/signaling";
 import { toast } from "vue-sonner";
-import { db } from "../lib/db";
+import { db, type KnownIdentity } from "../lib/db";
 import {
     identity,
     isLoading,
@@ -82,7 +82,8 @@ export function useGameSession() {
             status: isGameStarted.value ? 'game' : 'lobby',
             isConnected: true,
             isLocal: true,
-            isHost: localParticipant ? localParticipant.isHost : isInitiator.value
+            isHost: localParticipant ? localParticipant.isHost : isInitiator.value,
+            publicKey: identity.value?.publicKey
         };
 
         const infos: PlayerInfo[] = [];
@@ -102,7 +103,8 @@ export function useGameSession() {
                     status: (hostConnection ? ctx.playerStatuses.get(hostConnection.id) : null) || (isGameStarted.value ? 'game' : 'lobby'),
                     isConnected: !!hostConnection,
                     isLocal: false,
-                    isHost: true
+                    isHost: true,
+                    publicKey: hostConnection?.remotePublicKey || hostData.publicKey
                 });
                 processedIds.add(hostData.id);
             }
@@ -113,13 +115,16 @@ export function useGameSession() {
             (connectionList.value as any).forEach((c: any) => {
                 if (!processedIds.has(c.id)) {
                     const storedPeer = storedParticipants.find(p => p.id === c.id);
+                    const publicKey = c.remotePublicKey || storedPeer?.publicKey;
+                    console.log('[playerInfos] Adding peer:', c.remotePlayerName, 'remotePublicKey:', c.remotePublicKey?.substring(0, 20), 'publicKey:', publicKey?.substring(0, 20));
                     infos.push({
                         id: c.id,
                         name: c.remotePlayerName || storedPeer?.name || "Anonymous",
                         status: ctx.playerStatuses.get(c.id) || 'lobby',
                         isConnected: c.status === ConnectionStatus.connected,
                         isLocal: false,
-                        isHost: false
+                        isHost: false,
+                        publicKey: publicKey
                     });
                     processedIds.add(c.id);
                 }
@@ -137,7 +142,8 @@ export function useGameSession() {
                         status: isGameStarted.value ? 'game' : 'lobby',
                         isConnected: true,
                         isLocal: false,
-                        isHost: false
+                        isHost: false,
+                        publicKey: p.publicKey
                     });
                     processedIds.add(p.id);
                 }
@@ -247,7 +253,7 @@ export function useGameSession() {
                 const wallet = SecureWallet.getInstance();
                 const ident = await wallet.getIdentity();
                 if (ident) {
-                    const client = new SignalingService(gameId || "default", currentBoardId, ident.name, (msg) => {
+                    const client = new SignalingService(gameId || "default", currentBoardId, ident.name, async (msg) => {
                         // Handle error messages
                         if (msg.type === 'error') {
                             logger.error("Signaling error:", msg.message || msg.code);
@@ -262,14 +268,29 @@ export function useGameSession() {
                         if (msg.type === 'peerJoined') {
                             logger.sig("Peer joined:", msg.peerName, "publicKey:", msg.publicKey);
 
-                            // Add to pending join requests for host approval
-                            pendingJoinRequests.value.push({
-                                connectionId: msg.from!,
-                                peerName: msg.peerName || "Guest",
-                                publicKey: msg.publicKey!,
-                                encryptionPublicKey: msg.encryptionPublicKey,
-                                timestamp: Date.now()
-                            });
+                            // Check if this is a known identity
+                            const isKnown = await isKnownIdentity(msg.publicKey!);
+
+                            if (isKnown) {
+                                // Auto-approve known identity
+                                logger.sig("Auto-approving known identity:", msg.peerName);
+                                await autoApprovePeer({
+                                    connectionId: msg.from!,
+                                    peerName: msg.peerName || "Guest",
+                                    publicKey: msg.publicKey!,
+                                    encryptionPublicKey: msg.encryptionPublicKey,
+                                    timestamp: Date.now()
+                                });
+                            } else {
+                                // Add to pending join requests for manual host approval
+                                pendingJoinRequests.value.push({
+                                    connectionId: msg.from!,
+                                    peerName: msg.peerName || "Guest",
+                                    publicKey: msg.publicKey!,
+                                    encryptionPublicKey: msg.encryptionPublicKey,
+                                    timestamp: Date.now()
+                                });
+                            }
                         }
 
                         // Handle offer: Host has sent WebRTC offer
@@ -323,6 +344,16 @@ export function useGameSession() {
 
                             connection.setDataChannelCallback();
 
+                            // Store the host's public key and name from the offer message
+                            if (msg.publicKey) {
+                                console.log('[useGameSession] Guest storing host publicKey from offer:', msg.publicKey?.substring(0, 20));
+                                connection.remotePublicKey = msg.publicKey;
+                            }
+                            if (msg.peerName) {
+                                console.log('[useGameSession] Guest storing host name from offer:', msg.peerName);
+                                connection.remotePlayerName = msg.peerName;
+                            }
+
                             // Accept the offer and generate answer
                             connection.acceptOffer(msg.offer, ident.name).then(() => {
                                 // Wait for answer to be ready and send it
@@ -352,8 +383,35 @@ export function useGameSession() {
                             const connection = pendingConnections.value.get(msg.from!);
                             if (connection && msg.answer) {
                                 logger.sig("Applying answer to connection:", msg.from);
+                                console.log('[useGameSession] msg.answer type:', typeof msg.answer);
+                                console.log('[useGameSession] msg.answer is Signal?:', msg.answer instanceof Signal);
+                                console.log('[useGameSession] msg.answer publicKey:', (msg.answer as any).publicKey?.substring(0, 20));
+
+                                // Convert plain object to Signal instance if needed
+                                let answerSignal = msg.answer;
+                                if (!(msg.answer instanceof Signal) && typeof msg.answer === 'object') {
+                                    console.log('[useGameSession] Converting plain object to Signal instance');
+                                    answerSignal = new Signal(
+                                        (msg.answer as any).connectionId,
+                                        (msg.answer as any).session,
+                                        (msg.answer as any).playerName,
+                                        (msg.answer as any).iceCandidates || []
+                                    );
+                                    console.log('[useGameSession] Signal created from plain object');
+                                }
+
+                                // Store the guest's public key and name from the signaling message
+                                if (msg.publicKey) {
+                                    console.log('[useGameSession] Setting remotePublicKey from msg.publicKey:', msg.publicKey?.substring(0, 20));
+                                    connection.remotePublicKey = msg.publicKey;
+                                }
+                                if (msg.peerName) {
+                                    console.log('[useGameSession] Setting remotePlayerName from msg.peerName:', msg.peerName);
+                                    connection.remotePlayerName = msg.peerName;
+                                }
+
                                 try {
-                                    connection.acceptAnswer(msg.answer);
+                                    connection.acceptAnswer(answerSignal);
                                     logger.sig("WebRTC connection established with:", msg.from);
                                     pendingConnections.value.delete(msg.from!);
                                 } catch (e) {
@@ -409,20 +467,15 @@ export function useGameSession() {
         }
     };
 
-    // Check if a publicKey is in the friends list
-    const isFriend = async (publicKey: string): Promise<boolean> => {
-        const friends = await db.getAllFriends();
-        return friends.some(f => f.publicKey === publicKey);
+    // Check if a publicKey is in the known identities list
+    const isKnownIdentity = async (publicKey: string): Promise<boolean> => {
+        const knownIdentities = await db.getAllKnownIdentities();
+        return knownIdentities.some(f => f.publicKey === publicKey);
     };
 
-    // Host approves a pending join request
-    const onApprovePeer = async (request: PendingJoinRequest) => {
+    // Shared approval logic for both auto and manual approval
+    const autoApprovePeer = async (request: PendingJoinRequest) => {
         logger.sig("Approving peer:", request.peerName, "publicKey:", request.publicKey);
-
-        // Remove from pending list
-        pendingJoinRequests.value = pendingJoinRequests.value.filter(
-            r => r.connectionId !== request.connectionId
-        );
 
         // Create WebRTC connection and offer
         const connection = new Connection((c) => {
@@ -436,6 +489,11 @@ export function useGameSession() {
             });
             pendingConnections.value.delete(request.connectionId);
         };
+
+        // Store the guest's public key from the join request
+        // This will be confirmed when we receive their answer
+        connection.remotePublicKey = request.publicKey;
+        console.log('[useGameSession] Stored guest publicKey from join request:', request.publicKey?.substring(0, 20));
 
         connection.openDataChannel();
         await connection.prepareOfferSignal(
@@ -467,12 +525,41 @@ export function useGameSession() {
         }, 100);
     };
 
+    // Host approves a pending join request
+    const onApprovePeer = async (request: PendingJoinRequest) => {
+        // Remove from pending list
+        pendingJoinRequests.value = pendingJoinRequests.value.filter(
+            r => r.connectionId !== request.connectionId
+        );
+
+        // Use shared approval logic
+        await autoApprovePeer(request);
+    };
+
     // Host rejects a pending join request
     const onRejectPeer = (request: PendingJoinRequest) => {
         logger.sig("Rejecting peer:", request.peerName);
         pendingJoinRequests.value = pendingJoinRequests.value.filter(
             r => r.connectionId !== request.connectionId
         );
+    };
+
+    // Save a guest's identity to known identities when approving
+    const saveIdentityOnApprove = async (request: PendingJoinRequest) => {
+        try {
+            const newIdentity: KnownIdentity = {
+                id: `identity-${Date.now()}`,
+                name: request.peerName,
+                publicKey: request.publicKey,
+                addedAt: Date.now()
+            };
+            await db.addKnownIdentity(newIdentity);
+            toast.success('Identity Saved', {
+                description: `${request.peerName} has been added to your known identities.`
+            });
+        } catch (error) {
+            toast.error('Failed to save identity');
+        }
     };
 
     const startGame = () => {
@@ -691,9 +778,10 @@ export function useGameSession() {
         isGameStarted,
         onHostAGame,
         onJoinAsGuest,
-        isFriend,
+        isKnownIdentity,
         onApprovePeer,
         onRejectPeer,
+        saveIdentityOnApprove,
         startGame,
         connectWithOffer,
         updateOffer,

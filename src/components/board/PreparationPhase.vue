@@ -31,7 +31,7 @@ const props = defineProps<{
     signalingClient: any;
     pendingSignaling: Connection[];
     pendingJoinRequests?: PendingJoinRequest[];
-    isFriend?: (publicKey: string) => Promise<boolean>;
+    isKnownIdentity?: (publicKey: string) => Promise<boolean>;
     onStartGame: () => void;
     onHostAGame: () => void;
     onUpdateOffer: (connection: Connection, offer: string) => void;
@@ -42,6 +42,7 @@ const props = defineProps<{
     onRejectGuest: () => void;
     onApprovePeer?: (request: PendingJoinRequest) => void;
     onRejectPeer?: (request: PendingJoinRequest) => void;
+    onSaveIdentity?: (request: PendingJoinRequest) => Promise<void>;
     onCancelSignaling: (connection: Connection) => void;
     onRemovePlayer: (id: string) => void;
     playerCount: number;
@@ -51,11 +52,12 @@ const props = defineProps<{
 }>()
 
 const friendStatus = ref<Record<string, boolean>>({})
+const saveIdentityFlags = ref<Record<string, boolean>>({})
 
 // Check friend status for each pending request
 const checkFriendStatus = async (publicKey: string) => {
-    if (props.isFriend) {
-        friendStatus.value[publicKey] = await props.isFriend(publicKey)
+    if (props.isKnownIdentity) {
+        friendStatus.value[publicKey] = await props.isKnownIdentity(publicKey)
     }
 }
 
@@ -93,6 +95,18 @@ watch(() => props.pendingJoinRequests, (requests) => {
         })
     }
 }, { deep: true, immediate: true })
+
+// Handle approve with optional save identity
+const handleApprove = async (request: PendingJoinRequest) => {
+    if (saveIdentityFlags.value[request.connectionId] && props.onSaveIdentity) {
+        await props.onSaveIdentity(request)
+    }
+    if (props.onApprovePeer) {
+        props.onApprovePeer(request)
+    }
+    // Clear the save flag
+    delete saveIdentityFlags.value[request.connectionId]
+}
 
 const isPreparation = computed(() => props.state.matches('preparation'))
 const isHosting = computed(() => props.state.matches('hosting'))
@@ -155,11 +169,32 @@ const isApproving = computed(() => props.state.matches('approving'))
               <div class="flex items-center gap-2">
                 <span class="text-lg font-black text-white">{{ request.peerName }}</span>
                 <span v-if="friendStatus[request.publicKey]" class="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-[9px] font-black uppercase tracking-wider">
-                  Friend
+                  Known Identity
                 </span>
               </div>
               <p class="text-xs text-white/40 font-mono">{{ truncateKey(request.publicKey) }}</p>
             </div>
+          </div>
+
+          <!-- Save identity switch for unknown identities - positioned above buttons -->
+          <div v-if="!friendStatus[request.publicKey]" class="flex items-center justify-end gap-2 px-1 pb-2">
+            <span class="text-xs text-white/50 uppercase tracking-wider font-medium">Auto-approve next time</span>
+            <button
+              @click="saveIdentityFlags[request.connectionId] = !saveIdentityFlags[request.connectionId]"
+              :class="[
+                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-gray-900',
+                saveIdentityFlags[request.connectionId] ? 'bg-primary' : 'bg-white/10'
+              ]"
+              role="switch"
+              :aria-checked="saveIdentityFlags[request.connectionId]"
+            >
+              <span
+                :class="[
+                  'inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200',
+                  saveIdentityFlags[request.connectionId] ? 'translate-x-6' : 'translate-x-1'
+                ]"
+              />
+            </button>
           </div>
 
           <div class="grid grid-cols-2 gap-3">
@@ -170,7 +205,7 @@ const isApproving = computed(() => props.state.matches('approving'))
               Reject
             </button>
             <button
-              @click="onApprovePeer && onApprovePeer(request)"
+              @click="handleApprove(request)"
               class="h-12 rounded-xl bg-primary text-primary-foreground shadow-neon hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] font-black uppercase tracking-widest text-xs transition-all"
             >
               Approve
