@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState } from 'react';
+import { useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useMachine } from '@xstate/react';
@@ -11,12 +11,10 @@ import {
     createGameMessage,
     isGameMessage,
     GameProps,
-    PlayerInfo,
     SimpleConnection
 } from '@mykoboard/integration';
 import {
-    Rocket, Factory, Beaker, Globe,
-    ChevronRight,
+    Rocket, Beaker,
     ShieldAlert,
     Zap,
 } from 'lucide-react';
@@ -96,7 +94,6 @@ export default function GalacticHegemony({
         return () => connections.forEach((c: SimpleConnection) => c.removeMessageListener(handleMessage));
     }, [connections, isInitiator, onAddLedger]);
 
-    type ResourceType = 'credits' | 'matter' | 'data' | 'influence';
     type TechPath = 'military' | 'economic' | 'science';
 
     const handlePlaceWorker = (slotId: string, techPath?: TechPath, planetId?: string, shipType?: 'frigate' | 'dreadnought') => {

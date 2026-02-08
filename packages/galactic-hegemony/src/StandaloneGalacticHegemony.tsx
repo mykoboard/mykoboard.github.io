@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import GalacticHegemony from './GalacticHegemony';
 import { PlayerInfo } from '@mykoboard/integration';
 import { MockConnection } from './MockConnection';

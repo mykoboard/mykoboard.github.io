@@ -366,8 +366,8 @@ export function applyLedgerToGalacticState(players: PlayerState[], ledger: Ledge
         availableWorkers: 3,
         ships: { frigates: 0, dreadnoughts: 0 },
         techLevels: { military: 0, economic: 0, science: 0 },
-        planetsHand: [],
-        colonizedPlanets: []
+        planetsHand: [] as Planet[],
+        colonizedPlanets: [] as Planet[]
     }));
     let planetDeck = [...INITIAL_PLANETS];
 
@@ -384,14 +384,14 @@ export function applyLedgerToGalacticState(players: PlayerState[], ledger: Ledge
                 const newResources = { ...p.resources };
                 const newTechLevels = { ...p.techLevels };
                 const newShips = { ...p.ships };
-                let newPlanetsHand = [...p.planetsHand];
-                let newColonizedPlanets = [...p.colonizedPlanets];
+                let newPlanetsHand: Planet[] = [...p.planetsHand];
+                let newColonizedPlanets: Planet[] = [...p.colonizedPlanets];
 
                 if (slot.actionType === 'TECH' && techPath) {
-                    const nextLevel = newTechLevels[techPath] + 1;
+                    const nextLevel = newTechLevels[techPath as TechPath] + 1;
                     const costs = [0, 2, 4, 7, 10];
                     newResources.data -= costs[nextLevel];
-                    newTechLevels[techPath] = nextLevel;
+                    newTechLevels[techPath as TechPath] = nextLevel;
                 } else if (slot.actionType === 'SCAN') {
                     const drawn = planetDeck.shift();
                     if (drawn) newPlanetsHand.push(drawn);

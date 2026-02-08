@@ -1,18 +1,16 @@
 import React from 'react';
 import { Card } from "@/components/ui/card";
-import { PlayerState, TechPath, Planet } from './galacticHegemonyMachine';
+import { PlayerState, TechPath } from './galacticHegemonyMachine';
 import {
     Coins, Zap, Beaker, Globe,
-    Swords, FlaskConical, ChevronRight,
     UserCircle, LayoutGrid
 } from 'lucide-react';
 
 interface PlayerBoardProps {
     player: PlayerState;
-    onTechSelect?: (path: TechPath) => void;
 }
 
-export const PlayerBoard: React.FC<PlayerBoardProps> = ({ player, onTechSelect }) => {
+export const PlayerBoard: React.FC<PlayerBoardProps> = ({ player }) => {
     const resourceTypes: { key: keyof typeof player.resources; icon: any; color: string; label: string }[] = [
         { key: 'credits', icon: Coins, color: 'text-yellow-400', label: 'Credits' },
         { key: 'matter', icon: Zap, color: 'text-orange-400', label: 'Matter' },

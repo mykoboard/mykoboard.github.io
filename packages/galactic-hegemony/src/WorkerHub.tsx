@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
-import { Card } from "@/components/ui/card";
 import {
     GalacticHegemonyContext,
     PlayerState,
-    TechPath,
-    ResourceType,
-    Planet
+    TechPath
 } from './galacticHegemonyMachine';
 import {
     Factory, Beaker, Globe, Ship as ShipIcon,
-    UserCircle, Swords, Coins, FlaskConical,
-    ChevronRight, Zap
+    UserCircle, Swords, Coins, FlaskConical
 } from 'lucide-react';
 
 interface WorkerHubProps {
@@ -51,7 +47,7 @@ export const WorkerHub: React.FC<WorkerHubProps> = ({ slots, players, localPlaye
                 const isMySlot = slot.occupantId === 'local';
                 const canBump = !isMySlot && slot.occupantId && localPlayer &&
                     (localPlayer.ships.frigates + localPlayer.ships.dreadnoughts * 3) >
-                    (occupant?.ships.frigates + (occupant?.ships.dreadnoughts || 0) * 3 || 0);
+                    ((occupant?.ships.frigates ?? 0) + (occupant?.ships.dreadnoughts ?? 0) * 3);
 
                 const isSelecting = selectedTechSlot === slot.id || selectedShipSlot === slot.id || selectedPlanetSlot === slot.id;
 

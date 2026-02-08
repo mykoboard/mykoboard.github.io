@@ -24,7 +24,7 @@ export const planningPokerMachine = createMachine({
         input: { isInitiator: boolean };
     },
     initial: 'voting',
-    context: ({ input }) => ({
+    context: () => ({
         votes: {},
         votedPlayers: new Set<string>(),
         isRevealed: false,
@@ -73,7 +73,7 @@ export const planningPokerMachine = createMachine({
     }
 });
 
-export function applyLedgerToPokerState(players: any[], ledger: any[]): PokerContext {
+export function applyLedgerToPokerState(_players: any[], ledger: any[]): PokerContext {
     let context: PokerContext = {
         votes: {},
         votedPlayers: new Set<string>(),

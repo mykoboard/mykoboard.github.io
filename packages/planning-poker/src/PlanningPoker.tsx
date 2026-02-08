@@ -1,11 +1,10 @@
-import React, { useMemo, useEffect, useRef } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useMachine } from '@xstate/react';
 import {
     planningPokerMachine,
-    applyLedgerToPokerState,
-    PokerContext
+    applyLedgerToPokerState
 } from './planningPokerMachine';
 import {
     createGameMessage,
@@ -152,7 +151,6 @@ export default function PlanningPoker({
     };
 
     const localPlayer = playerInfos.find(p => p.isLocal);
-    const hasVoted = localPlayer ? votedPlayers.has(localPlayer.id) : false;
     // For local player, show their own vote even if not revealed
     const myDisplayVote = localPlayer ? hostVotesRef.current[localPlayer.id] : null;
 
