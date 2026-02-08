@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef } from 'react';
+import { useMemo, useEffect, useRef, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useMachine } from '@xstate/react';
@@ -46,15 +46,24 @@ export default function PlanningPoker({
     // Host-only store for the real values until reveal
     const hostVotesRef = useRef<Record<string, string>>({});
 
+    // Track local player's vote for immediate UI feedback (especially for guests)
+    const [localVote, setLocalVote] = useState<string | null>(null);
+
     // Sync state from ledger
     useEffect(() => {
         if (!ledger) return;
         const newContext = applyLedgerToPokerState(playerInfos, ledger);
-        send({ type: 'SYNC_STATE', context: newContext });
+
+        // Merge local votedPlayers with ledger votedPlayers to preserve optimistic updates
+        const mergedVotedPlayers = new Set([...state.context.votedPlayers, ...newContext.votedPlayers]);
+
+        send({ type: 'SYNC_STATE', context: { ...newContext, votedPlayers: mergedVotedPlayers } });
 
         if (newContext.isRevealed && state.matches('voting')) {
+            setLocalVote(null); // Clear pending vote when revealed
             send({ type: 'REVEAL', payload: { votes: newContext.votes } });
         } else if (!newContext.isRevealed && state.matches('revealed')) {
+            setLocalVote(null); // Clear local vote on reset
             send({ type: 'RESET' });
         }
     }, [ledger, playerInfos, send]);
@@ -101,6 +110,9 @@ export default function PlanningPoker({
         const localPlayer = playerInfos.find(p => p.isLocal);
         if (!localPlayer) return;
 
+        // Immediate UI feedback
+        setLocalVote(value);
+
         if (isInitiator) {
             hostVotesRef.current[localPlayer.id] = value;
             onAddLedger?.({
@@ -109,6 +121,14 @@ export default function PlanningPoker({
             });
         } else {
             hostVotesRef.current[localPlayer.id] = value;
+            // Immediately mark as voted for UI feedback
+            send({
+                type: 'SYNC_STATE',
+                context: {
+                    ...state.context,
+                    votedPlayers: new Set([...state.context.votedPlayers, localPlayer.id])
+                }
+            });
             connections.forEach((c: SimpleConnection) => {
                 c.send(JSON.stringify(createGameMessage('VOTE_REQUEST', {
                     playerId: localPlayer.id,
@@ -151,8 +171,10 @@ export default function PlanningPoker({
     };
 
     const localPlayer = playerInfos.find(p => p.isLocal);
-    // For local player, show their own vote even if not revealed
-    const myDisplayVote = localPlayer ? hostVotesRef.current[localPlayer.id] : null;
+    // For local player, show their local vote or the confirmed vote from host
+    const myDisplayVote = localPlayer
+        ? (localVote || hostVotesRef.current[localPlayer.id])
+        : null;
 
     const allVoted = playerInfos.length > 0 && playerInfos.every(p => votedPlayers.has(p.id));
 
@@ -323,31 +345,34 @@ export default function PlanningPoker({
                     </div>
 
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-7 gap-6">
-                        {FIBONACCI.map((value) => (
-                            <button
-                                key={value}
-                                onClick={() => handleVote(value)}
-                                disabled={isRevealed}
-                                className={cn(
-                                    "aspect-[2/3] rounded-[1.5rem] border-2 flex flex-col items-center justify-center transition-all duration-300 relative group",
-                                    myDisplayVote === value
-                                        ? "bg-primary/20 border-primary shadow-neon -translate-y-2"
-                                        : "bg-black/40 border-white/5 hover:border-white/20 hover:bg-white/5",
-                                    isRevealed && "opacity-50 cursor-not-allowed"
-                                )}
-                            >
-                                <div className="text-4xl font-black tracking-tighter">
-                                    {value === "☕" ? <Coffee className="w-10 h-10" /> :
-                                        value === "?" ? <HelpCircle className="w-10 h-10" /> : value}
-                                </div>
-
-                                {myDisplayVote === value && (
-                                    <div className="absolute -top-3 -right-3 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg border-4 border-[#020617] animate-in zoom-in duration-300">
-                                        <CheckCircle2 className="w-4 h-4 text-[#020617]" />
+                        {FIBONACCI.map((value) => {
+                            const isSelected = myDisplayVote === value;
+                            return (
+                                <button
+                                    key={value}
+                                    onClick={() => handleVote(value)}
+                                    disabled={isRevealed}
+                                    className={cn(
+                                        "aspect-[2/3] rounded-[1.5rem] border-2 flex flex-col items-center justify-center transition-all duration-300 relative group",
+                                        isSelected
+                                            ? "bg-primary/20 border-primary shadow-neon -translate-y-2"
+                                            : "bg-black/40 border-white/5 hover:border-white/20 hover:bg-white/5",
+                                        isRevealed && "opacity-50 cursor-not-allowed"
+                                    )}
+                                >
+                                    <div className="text-4xl font-black tracking-tighter">
+                                        {value === "☕" ? <Coffee className="w-10 h-10" /> :
+                                            value === "?" ? <HelpCircle className="w-10 h-10" /> : value}
                                     </div>
-                                )}
-                            </button>
-                        ))}
+
+                                    {isSelected && (
+                                        <div className="absolute -top-3 -right-3 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg border-4 border-[#020617] animate-in zoom-in duration-300">
+                                            <CheckCircle2 className="w-4 h-4 text-[#020617]" />
+                                        </div>
+                                    )}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 

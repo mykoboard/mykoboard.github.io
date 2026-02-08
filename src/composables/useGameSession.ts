@@ -78,7 +78,7 @@ export function useGameSession() {
         const localParticipant = storedParticipants.find(p => p.isYou);
         const localPlayer: PlayerInfo = {
             id: identity.value?.id || 'local',
-            name: ctx.playerName,
+            name: ctx.playerName || identity.value?.name || 'Anonymous',
             status: isGameStarted.value ? 'game' : 'lobby',
             isConnected: true,
             isLocal: true,
@@ -108,6 +108,9 @@ export function useGameSession() {
                 });
                 processedIds.add(hostData.id);
             }
+            // Add guest's own player info with isLocal=true
+            infos.push(localPlayer);
+            processedIds.add(localPlayer.id);
         }
 
         // 2. Other participants
@@ -131,22 +134,21 @@ export function useGameSession() {
             });
         } else if (externalParticipants.length > 0) {
             externalParticipants.forEach(p => {
-                if (p.isHost || p.id === 'local') return;
-                if (p.name === localPlayer.name && !processedIds.has(p.id)) {
-                    infos.push({ ...localPlayer, id: p.id });
-                    processedIds.add(p.id);
-                } else {
-                    infos.push({
-                        id: p.id,
-                        name: p.name,
-                        status: isGameStarted.value ? 'game' : 'lobby',
-                        isConnected: true,
-                        isLocal: false,
-                        isHost: false,
-                        publicKey: p.publicKey
-                    });
-                    processedIds.add(p.id);
-                }
+                if (p.isHost || processedIds.has(p.id)) return;
+                // Skip if this external participant is actually the local player
+                // Match by publicKey since host uses connection ID but guest uses identity ID
+                if (p.id === localPlayer.id || p.id === identity.value?.id || p.publicKey === identity.value?.publicKey) return;
+                // Add other guests (not self, not host)
+                infos.push({
+                    id: p.id,
+                    name: p.name,
+                    status: isGameStarted.value ? 'game' : 'lobby',
+                    isConnected: true,
+                    isLocal: false,
+                    isHost: false,
+                    publicKey: p.publicKey
+                });
+                processedIds.add(p.id);
             });
         }
 
@@ -672,7 +674,8 @@ export function useGameSession() {
         const participants = playerInfos.value.map(p => ({
             id: p.id,
             name: p.name,
-            isHost: p.isHost
+            isHost: p.isHost,
+            publicKey: p.publicKey
         }));
 
         (connectedPeers.value as any).forEach((c: any) => {

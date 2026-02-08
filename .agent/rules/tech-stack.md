@@ -28,7 +28,7 @@ trigger: always_on
 - **Hybrid Frontend**: The base application is Vue 3, but the architecture must support microfrontend components from other libraries (e.g., React demo components).
 - **Directory Mapping**:
     - `src/`: Contains the main Vue 3 application shell.
-    - `components/`: Contains the integration library and components from other frameworks.
+    - `packages/`: Contains the integration library and components from other frameworks.
 - **Interoperability**: Ensure clean boundaries when integrating non-Vue components into the main Vue shell.
 
 ## 4. Implementation & Styling
