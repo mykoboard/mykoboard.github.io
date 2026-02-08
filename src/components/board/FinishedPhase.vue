@@ -62,22 +62,3 @@ const componentProps = computed(() => ({
   </div>
 </template>
 
-<style scoped>
-.glass-dark {
-  background: rgba(15, 15, 25, 0.7);
-  backdrop-filter: blur(10px);
-}
-
-.shadow-neon {
-  box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
-}
-
-@keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 0.7s ease-out forwards;
-}
-</style>

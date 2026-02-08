@@ -34,13 +34,3 @@ const componentProps = computed(() => ({
   </div>
 </template>
 
-<style scoped>
-@keyframes zoom-in {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-.animate-zoom-in {
-  animation: zoom-in 0.5s ease-out forwards;
-}
-</style>

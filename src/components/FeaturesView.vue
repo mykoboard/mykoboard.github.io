@@ -53,27 +53,3 @@ const features = [
     </div>
   </section>
 </template>
-
-<style scoped>
-.glass-dark {
-  background: rgba(15, 15, 25, 0.7);
-  backdrop-filter: blur(10px);
-}
-
-.text-gradient {
-  background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-fade-in {
-  animation: fade-in 1s ease-out forwards;
-  opacity: 0;
-}
-</style>

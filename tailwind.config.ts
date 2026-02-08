@@ -67,6 +67,10 @@ export default {
           '0%': { opacity: '0', transform: 'translateY(10px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' }
         },
+        'fade-in': {
+          from: { opacity: '0', transform: 'translateY(20px)' },
+          to: { opacity: '1', transform: 'translateY(0)' }
+        },
         float: {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-10px)' }
@@ -74,9 +78,43 @@ export default {
       },
       animation: {
         fadeIn: 'fadeIn 0.5s ease-out forwards',
+        'fade-in': 'fade-in 1s ease-out forwards',
         float: 'float 3s ease-in-out infinite'
+      },
+      backgroundImage: {
+        'gradient-primary': 'linear-gradient(135deg, #10b981 0%, #3b82f6 100%)',
+      },
+      backdropBlur: {
+        'glass': '10px',
       }
     }
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    function ({ addUtilities }: any) {
+      const newUtilities = {
+        '.glass-dark': {
+          background: 'rgba(15, 15, 25, 0.7)',
+          backdropFilter: 'blur(10px)',
+        },
+        '.text-gradient': {
+          background: 'linear-gradient(135deg, #10b981 0%, #3b82f6 100%)',
+          '-webkit-background-clip': 'text',
+          'background-clip': 'text',
+          color: 'transparent',
+        },
+        '.neon-border': {
+          border: '1px solid rgba(16, 185, 129, 0.2)',
+          boxShadow: '0 0 15px rgba(16, 185, 129, 0.1)',
+        },
+        '.shadow-neon': {
+          boxShadow: '0 0 20px rgba(16, 185, 129, 0.3)',
+        },
+        '.shadow-glass-dark': {
+          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+        },
+      }
+      addUtilities(newUtilities)
+    }
+  ],
 } satisfies Config;

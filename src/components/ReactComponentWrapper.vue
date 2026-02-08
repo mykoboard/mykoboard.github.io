@@ -34,7 +34,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="react-wrapper-root">
+  <div class="w-full h-full">
     <component 
       :is="WrappedComponent" 
       v-bind="componentProps" 
@@ -45,18 +45,3 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-.react-wrapper-root {
-  width: 100%;
-  height: 100%;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.2; }
-  50% { opacity: 0.4; }
-}
-.animate-pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-</style>

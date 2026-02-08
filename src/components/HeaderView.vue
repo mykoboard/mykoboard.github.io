@@ -67,15 +67,3 @@ const goProfile = () => router.push('/profile')
     </div>
   </header>
 </template>
-
-<style scoped>
-.glass-dark {
-  background: rgba(15, 15, 25, 0.7);
-  backdrop-filter: blur(10px);
-}
-
-.neon-border:hover {
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
-}
-</style>
