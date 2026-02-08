@@ -40,12 +40,16 @@
 
 ## 🛠️ Tech Stack
 
-- **Framework**: [React 19](https://react.dev/)
+- **Frontend Framework**: [Vue 3](https://vuejs.org/) (Composition API)
+- **Game MFEs**: React components via [Module Federation](https://module-federation.io/)
 - **Build Tool**: [Vite](https://vitejs.dev/)
+- **Runtime**: [Bun](https://bun.sh/)
 - **State Management**: [XState](https://xstate.js.org/)
-- **Networking**: [WebRTC](https://webrtc.org/)
+- **Networking**: [WebRTC](https://webrtc.org/) (P2P)
+- **Signaling**: AWS Free Tier (Lambda + DynamoDB)
+- **Local Storage**: IndexedDB
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [shadcn/ui](https://ui.shadcn.com/)
-- **Type Safety**: [TypeScript](https://www.typescriptlang.org/)
+- **Type Safety**: [TypeScript](https://www.typescriptlang.org/) (Strict Mode)
 
 ## 🤝 Contributing
 
