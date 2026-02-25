@@ -23,7 +23,9 @@ const router = createRouter({
         },
         {
             path: '/games/:gameId',
-            redirect: '/games'
+            name: 'game-info',
+            component: () => import('../pages/GameInfoView.vue'),
+            meta: { requiresAuth: true }
         },
         {
             path: '/games/:gameId/:boardId',

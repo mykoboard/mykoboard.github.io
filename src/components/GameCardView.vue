@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { Star } from 'lucide-vue-next'
-import { v4 as uuidv4 } from 'uuid'
 import { useRouter } from 'vue-router'
-import { db } from '../lib/db'
 
 interface Game {
     id: string;
@@ -22,24 +20,18 @@ const emit = defineEmits<{
 
 const router = useRouter()
 
-const goToBoard = async () => {
-    const boardId = uuidv4()
-    const maxPlayers = 2 // Default for now
-    
-    // Mark this session as hosted by this user
-    await db.markAsHosting(boardId, props.game.id, maxPlayers)
-    
-    router.push(`/games/${props.game.id}/${boardId}?maxPlayers=${maxPlayers}`)
+const viewGameInfo = async () => {
+    router.push(`/games/${props.game.id}`)
 }
 </script>
 
 <template>
-  <div class="relative glass-dark p-6 rounded-3xl flex flex-col items-center border border-white/5 hover:border-primary/30 transition-all duration-500 group overflow-hidden h-full">
+  <div class="relative w-full min-w-0 glass-dark p-6 rounded-3xl flex flex-col items-center border border-white/5 hover:border-primary/30 transition-all duration-500 group overflow-hidden">
     <!-- Background Glow -->
     <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-2xl -z-10" />
 
-    <div class="w-full aspect-square rounded-2xl overflow-hidden mb-6 bg-white/5 flex items-center justify-center relative shadow-inner shrink-0">
-      <img :src="game.image" :alt="game.name" class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700" />
+    <div class="w-full relative aspect-square rounded-2xl overflow-hidden mb-6 bg-white/5 shadow-inner shrink-0">
+      <img :src="game.image" :alt="game.name" class="absolute inset-0 w-full h-full object-cover max-w-full max-h-full transform group-hover:scale-110 transition-transform duration-700" />
       <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
     </div>
 
@@ -51,9 +43,9 @@ const goToBoard = async () => {
 
     <button
       class="w-full py-4 bg-primary text-primary-foreground rounded-xl hover:bg-emerald-400 transition-all duration-300 font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_25px_rgba(16,185,129,0.4)] mt-auto"
-      @click="goToBoard"
+      @click="viewGameInfo"
     >
-      Play Session
+      View Game Info
     </button>
 
     <button
