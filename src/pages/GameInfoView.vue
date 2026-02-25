@@ -20,7 +20,7 @@ const goBack = () => {
 const goToBoard = async () => {
     if (!game.value) return;
     const boardId = uuidv4()
-    const maxPlayers = 2 // Default for now, we should handle maxPlayers dynamically later via settings on this page or the lobby
+    const maxPlayers = game.value.maxPlayers || 2
     
     // Mark this session as hosted by this user
     await db.markAsHosting(boardId, game.value.id, maxPlayers)
