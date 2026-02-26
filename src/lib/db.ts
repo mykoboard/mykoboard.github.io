@@ -5,6 +5,7 @@ export interface GameParticipant {
     name: string;
     isYou: boolean;
     isHost: boolean;
+    publicKey?: string;
 }
 
 export interface GameSession {

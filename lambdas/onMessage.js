@@ -89,10 +89,18 @@ export const handler = async (event) => {
             }));
 
             if (!hostResult.Items || hostResult.Items.length === 0) {
-                return { statusCode: 404, body: "Session not found" };
+                await sendMessage(client, connectionId, {
+                    type: "error",
+                    code: "SESSION_NOT_FOUND",
+                    message: "The game session was not found on the signaling server. The host might still be connecting."
+                });
+                return { statusCode: 200 };
             }
 
-            const host = hostResult.Items[0];
+            // Pick the latest host record (in case of stale connections with the same boardId)
+            const host = hostResult.Items.sort((a, b) =>
+                Number(b.timestamp?.N || 0) - Number(a.timestamp?.N || 0)
+            )[0];
             const playersMap = host.players?.M || {};
 
             // Identity check: public key must be unique in this session
@@ -125,13 +133,23 @@ export const handler = async (event) => {
             }));
 
             // Notify Host about new registered peer
-            await sendMessage(client, host.connectionId.S, {
+            console.log(`Notifying host ${host.connectionId.S} about peer ${connectionId}`);
+            const sentinel = await sendMessage(client, host.connectionId.S, {
                 type: "peerJoined",
                 from: connectionId,
                 peerName: peerName || "Guest",
                 publicKey: publicKey,
                 encryptionPublicKey: body.encryptionPublicKey
             });
+
+            if (!sentinel) {
+                await sendMessage(client, connectionId, {
+                    type: "error",
+                    code: "HOST_UNREACHABLE",
+                    message: "The host is no longer connected to the signaling server."
+                });
+                return { statusCode: 200 }; // Return 200 to Lambda so it doesn't retry
+            }
 
             return { statusCode: 200, body: "Joined" };
         }
@@ -217,7 +235,9 @@ async function sendMessage(client, connectionId, payload) {
             ConnectionId: connectionId,
             Data: JSON.stringify(payload)
         }));
+        return true;
     } catch (err) {
-        console.error("Failed to send:", err);
+        console.error("Failed to send to", connectionId, err);
+        return false;
     }
 }
