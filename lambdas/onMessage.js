@@ -97,61 +97,71 @@ export const handler = async (event) => {
                 return { statusCode: 200 };
             }
 
-            // Pick the latest host record (in case of stale connections with the same boardId)
-            const host = hostResult.Items.sort((a, b) =>
+            // Sort hosts by latest timestamp first
+            const hosts = hostResult.Items.sort((a, b) =>
                 Number(b.timestamp?.N || 0) - Number(a.timestamp?.N || 0)
-            )[0];
-            const playersMap = host.players?.M || {};
+            );
 
-            // Identity check: public key must be unique in this session
-            if (playersMap[publicKey]) {
-                await sendMessage(client, connectionId, {
-                    type: "error",
-                    code: "DUPLICATE_IDENTITY",
-                    message: "Identity already active in this session."
-                });
-                return { statusCode: 200, body: "Duplicate blocked" };
+            let joined = false;
+            for (const hostItem of hosts) {
+                const hostConnId = hostItem.connectionId.S;
+
+                try {
+                    // Update Guest in this Host's players map
+                    await ddb.send(new UpdateItemCommand({
+                        TableName: TABLE_NAME,
+                        Key: { connectionId: { S: hostConnId } },
+                        UpdateExpression: "SET players.#pk = :p",
+                        ExpressionAttributeNames: { "#pk": publicKey },
+                        ExpressionAttributeValues: {
+                            ":p": {
+                                M: {
+                                    name: { S: peerName || "Guest" },
+                                    connectionId: { S: connectionId },
+                                    role: { S: "Guest" },
+                                    encryptionPublicKey: { S: body.encryptionPublicKey || "" },
+                                    timestamp: { N: Date.now().toString() }
+                                }
+                            }
+                        }
+                    }));
+
+                    // Try to notify this host
+                    console.log(`[guestJoin] Attempting to notify host ${hostConnId} for peer ${connectionId}`);
+                    const notified = await sendMessage(client, hostConnId, {
+                        type: "peerJoined",
+                        from: connectionId,
+                        peerName: peerName || "Guest",
+                        publicKey: publicKey,
+                        encryptionPublicKey: body.encryptionPublicKey
+                    });
+
+                    if (notified) {
+                        console.log(`[guestJoin] Host ${hostConnId} notified successfully`);
+                        joined = true;
+                        break; // Success!
+                    } else {
+                        // Stale connection? Clean up the record
+                        console.warn(`[guestJoin] Host ${hostConnId} unreachable, cleaning up stale record`);
+                        await ddb.send(new DeleteItemCommand({
+                            TableName: TABLE_NAME,
+                            Key: { connectionId: { S: hostConnId } }
+                        }));
+                    }
+                } catch (e) {
+                    console.error(`[guestJoin] Failed with host candidate ${hostConnId}:`, e.message);
+                }
             }
 
-            // Add Guest to Host's players map
-            await ddb.send(new UpdateItemCommand({
-                TableName: TABLE_NAME,
-                Key: { connectionId: { S: host.connectionId.S } },
-                UpdateExpression: "SET players.#pk = :p",
-                ExpressionAttributeNames: { "#pk": publicKey },
-                ExpressionAttributeValues: {
-                    ":p": {
-                        M: {
-                            name: { S: peerName || "Guest" },
-                            connectionId: { S: connectionId },
-                            role: { S: "Guest" },
-                            encryptionPublicKey: { S: body.encryptionPublicKey || "" },
-                            timestamp: { N: Date.now().toString() }
-                        }
-                    }
-                }
-            }));
-
-            // Notify Host about new registered peer
-            console.log(`Notifying host ${host.connectionId.S} about peer ${connectionId}`);
-            const sentinel = await sendMessage(client, host.connectionId.S, {
-                type: "peerJoined",
-                from: connectionId,
-                peerName: peerName || "Guest",
-                publicKey: publicKey,
-                encryptionPublicKey: body.encryptionPublicKey
-            });
-
-            if (!sentinel) {
+            if (!joined) {
                 await sendMessage(client, connectionId, {
                     type: "error",
                     code: "HOST_UNREACHABLE",
-                    message: "The host is no longer connected to the signaling server."
+                    message: "All matching host sessions are unreachable. The host may have disconnected or is in a network blind spot."
                 });
-                return { statusCode: 200 }; // Return 200 to Lambda so it doesn't retry
             }
 
-            return { statusCode: 200, body: "Joined" };
+            return { statusCode: 200, body: joined ? "Joined" : "All candidates failed" };
         }
 
         // 3️⃣ Host Offer: Host sends specific offer to a Guest
@@ -222,6 +232,11 @@ export const handler = async (event) => {
             return { statusCode: 200 };
         }
 
+        // 7️⃣ Heartbeat
+        if (type === "ping" || body.action === "ping") {
+            return { statusCode: 200, body: "pong" };
+        }
+
         return { statusCode: 400, body: "Unknown action" };
     } catch (err) {
         console.error(err);
@@ -237,7 +252,10 @@ async function sendMessage(client, connectionId, payload) {
         }));
         return true;
     } catch (err) {
-        console.error("Failed to send to", connectionId, err);
+        console.error(`[sendMessage] Failed to send to ${connectionId}:`, err.name, err.message);
+        if (err.$metadata) {
+            console.error(`Status Code: ${err.$metadata.httpStatusCode}, Request ID: ${err.$metadata.requestId}`);
+        }
         return false;
     }
 }

@@ -35,6 +35,7 @@ export class SignalingService {
     private boardId: string; // The specific session ID (optional for joiners)
     private peerName: string;
     private publicKey: string | null = null;
+    private pingInterval: any = null;
 
     constructor(gameId: string, boardId: string | undefined, peerName: string, onMessage: (msg: any) => void) {
         this.gameId = gameId;
@@ -67,6 +68,12 @@ export class SignalingService {
 
             this.socket.onopen = () => {
                 logger.sig("WebSocket Connection Open.");
+                // Set up heartbeat to prevent AWS timeout (10 min idle)
+                this.pingInterval = setInterval(() => {
+                    if (this.socket?.readyState === WebSocket.OPEN) {
+                        this.socket.send(JSON.stringify({ action: 'ping' }));
+                    }
+                }, 30000); // Ping every 30s
                 resolve();
             };
 
@@ -82,6 +89,10 @@ export class SignalingService {
 
             this.socket.onclose = (event) => {
                 logger.sig("Disconnected from signaling server", event.code, event.reason);
+                if (this.pingInterval) {
+                    clearInterval(this.pingInterval);
+                    this.pingInterval = null;
+                }
                 this.socket = null;
             };
 
@@ -180,6 +191,10 @@ export class SignalingService {
     disconnect(deleteOfferFirst: boolean = false) {
         if (deleteOfferFirst && this.isConnected) {
             this.deleteOffer();
+        }
+        if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+            this.pingInterval = null;
         }
         this.socket?.close();
         this.socket = null;

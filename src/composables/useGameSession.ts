@@ -1,4 +1,4 @@
-import { ref, computed, watch, watchEffect } from 'vue';
+import { ref, computed, watch, watchEffect, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { v4 as uuidv4 } from "uuid";
 import { useSelector } from "@xstate/vue";
@@ -260,8 +260,8 @@ export function useGameSession() {
                         if (msg.type === 'error') {
                             logger.error("Signaling error:", msg.message || msg.code);
 
-                            if (msg.code === 'SESSION_NOT_FOUND' && !isInitiator.value) {
-                                logger.sig("Session not found, retrying in 3s...");
+                            if ((msg.code === 'SESSION_NOT_FOUND' || msg.code === 'HOST_UNREACHABLE') && !isInitiator.value) {
+                                logger.sig(`${msg.code}, retrying in 3s...`);
                                 setTimeout(() => {
                                     hasRegistered.value = false; // Trigger the registration watcher again
                                 }, 3000);
@@ -583,6 +583,51 @@ export function useGameSession() {
     const onBackToDiscovery = () => {
         router.push(`/games/${gameId.value}`);
     };
+
+    // --- MOBILE RESILIENCY ---
+    const wakeLock = ref<any>(null);
+
+    const requestWakeLock = async () => {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock.value = await (navigator as any).wakeLock.request('screen');
+                logger.sig("Wake Lock acquired successfully");
+                wakeLock.value.addEventListener('release', () => {
+                    logger.sig("Wake Lock released");
+                });
+            } catch (err: any) {
+                logger.error(`Wake Lock failed: ${err.name}, ${err.message}`);
+            }
+        }
+    };
+
+    const handleVisibilityChange = async () => {
+        if (document.visibilityState === 'visible') {
+            logger.sig("App became visible, checking signaling status...");
+            if (signalingClient.value && !signalingClient.value.isConnected) {
+                hasRegistered.value = false;
+                await setupSignaling(gameId.value, boardId.value);
+            } else if (signalingClient.value?.isConnected) {
+                // Even if connected, re-register to ensure DynamoDB connectionId is fresh
+                hasRegistered.value = false;
+            }
+        }
+    };
+
+    onMounted(() => {
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('focus', handleVisibilityChange);
+        if (isInsideBoard.value) requestWakeLock();
+    });
+
+    onUnmounted(() => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleVisibilityChange);
+        if (wakeLock.value) {
+            wakeLock.value.release();
+            wakeLock.value = null;
+        }
+    });
 
     // --- WATCHERS ---
 
