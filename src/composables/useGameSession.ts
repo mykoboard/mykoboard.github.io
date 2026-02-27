@@ -261,6 +261,10 @@ export function useGameSession() {
                             logger.error("Signaling error:", msg.message || msg.code);
 
                             if ((msg.code === 'SESSION_NOT_FOUND' || msg.code === 'HOST_UNREACHABLE') && !isInitiator.value) {
+                                if (isGameStarted.value) {
+                                    logger.sig(`${msg.code} received after game started, ignoring.`);
+                                    return;
+                                }
                                 logger.sig(`${msg.code}, retrying in 3s...`);
                                 setTimeout(() => {
                                     hasRegistered.value = false; // Trigger the registration watcher again
@@ -604,12 +608,20 @@ export function useGameSession() {
     const handleVisibilityChange = async () => {
         if (document.visibilityState === 'visible') {
             logger.sig("App became visible, checking signaling status...");
+            const hasActiveP2P = connectedPeers.value.length > 0;
+
             if (signalingClient.value && !signalingClient.value.isConnected) {
-                hasRegistered.value = false;
-                await setupSignaling(gameId.value, boardId.value);
+                // Only re-register if we are not in an active game session with peers
+                if (!isGameStarted.value || !hasActiveP2P) {
+                    hasRegistered.value = false;
+                    await setupSignaling(gameId.value, boardId.value);
+                }
             } else if (signalingClient.value?.isConnected) {
                 // Even if connected, re-register to ensure DynamoDB connectionId is fresh
-                hasRegistered.value = false;
+                // But only if we are still in preparation/lobby phase
+                if (!isGameStarted.value || !hasActiveP2P) {
+                    hasRegistered.value = false;
+                }
             }
         }
     };
