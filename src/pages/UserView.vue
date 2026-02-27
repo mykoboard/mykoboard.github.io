@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, Key, Fingerprint, Sparkles, Save, Shield, History, AlertTriangle, Trash2, Users } from 'lucide-vue-next'
+import { User, Key, Fingerprint, Sparkles, Shield, History, AlertTriangle, Trash2, Users } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import Header from '../components/HeaderView.vue'
 import Input from '../components/ui/Input.vue'
@@ -28,6 +28,7 @@ const name = ref("")
 const avatar = ref("")
 const token = ref("")
 const isSaving = ref(false)
+const isCreating = ref(false)
 const isClearing = ref(false)
 const activeSessions = ref<any[]>([])
 const knownIdentities = ref<KnownIdentity[]>([])
@@ -35,7 +36,7 @@ const newIdentityName = ref('')
 const newIdentityPublicKey = ref('')
 const isAddingIdentity = ref(false)
 
-onMounted(async () => {
+const loadData = async () => {
     const wallet = SecureWallet.getInstance()
     const id = await wallet.getIdentity()
     if (id) {
@@ -43,10 +44,17 @@ onMounted(async () => {
         name.value = id.name
         avatar.value = id.avatar || ""
         token.value = id.subscriptionToken
+    } else {
+        identity.value = null
+        name.value = ""
+        avatar.value = ""
+        token.value = ""
     }
     activeSessions.value = await SessionManager.getSessions()
     knownIdentities.value = await db.getAllKnownIdentities()
-})
+}
+
+onMounted(loadData)
 
 const hasChanges = computed(() => {
     if (!identity.value) return false
@@ -54,6 +62,26 @@ const hasChanges = computed(() => {
            avatar.value !== (identity.value.avatar || "") ||
            token.value !== identity.value.subscriptionToken
 })
+
+const handleCreateIdentity = async () => {
+    if (!name.value.trim()) {
+        toast.error("Identity requires a name")
+        return
+    }
+    isCreating.value = true
+    try {
+        const wallet = SecureWallet.getInstance()
+        await wallet.createIdentity(name.value.trim(), token.value.trim())
+        await loadData()
+        toast.success("Identity Generated", {
+            description: "Your local decentralized node is now active."
+        })
+    } catch (error) {
+        toast.error("Generation Failed")
+    } finally {
+        isCreating.value = false
+    }
+}
 
 const handleUpdateProfile = async () => {
     if (!name.value.trim()) {
@@ -388,6 +416,70 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
               </AlertDialogPortal>
             </AlertDialogRoot>
           </div>
+        </div>
+      </div>
+
+      <!-- No Identity State -->
+      <div v-else class="space-y-10 animate-fade-in-up">
+        <div class="flex items-center gap-4">
+          <div class="p-3 bg-primary/10 rounded-2xl border border-primary/20 shadow-neon">
+            <Shield class="w-8 h-8 text-primary" />
+          </div>
+          <h1 class="text-4xl font-black tracking-tight text-white uppercase">Establish <span class="text-gradient">Identity</span></h1>
+        </div>
+
+        <div class="glass-dark p-10 rounded-[2.5rem] border border-white/5 shadow-glass-dark max-w-2xl mx-auto space-y-10">
+          <div class="space-y-4 text-center">
+            <div class="mx-auto w-20 h-20 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-neon mb-6">
+              <Fingerprint class="w-10 h-10 text-primary" />
+            </div>
+            <h2 class="text-3xl font-black text-white uppercase tracking-tight">Generate Neural Node</h2>
+            <p class="text-slate-400 font-medium max-w-md mx-auto leading-relaxed">
+              To participate in the decentralized ledger, you must first establish a local identity. 
+              Your keys will be generated and stored <span class="text-primary font-bold italic">exclusively</span> on this device.
+            </p>
+          </div>
+
+          <div class="space-y-6">
+            <div class="space-y-3">
+              <label class="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] ml-1">Identity Name</label>
+              <Input 
+                v-model="name" 
+                placeholder="How shall the network know you?" 
+                className="h-16 bg-white/5 border-white/10 rounded-2xl focus:ring-primary text-white font-bold text-lg px-6" 
+              />
+            </div>
+
+            <div class="space-y-3">
+              <label class="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] ml-1">Subscription Token (Optional)</label>
+              <Input 
+                v-model="token" 
+                placeholder="Paste access token if available..." 
+                className="h-16 bg-white/5 border-white/10 rounded-2xl focus:ring-primary text-white font-mono px-6" 
+              />
+            </div>
+
+            <div class="pt-4">
+              <button
+                @click="handleCreateIdentity"
+                :disabled="isCreating || !name.trim()"
+                class="w-full h-20 text-sm font-black uppercase tracking-[0.5em] rounded-2xl bg-primary text-primary-foreground shadow-[0_0_40px_rgba(16,185,129,0.2)] hover:shadow-[0_0_60px_rgba(16,185,129,0.4)] transition-all duration-500 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <div v-if="isCreating" class="flex items-center justify-center gap-4">
+                  <div class="h-6 w-6 animate-spin rounded-full border-3 border-white border-b-transparent" />
+                  GENERATING SECURE NODE...
+                </div>
+                <div v-else class="flex items-center justify-center gap-3">
+                  INITIALIZE DECENTRALIZED IDENTITY
+                  <Sparkles class="w-5 h-5" />
+                </div>
+              </button>
+            </div>
+          </div>
+          
+          <p class="text-[10px] text-white/20 text-center uppercase tracking-widest font-bold">
+            P2P Encryption • Local-First Persistence • Zero Server Latency
+          </p>
         </div>
       </div>
     </div>
