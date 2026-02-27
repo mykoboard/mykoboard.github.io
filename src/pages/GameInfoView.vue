@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from 'lucide-vue-next'
 import { v4 as uuidv4 } from 'uuid'
@@ -27,6 +27,19 @@ const goToBoard = async () => {
     
     router.push(`/games/${game.value.id}/${boardId}?maxPlayers=${maxPlayers}`)
 }
+
+const resolvedInfoComponent = shallowRef<any>(null)
+watch(() => game.value, async (newGame) => {
+    resolvedInfoComponent.value = null
+    if (newGame?.infoComponent) {
+        if (newGame.framework === 'vue') {
+            const module = await (typeof newGame.infoComponent === 'function' ? newGame.infoComponent() : newGame.infoComponent)
+            resolvedInfoComponent.value = module.default || module
+        } else {
+            resolvedInfoComponent.value = newGame.infoComponent
+        }
+    }
+}, { immediate: true })
 </script>
 
 <template>
@@ -73,7 +86,10 @@ const goToBoard = async () => {
 
             <div class="flex-grow space-y-6">
                 <div v-if="game.infoComponent" class="min-h-[200px]">
-                    <ReactComponentWrapper :component="game.infoComponent" :componentProps="{}" />
+                    <template v-if="game.framework === 'vue'">
+                        <component :is="resolvedInfoComponent" v-if="resolvedInfoComponent" />
+                    </template>
+                    <ReactComponentWrapper v-else :component="game.infoComponent" :componentProps="{}" />
                 </div>
             </div>
         </div>

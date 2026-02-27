@@ -139,6 +139,7 @@ onUnmounted(() => {
           :isInitiator="isInitiator"
           :ledger="snapshot?.context?.ledger || []"
           :onBackToLobby="onBackToDiscovery"
+          :framework="game.framework"
         />
         
         <ActivePhase
@@ -150,6 +151,7 @@ onUnmounted(() => {
           :ledger="snapshot?.context?.ledger || []"
           :onAddLedger="onAddLedger"
           :onFinishGame="onFinishGame"
+          :framework="game.framework"
         />
 
         <PreparationPhase

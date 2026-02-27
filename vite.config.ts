@@ -34,7 +34,7 @@ export default defineConfig(({ mode }) => ({
           ? "http://localhost:5005/packages/apex-nebula/assets/remoteEntry.js"
           : "https://mykoboard.com/packages/apex-nebula/assets/remoteEntry.js",
       },
-      shared: ["react", "react-dom", "@xstate/react", "xstate", "@mykoboard/integration"],
+      shared: ["vue", "react", "react-dom", "@xstate/react", "@xstate/vue", "xstate", "@mykoboard/integration"],
     }),
   ].filter(Boolean),
   resolve: {

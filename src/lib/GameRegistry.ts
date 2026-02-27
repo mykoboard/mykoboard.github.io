@@ -8,8 +8,9 @@ export interface GameMetadata {
     description: string;
     minPlayers: number;
     maxPlayers: number;
-    component: React.LazyExoticComponent<React.ComponentType<GameProps>>;
-    infoComponent?: React.LazyExoticComponent<React.ComponentType<any>>;
+    framework: 'react' | 'vue';
+    component: any;
+    infoComponent?: any;
 }
 
 export const games: GameMetadata[] = [
@@ -20,6 +21,7 @@ export const games: GameMetadata[] = [
         description: "Classic strategy game for two players. Get three in a row to win!",
         minPlayers: 2,
         maxPlayers: 2,
+        framework: 'react',
         // @ts-ignore
         component: React.lazy(() => import('tic-tac-toe/TicTacToe')),
         // @ts-ignore
@@ -32,6 +34,7 @@ export const games: GameMetadata[] = [
         description: "Standard Ludo game for 2-4 players. Race your pieces to the finish!",
         minPlayers: 2,
         maxPlayers: 4,
+        framework: 'react',
         // @ts-ignore
         component: React.lazy(() => import('ludo/Ludo')),
         // @ts-ignore
@@ -44,6 +47,7 @@ export const games: GameMetadata[] = [
         description: "Decentralized P2P strategy game. Compete for cosmic dominance in a serverless galaxy!",
         minPlayers: 2,
         maxPlayers: 6,
+        framework: 'react',
         // @ts-ignore
         component: React.lazy(() => import('galactic-hegemony/GalacticHegemony')),
         // @ts-ignore
@@ -56,6 +60,7 @@ export const games: GameMetadata[] = [
         description: "Scrum estimation tool for teams. Vote on story points with Fibonacci cards in real-time.",
         minPlayers: 2,
         maxPlayers: 10,
+        framework: 'react',
         // @ts-ignore
         component: React.lazy(() => import('planning-poker/PlanningPoker')),
         // @ts-ignore
@@ -68,10 +73,11 @@ export const games: GameMetadata[] = [
         description: "Evolutionary strategy game based on genetic algorithms. Mutate your genome and colonize the nebula!",
         minPlayers: 2,
         maxPlayers: 4,
+        framework: 'vue',
         // @ts-ignore
-        component: React.lazy(() => import('apex-nebula/ApexNebula')),
+        component: () => import('apex-nebula/ApexNebula'),
         // @ts-ignore
-        infoComponent: React.lazy(() => import('apex-nebula/GameInfo')),
+        infoComponent: () => import('apex-nebula/GameInfo'),
     },
 ];
 

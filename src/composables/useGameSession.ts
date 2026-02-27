@@ -5,7 +5,7 @@ import { useSelector } from "@xstate/vue";
 import { Connection, ConnectionStatus, Signal } from "../lib/webrtc";
 import { logger } from "../lib/logger";
 import { getGameById } from "../lib/GameRegistry";
-import { Ledger, createLobbyMessage, isLobbyMessage, PlayerInfo, createLobbyMessage as createMsg } from "@mykoboard/integration";
+import { Ledger, createLobbyMessage, isLobbyMessage, PlayerInfo } from "@mykoboard/integration";
 import { SecureWallet } from "../lib/wallet";
 import { SessionManager } from "../lib/sessions";
 import { SignalingService } from "../lib/signaling";
@@ -15,7 +15,6 @@ import {
     identity,
     isLoading,
     activeSessions,
-    lobbyActor,
     getBoardActor
 } from "./sharedState";
 
@@ -64,7 +63,6 @@ export function useGameSession() {
     const connectionList = computed(() => Array.from(connections.value.values()));
     const connectedPeers = computed((): Connection[] => connectionList.value.filter((c: any) => c.status === ConnectionStatus.connected) as Connection[]);
     const pendingSignaling = computed(() => connectionList.value.filter((c: any) => c.status !== ConnectionStatus.connected && c.status !== ConnectionStatus.closed));
-    const isConnected = computed(() => !!boardSnapshot.value && (boardSnapshot.value as any).status !== 'idle');
     const view = computed(() => isInsideBoard.value ? 'game' : 'lobby');
 
     const playerInfos = computed((): PlayerInfo[] => {
@@ -283,12 +281,24 @@ export function useGameSession() {
                         if (msg.type === 'peerJoined') {
                             logger.sig("Peer joined:", msg.peerName, "publicKey:", msg.publicKey);
 
-                            // Check if this is a known identity
+                            // Check if this is a known identity OR already in this session (e.g. refresh)
                             const isKnown = await isKnownIdentity(msg.publicKey!);
+                            const isAlreadyInSession = playerInfos.value.some(p => p.publicKey === msg.publicKey);
 
-                            if (isKnown) {
-                                // Auto-approve known identity
-                                logger.sig("Auto-approving known identity:", msg.peerName);
+                            if (isKnown || isAlreadyInSession) {
+                                // Auto-approve known identity or returning peer
+                                logger.sig(`Auto-approving ${isKnown ? 'known' : 'returning'} identity:`, msg.peerName);
+
+                                // Auto-save identity if it's a returning peer but not yet permanently known
+                                if (!isKnown && isAlreadyInSession && msg.publicKey) {
+                                    db.addKnownIdentity({
+                                        id: `identity-${Date.now()}-${msg.publicKey.substring(0, 8)}`,
+                                        name: msg.peerName || "Guest",
+                                        publicKey: msg.publicKey,
+                                        addedAt: Date.now()
+                                    }).catch(err => logger.error("Failed to auto-save returning peer identity:", err));
+                                }
+
                                 await autoApprovePeer({
                                     connectionId: msg.from!,
                                     peerName: msg.peerName || "Guest",
@@ -605,6 +615,30 @@ export function useGameSession() {
         }
     };
 
+    const updateOffer = async (connection: Connection, offer: string) => {
+        try {
+            const signal = Signal.fromString(offer);
+            const wallet = SecureWallet.getInstance();
+            const ident = await wallet.getIdentity();
+            if (ident) {
+                await connection.acceptOffer(signal, ident.name);
+                currentBoardActor.value?.send({ type: 'UPDATE_CONNECTION', connection });
+            }
+        } catch (e) {
+            logger.error("Failed to update offer:", e);
+        }
+    };
+
+    const updateAnswer = (connection: Connection, answer: string) => {
+        try {
+            const signal = Signal.fromString(answer);
+            connection.acceptAnswer(signal);
+            currentBoardActor.value?.send({ type: 'UPDATE_CONNECTION', connection });
+        } catch (e) {
+            logger.error("Failed to update answer:", e);
+        }
+    };
+
     const handleVisibilityChange = async () => {
         if (document.visibilityState === 'visible') {
             logger.sig("App became visible, checking signaling status...");
@@ -746,6 +780,8 @@ export function useGameSession() {
         onRejectGuest,
         onCancelSignaling,
         onBackToGames,
-        onBackToDiscovery
+        onBackToDiscovery,
+        updateOffer,
+        updateAnswer
     };
 }

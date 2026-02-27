@@ -104,7 +104,6 @@ watch(() => props.players, () => {
             </span>
           </div>
           
-          <!-- Save identity switch for unknown, connected players -->
           <div v-if="!player.isLocal && player.isConnected && !knownIdentityStatus[player.id]" 
                class="flex items-center gap-2 mt-2">
             <button
@@ -125,11 +124,6 @@ watch(() => props.players, () => {
             </button>
             <span class="text-[9px] text-white/40 uppercase tracking-wider font-medium">
               {{ saveIdentityFlags[player.id] ? 'Saved for auto-approve' : 'Auto-approve next time' }}
-            </span>
-            <!-- Debug info -->
-            <span class="text-[8px] text-white/30">
-              {{ player.isLocal ? '(Local)' : '(Remote)' }}
-              {{ player.publicKey ? '✓PK' : '✗PK' }}
             </span>
           </div>
         </div>

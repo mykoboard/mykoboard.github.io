@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { UserPlus, Globe, LogIn, CheckCircle2, Clipboard, AlertTriangle, Link, Copy, Check } from 'lucide-vue-next'
+import { UserPlus, AlertTriangle, Link, Copy, Check } from 'lucide-vue-next'
 import { 
   AlertDialogRoot, 
   AlertDialogTrigger, 
@@ -91,6 +91,10 @@ watch(() => props.pendingJoinRequests, (requests) => {
         requests.forEach(request => {
             if (!(request.publicKey in friendStatus.value)) {
                 checkFriendStatus(request.publicKey)
+            }
+            // Default "Auto-approve next time" to true for new requests
+            if (request.connectionId && saveIdentityFlags.value[request.connectionId] === undefined) {
+                saveIdentityFlags.value[request.connectionId] = true
             }
         })
     }

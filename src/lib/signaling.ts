@@ -1,4 +1,3 @@
-import { Signal } from './webrtc';
 import { logger } from './logger';
 
 export type SignalingSlot = {
@@ -11,7 +10,7 @@ export type SignalingSlot = {
 export type SignalingMessage = {
     action: 'sendMessage'; // Required for AWS API Gateway routing
     type: 'hostRegister' | 'guestJoin' | 'hostOffer' | 'guestAnswer' | 'deleteOffer' |
-    'peerJoined' | 'offer' | 'answer' | 'error';
+    'peerJoined' | 'offer' | 'answer' | 'error' | 'ping';
     from?: string;
     to?: string;
     target?: string;
@@ -70,9 +69,7 @@ export class SignalingService {
                 logger.sig("WebSocket Connection Open.");
                 // Set up heartbeat to prevent AWS timeout (10 min idle)
                 this.pingInterval = setInterval(() => {
-                    if (this.socket?.readyState === WebSocket.OPEN) {
-                        this.socket.send(JSON.stringify({ action: 'ping' }));
-                    }
+                    this.send({ type: 'ping' });
                 }, 30000); // Ping every 30s
                 resolve();
             };
