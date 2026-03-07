@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
 
 jobs:
   publish-gpr:
@@ -20,7 +22,21 @@ jobs:
         run: |
           echo "@mykoboard:registry=https://npm.pkg.github.com" > .npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
-      - name: Publish to GitHub Packages
+      - name: Apply Development Version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          VERSION=$(cat package.json | bun -e "console.log(JSON.parse(fs.readFileSync(0)).version)")
+          NEW_VERSION="${VERSION}-dev.${{ github.run_number }}"
+          bun -e "const pkg = JSON.parse(fs.readFileSync('package.json')); pkg.version = '${NEW_VERSION}'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 4))"
+
+      - name: Publish to GitHub Packages (Dev)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: npm publish --tag dev
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to GitHub Packages (Release)
+        if: startsWith(github.ref, 'refs/tags/v')
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
