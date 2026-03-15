@@ -1,17 +1,25 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { UserPlus, LogIn, CheckCircle2, Clipboard } from 'lucide-vue-next'
 import { ConnectionStatus, type Connection } from '../../lib/webrtc'
 import Input from '../ui/Input.vue'
 
 const props = defineProps<{
   connection: Connection
+  offerUrlBase?: string
   onOfferChange: (connection: Connection, value: string) => void
   onAnswerChange: (connection: Connection, value: string) => void
   onCancel?: (connection: Connection) => void
 }>()
 
 const copied = ref(false)
+const gatheringTimeoutReached = ref(false)
+
+// Start a fallback timer to reveal the signal even if ICE gathering is slow or stuck
+const GATHERING_TIMEOUT_MS = 5000
+setTimeout(() => {
+    gatheringTimeoutReached.value = true
+}, GATHERING_TIMEOUT_MS)
 
 const copyToClipboard = (text: string) => {
     if (!text) return
@@ -19,6 +27,21 @@ const copyToClipboard = (text: string) => {
     copied.value = true
     setTimeout(() => copied.value = false, 2000)
 }
+
+const displaySignal = computed(() => {
+    if (!props.connection.serializedSignal) return ''
+    const raw = props.connection.serializedSignal
+    if (props.offerUrlBase && props.connection.status === ConnectionStatus.started) {
+        return `${props.offerUrlBase}?mode=manual&offer=${encodeURIComponent(raw)}`
+    }
+    return raw
+})
+
+const isGathering = computed(() => {
+    if (gatheringTimeoutReached.value) return false
+    return props.connection.iceGatheringState !== 'complete'
+})
+
 </script>
 
 <template>
@@ -50,20 +73,31 @@ const copyToClipboard = (text: string) => {
         Active Invite Vector
       </h3>
       <div class="space-y-4">
-        <div class="p-4 bg-white/5 rounded-xl border border-white/10 relative group min-h-[64px] flex items-center group-hover:neon-border transition-all duration-500">
+        <div 
+          class="p-4 bg-white/5 rounded-xl border border-white/10 relative group min-h-[64px] flex items-center transition-all duration-500"
+          :class="{ 'neon-border': !isGathering, 'animate-pulse bg-primary/5 border-primary/20': isGathering }"
+        >
           <template v-if="connection.signal">
-            <div class="text-[10px] font-mono break-all line-clamp-2 text-white/40 pr-8">
-              {{ connection.signal.toString() }}
-            </div>
-            <button
-              class="absolute top-2 right-2 h-8 w-8 flex items-center justify-center text-primary hover:bg-primary/10 transition-colors rounded-lg"
-              @click="copyToClipboard(connection.signal.toString())"
-            >
-              <CheckCircle2 v-if="copied" class="w-4 h-4" />
-              <Clipboard v-else class="w-4 h-4" />
-            </button>
+            <template v-if="isGathering">
+              <div class="flex items-center gap-2 text-[10px] font-mono text-primary/60 uppercase tracking-widest animate-pulse">
+                <div class="h-1.5 w-1.5 bg-primary rounded-full animate-ping"></div>
+                Gathering Node Candidates...
+              </div>
+            </template>
+            <template v-else>
+              <div class="text-[10px] font-mono break-all line-clamp-2 text-white/40 pr-8">
+                {{ displaySignal }}
+              </div>
+              <button
+                class="absolute top-2 right-2 h-8 w-8 flex items-center justify-center text-primary hover:bg-primary/10 transition-colors rounded-lg"
+                @click="copyToClipboard(displaySignal)"
+              >
+                <CheckCircle2 v-if="copied" class="w-4 h-4" />
+                <Clipboard v-else class="w-4 h-4" />
+              </button>
+            </template>
           </template>
-          <div v-else class="text-[10px] text-white/20 italic tracking-wider">Gathering node connection details...</div>
+          <div v-else class="text-[10px] text-white/20 italic tracking-wider">Opening node port...</div>
         </div>
         <p class="text-[10px] text-white/30 uppercase font-medium leading-relaxed tracking-wider">
           Transmit this vector to a peer node. Their response will be synthesized automatically.
@@ -83,18 +117,29 @@ const copyToClipboard = (text: string) => {
         Signal Response Synthesized
       </h3>
       <div class="space-y-3">
-        <div class="p-4 bg-white/5 rounded-xl border border-white/10 relative group min-h-[64px] flex items-center group-hover:neon-border transition-all duration-500">
+        <div 
+          class="p-4 bg-white/5 rounded-xl border border-white/10 relative group min-h-[64px] flex items-center transition-all duration-500"
+          :class="{ 'neon-border': !isGathering, 'animate-pulse bg-primary/5 border-primary/20': isGathering }"
+        >
           <template v-if="connection.signal">
-            <div class="text-[10px] font-mono break-all line-clamp-2 text-white/40 pr-8">
-              {{ connection.signal.toString() }}
-            </div>
-            <button
-              class="absolute top-2 right-2 h-8 w-8 flex items-center justify-center text-primary hover:bg-primary/10 transition-colors rounded-lg"
-              @click="copyToClipboard(connection.signal.toString())"
-            >
-              <CheckCircle2 v-if="copied" class="w-4 h-4" />
-              <Clipboard v-else class="w-4 h-4" />
-            </button>
+            <template v-if="isGathering">
+               <div class="flex items-center gap-2 text-[10px] font-mono text-primary/60 uppercase tracking-widest animate-pulse">
+                <div class="h-1.5 w-1.5 bg-primary rounded-full animate-ping"></div>
+                Gathering Node Candidates...
+              </div>
+            </template>
+            <template v-else>
+              <div class="text-[10px] font-mono break-all line-clamp-2 text-white/40 pr-8">
+                {{ connection.serializedSignal }}
+              </div>
+              <button
+                class="absolute top-2 right-2 h-8 w-8 flex items-center justify-center text-primary hover:bg-primary/10 transition-colors rounded-lg"
+                @click="copyToClipboard(connection.serializedSignal)"
+              >
+                <CheckCircle2 v-if="copied" class="w-4 h-4" />
+                <Clipboard v-else class="w-4 h-4" />
+              </button>
+            </template>
           </template>
           <div v-else class="text-[10px] text-white/20 italic tracking-wider">Finalizing response...</div>
         </div>

@@ -74,8 +74,8 @@ watch(() => game.value, async (newGame) => {
                 </div>
             </div>
 
-            <!-- Action Button -->
-            <div class="flex items-center justify-start">
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-start gap-4">
                 <button
                     class="w-full md:w-auto px-10 py-5 bg-primary text-primary-foreground text-lg rounded-xl hover:bg-emerald-400 transition-all duration-300 font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] transform hover:-translate-y-1 active:translate-y-0"
                     @click="goToBoard"

@@ -216,16 +216,25 @@ export const boardMachine = createMachine({
 
             const existing = context.connections.get(connection.id);
             if (existing) {
+                // If the incoming connection is the SAME instance, we can't rely on comparing 
+                // it to 'existing'. Instead, we check if the values have changed relative 
+                // to what the Machine previously recorded.
                 const statusChanged = (existing as any)._lastKnownStatus !== connection.status;
                 const signalChanged = (existing as any)._lastKnownSignal !== (connection.signal?.toString() || "");
+                const iceGatheringChanged = (existing as any)._lastKnownIceGathering !== (connection as any).iceGatheringState;
+                const identityChanged = (existing as any)._lastKnownRemotePublicKey !== connection.remotePublicKey;
 
-                if (!statusChanged && !signalChanged) {
+                if (!statusChanged && !signalChanged && !iceGatheringChanged && !identityChanged) {
                     return context;
                 }
             }
 
-            (connection as any)._lastKnownStatus = connection.status;
-            (connection as any)._lastKnownSignal = connection.signal?.toString() || "";
+            // Record the NEW state BEFORE updating the context
+            const connectionProxy = (connection as any);
+            connectionProxy._lastKnownStatus = connection.status;
+            connectionProxy._lastKnownSignal = connection.signal?.toString() || "";
+            connectionProxy._lastKnownIceGathering = connectionProxy.iceGatheringState;
+            connectionProxy._lastKnownRemotePublicKey = connection.remotePublicKey;
 
             const newConnections = new Map(context.connections);
             newConnections.set(connection.id, connection);

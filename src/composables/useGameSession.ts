@@ -1,4 +1,4 @@
-import { ref, computed, watch, watchEffect, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, watchEffect, onMounted, onUnmounted, shallowReactive } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { v4 as uuidv4 } from "uuid";
 import { useSelector } from "@xstate/vue";
@@ -6,7 +6,7 @@ import { Connection, ConnectionStatus, Signal } from "../lib/webrtc";
 import { logger } from "../lib/logger";
 import { getGameById } from "../lib/GameRegistry";
 import { Ledger, createLobbyMessage, isLobbyMessage, PlayerInfo } from "@mykoboard/integration";
-import { SecureWallet } from "../lib/wallet";
+import { SecureWallet, type PlayerIdentity } from "../lib/wallet";
 import { SessionManager } from "../lib/sessions";
 import { SignalingService } from "../lib/signaling";
 import { toast } from "vue-sonner";
@@ -22,11 +22,25 @@ export function useGameSession() {
     const route = useRoute();
     const router = useRouter();
 
+    const waitForIdentity = async () => {
+        if (identity.value) return identity.value;
+        return new Promise<PlayerIdentity>((resolve) => {
+            const stop = watch(identity, (val) => {
+                if (val) {
+                    stop();
+                    resolve(val);
+                }
+            }, { immediate: true });
+        });
+    };
+
     // Local signaling state (moved from useLobby)
     const signalingClient = ref<SignalingService | null>(null);
     const isServerConnecting = ref(false);
     const connectionBoardId = ref<string>("");
     const hasRegistered = ref(false); // Track if we've already registered
+    const hostSignalingMode = ref<'server' | 'manual' | null>(null);
+    const manualGuestConnectionId = ref<string | null>(null);
 
     // Pending join requests (for host approval)
     interface PendingJoinRequest {
@@ -50,7 +64,7 @@ export function useGameSession() {
 
     // We need a stable reference to the current board actor if it exists
     const currentBoardActor = computed(() => {
-        if (!boardId.value || boardId.value === 'manual') return null;
+        if (!boardId.value) return null;
         return getBoardActor(boardId.value, identity.value?.name || "Anonymous", false);
     });
 
@@ -61,8 +75,27 @@ export function useGameSession() {
     const isGameStarted = computed(() => boardSnapshot.value?.context?.isGameStarted || false);
     const connections = computed(() => boardSnapshot.value?.context?.connections || new Map());
     const connectionList = computed(() => Array.from(connections.value.values()));
-    const connectedPeers = computed((): Connection[] => connectionList.value.filter((c: any) => c.status === ConnectionStatus.connected) as Connection[]);
-    const pendingSignaling = computed(() => connectionList.value.filter((c: any) => c.status !== ConnectionStatus.connected && c.status !== ConnectionStatus.closed));
+    const connectedPeers = computed((): Connection[] => {
+        const fromActor = connectionList.value.filter((c: any) => c.status === ConnectionStatus.connected) as Connection[];
+        const fromPending = Array.from(pendingConnections.value.values()).filter(c => c.status === ConnectionStatus.connected);
+        const merged = new Map<string, Connection>();
+        fromActor.forEach((c: any) => merged.set(c.id, c));
+        fromPending.forEach((c: any) => merged.set(c.id, c));
+        return Array.from(merged.values());
+    });
+    
+    // Merge actor connections and local pending connections to avoid race conditions in UI rendering
+    const pendingSignaling = computed(() => {
+        const fromActor = connectionList.value.filter((c: any) => c.status !== ConnectionStatus.connected && c.status !== ConnectionStatus.closed);
+        const fromPending = Array.from(pendingConnections.value.values()).filter(c => c.status !== ConnectionStatus.connected && c.status !== ConnectionStatus.closed);
+        
+        const merged = new Map<string, any>();
+        fromActor.forEach((c: any) => merged.set(c.id, c));
+        fromPending.forEach((c: any) => merged.set(c.id, c));
+        
+        return Array.from(merged.values()) as Connection[];
+    });
+
     const view = computed(() => isInsideBoard.value ? 'game' : 'lobby');
 
     const playerInfos = computed((): PlayerInfo[] => {
@@ -76,7 +109,7 @@ export function useGameSession() {
         const localParticipant = storedParticipants.find(p => p.id === identity.value?.id || p.publicKey === identity.value?.publicKey || p.isYou);
         const localPlayer: PlayerInfo = {
             id: identity.value?.id || 'local',
-            name: ctx.playerName || identity.value?.name || 'Anonymous',
+            name: identity.value?.name || (ctx.playerName !== "Anonymous" ? ctx.playerName : null) || 'Anonymous',
             status: isGameStarted.value ? 'game' : 'lobby',
             isConnected: true,
             isLocal: true,
@@ -85,70 +118,54 @@ export function useGameSession() {
         };
 
         const infos: PlayerInfo[] = [];
-        const processedIds = new Set<string>();
+        const processedPublicKeys = new Set<string>();
 
-        // 1. Host Handling
-        if (isInitiator.value) {
-            infos.push(localPlayer);
-            processedIds.add(localPlayer.id);
-        } else if (externalParticipants.length > 0) {
-            const hostData = externalParticipants.find(p => p.isHost);
-            if (hostData) {
-                const hostConnection = (connectedPeers.value as any).find((c: any) => c.status === ConnectionStatus.connected);
-                infos.push({
-                    id: hostData.id,
-                    name: hostData.name,
-                    status: (hostConnection ? ctx.playerStatuses.get(hostConnection.id) : null) || (isGameStarted.value ? 'game' : 'lobby'),
-                    isConnected: !!hostConnection,
-                    isLocal: false,
-                    isHost: true,
-                    publicKey: hostConnection?.remotePublicKey || hostData.publicKey
-                });
-                processedIds.add(hostData.id);
-            }
-            // Add guest's own player info with isLocal=true
-            infos.push(localPlayer);
-            processedIds.add(localPlayer.id);
-        }
+        // 1. Always include local player
+        infos.push(localPlayer);
+        if (localPlayer.publicKey) processedPublicKeys.add(localPlayer.publicKey);
 
-        // 2. Other participants
+        // 2. Add other participants from the synced list (externalParticipants)
+        externalParticipants.forEach(p => {
+            if (!p.publicKey || processedPublicKeys.has(p.publicKey)) return;
+            infos.push({
+                id: p.id,
+                name: p.name,
+                status: isGameStarted.value ? 'game' : 'lobby',
+                isConnected: true, 
+                isLocal: false,
+                isHost: p.isHost,
+                publicKey: p.publicKey
+            });
+            processedPublicKeys.add(p.publicKey);
+        });
+
+        // 3. Add direct connections that haven't synced to externalParticipants yet
         if (isInitiator.value) {
-            (connectionList.value as any).forEach((c: any) => {
-                if (!processedIds.has(c.id)) {
-                    const storedPeer = storedParticipants.find(p => p.id === c.id);
-                    const publicKey = c.remotePublicKey || storedPeer?.publicKey;
+            // Use live connections to bypass computed reactivity lag
+            const actorConnections = (boardSnapshot.value as any)?.context?.connections || new Map();
+            const allConnections = new Map(actorConnections);
+            pendingConnections.value.forEach((c: any) => allConnections.set(c.id, c));
+
+            allConnections.forEach((c: any) => {
+                const publicKey = c.remotePublicKey;
+                if (publicKey && !processedPublicKeys.has(publicKey)) {
                     infos.push({
                         id: c.id,
-                        name: c.remotePlayerName || storedPeer?.name || "Anonymous",
+                        name: c.remotePlayerName || "Anonymous",
                         status: ctx.playerStatuses.get(c.id) || 'lobby',
                         isConnected: c.status === ConnectionStatus.connected,
                         isLocal: false,
                         isHost: false,
                         publicKey: publicKey
                     });
-                    processedIds.add(c.id);
+                    processedPublicKeys.add(publicKey);
                 }
-            });
-        } else if (externalParticipants.length > 0) {
-            externalParticipants.forEach(p => {
-                if (p.isHost || processedIds.has(p.id)) return;
-                if (p.id === localPlayer.id || p.id === identity.value?.id || p.publicKey === identity.value?.publicKey) return;
-                infos.push({
-                    id: p.id,
-                    name: p.name,
-                    status: isGameStarted.value ? 'game' : 'lobby',
-                    isConnected: true,
-                    isLocal: false,
-                    isHost: false,
-                    publicKey: p.publicKey
-                });
-                processedIds.add(p.id);
             });
         }
 
-        // 3. Historical
+        // 4. Historical
         storedParticipants.forEach(p => {
-            if (!p.isYou && !processedIds.has(p.id)) {
+            if (!p.isYou && p.publicKey && !processedPublicKeys.has(p.publicKey)) {
                 infos.push({
                     id: p.id,
                     name: p.name,
@@ -158,6 +175,7 @@ export function useGameSession() {
                     isHost: p.isHost,
                     publicKey: p.publicKey
                 });
+                processedPublicKeys.add(p.publicKey);
             }
         });
 
@@ -167,7 +185,7 @@ export function useGameSession() {
     watchEffect(() => {
         const s = boardSnapshot.value as any;
         if (s?.status === 'approving' || s?.status === 'hosting' || s?.status === 'preparation' || s?.status === 'playing' || s?.status === 'finished') {
-            if (boardId.value && boardId.value !== 'manual') {
+            if (boardId.value && route.query.mode !== 'manual') {
                 SessionManager.saveSession({
                     gameId: gameId.value,
                     boardId: boardId.value,
@@ -191,6 +209,90 @@ export function useGameSession() {
     const lastStatusMap = new Map<string, string>();
     const lastSignalMap = new Map<string, string>();
 
+    const syncParticipants = () => {
+        if (!isInitiator.value || !currentBoardActor.value || !identity.value) return;
+        
+        // Use direct maps to bypass computed lag
+        const actorConnections = (boardSnapshot.value as any)?.context?.connections || new Map();
+        const liveConnections = new Map(actorConnections);
+        pendingConnections.value.forEach((c: any, id: string) => liveConnections.set(id, c));
+
+        const participants = [
+            { id: identity.value.id, name: identity.value.name, isHost: true, publicKey: identity.value.publicKey },
+            ...Array.from(liveConnections.values())
+                .filter((c: any) => c.status === ConnectionStatus.connected)
+                .map((c: any) => ({
+                    id: c.id,
+                    name: c.remotePlayerName || "Anonymous",
+                    isHost: false,
+                    publicKey: c.remotePublicKey
+                }))
+        ];
+        
+        currentBoardActor.value.send({ type: 'SYNC_PARTICIPANTS', participants });
+        
+        liveConnections.forEach((c: any) => {
+            if (c.status === ConnectionStatus.connected) {
+                c.send(JSON.stringify(createLobbyMessage('SYNC_PARTICIPANTS' as any, participants)));
+            }
+        });
+    };
+
+    const registerConnectionHandlers = (connection: Connection) => {
+        const actor = currentBoardActor.value;
+        if (!actor || (connection as any)._hasListener) return;
+
+        connection.addMessageListener((data: string) => {
+            try {
+                const msg = JSON.parse(data);
+                // Allow PLAYER_IDENTITY even if not in standard enum
+                if (msg.type === 'PLAYER_IDENTITY') {
+                    connection.remotePlayerName = msg.payload.name;
+                    connection.remotePublicKey = msg.payload.publicKey;
+                    updateConnection(connection);
+                    if (isInitiator.value) syncParticipants();
+                    return;
+                }
+                
+                if (!isLobbyMessage(msg)) return;
+                if (msg.type === 'START_GAME') actor.send({ type: 'START_GAME' });
+                if (msg.type === 'GAME_STARTED') actor.send({ type: 'GAME_STARTED' });
+                if (msg.type === 'GAME_RESET') actor.send({ type: 'GAME_RESET' });
+                if (msg.type === 'NEW_BOARD') router.replace(`/games/${gameId.value}/${msg.payload}`);
+                if (msg.type === 'SYNC_PLAYER_STATUS') actor.send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: msg.payload });
+                if (msg.type === 'SYNC_PARTICIPANTS') actor.send({ type: 'SYNC_PARTICIPANTS', participants: msg.payload });
+                if (msg.type === 'SYNC_LEDGER') {
+                    const entries = msg.payload as any[];
+                    for (const entry of entries) {
+                        if (entry.signature && entry.signerPublicKey) {
+                            SecureWallet.verify(entry.action, entry.signature, entry.signerPublicKey).then(isValid => {
+                                if (!isValid) logger.error("Invalid signature in ledger entry", entry);
+                            });
+                        }
+                    }
+                    actor.send({ type: 'SYNC_LEDGER', ledger: msg.payload });
+                }
+            } catch { }
+        });
+
+        const onOpen = () => {
+            if (isInitiator.value) syncParticipants();
+        };
+
+        if (connection.dataChannel?.readyState === 'open') {
+            onOpen();
+        } else if (connection.dataChannel) {
+            const channel = connection.dataChannel;
+            const originalOnOpen = channel.onopen;
+            channel.onopen = (e) => {
+                if (originalOnOpen) originalOnOpen.call(channel, e);
+                onOpen();
+            };
+        }
+
+        (connection as any)._hasListener = true;
+    };
+
     const updateConnection = (connection: Connection) => {
         const actor = currentBoardActor.value;
         if (!actor) return;
@@ -205,41 +307,18 @@ export function useGameSession() {
         lastSignalMap.set(connection.id, existingSignal);
 
         actor.send({ type: 'UPDATE_CONNECTION', connection });
-
-        // Setup message listener if not present
-        if (!(connection as any)._hasListener) {
-            connection.addMessageListener((data: string) => {
-                try {
-                    const msg = JSON.parse(data);
-                    if (!isLobbyMessage(msg)) return;
-                    if (msg.type === 'START_GAME') actor.send({ type: 'START_GAME' });
-                    if (msg.type === 'GAME_STARTED') actor.send({ type: 'GAME_STARTED' });
-                    if (msg.type === 'GAME_RESET') actor.send({ type: 'GAME_RESET' });
-                    if (msg.type === 'NEW_BOARD') router.replace(`/games/${gameId.value}/${msg.payload}`);
-                    if (msg.type === 'SYNC_PLAYER_STATUS') actor.send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: msg.payload });
-                    if (msg.type === 'SYNC_PARTICIPANTS') actor.send({ type: 'SYNC_PARTICIPANTS', participants: msg.payload });
-                    if (msg.type === 'SYNC_LEDGER') {
-                        const entries = msg.payload as any[];
-                        for (const entry of entries) {
-                            if (entry.signature && entry.signerPublicKey) {
-                                SecureWallet.verify(entry.action, entry.signature, entry.signerPublicKey).then(isValid => {
-                                    if (!isValid) logger.error("Invalid signature in ledger entry", entry);
-                                });
-                            }
-                        }
-                        actor.send({ type: 'SYNC_LEDGER', ledger: msg.payload });
-                    }
-                } catch { }
-            });
-            (connection as any)._hasListener = true;
-        }
+        registerConnectionHandlers(connection);
     };
 
     // Signaling Setup (moved from useLobby)
-    const setupSignaling = async (gameIdArg: string, boardIdArg?: string) => {
+    const setupSignaling = async (gameIdArg: string, boardIdArg?: string, isManualMode?: boolean) => {
         const currentBoardId = boardIdArg || gameIdArg;
+        
+        // Host guard: don't connect if we are the host but haven't picked server mode yet
+        if (isInitiator.value && hostSignalingMode.value !== 'server') return;
+
         logger.sig("setupSignaling called with gameId:", gameIdArg, "boardId:", boardIdArg, "resolved currentBoardId:", currentBoardId);
-        if (!currentBoardId) return;
+        if (!currentBoardId || currentBoardId === 'manual' || isManualMode || hostSignalingMode.value === 'manual') return;
 
         if (connectionBoardId.value !== currentBoardId && signalingClient.value?.isConnected) {
             logger.sig("Switching signaling board assignment from", connectionBoardId.value, "to", currentBoardId);
@@ -330,9 +409,9 @@ export function useGameSession() {
                             // Create connection and accept offer
                             // Note: use gameIdArg here
                             const actor = getBoardActor(targetId, ident.name, false);
-                            const connection = new Connection((c) => {
+                            const connection = shallowReactive(new Connection((c) => {
                                 actor.send({ type: 'UPDATE_CONNECTION', connection: c });
-                            });
+                            }));
 
                             // Add message listener to route messages to board actor
                             connection.addMessageListener((data: string) => {
@@ -373,11 +452,11 @@ export function useGameSession() {
                             if (msg.publicKey) connection.remotePublicKey = msg.publicKey;
                             if (msg.peerName) connection.remotePlayerName = msg.peerName;
 
-                            connection.acceptOffer(msg.offer, ident.name).then(() => {
+                            connection.acceptOffer(msg.offer, ident.name, ident.publicKey).then(() => {
                                 const checkAnswer = setInterval(() => {
                                     if (connection.signal && signalingClient.value) {
                                         clearInterval(checkAnswer);
-                                        signalingClient.value.guestAnswer(msg.from!, ident.publicKey, connection.signal);
+                                        signalingClient.value.guestAnswer(msg.from!, ident.publicKey, connection.serializedSignal);
                                     }
                                 }, 100);
                             }).catch(e => {
@@ -397,10 +476,8 @@ export function useGameSession() {
                                 let answerSignal = msg.answer;
                                 if (!(msg.answer instanceof Signal) && typeof msg.answer === 'object') {
                                     answerSignal = new Signal(
-                                        (msg.answer as any).connectionId,
                                         (msg.answer as any).session,
-                                        (msg.answer as any).playerName,
-                                        (msg.answer as any).iceCandidates || []
+                                        (msg.answer as any).playerName
                                     );
                                 }
 
@@ -464,9 +541,9 @@ export function useGameSession() {
     const autoApprovePeer = async (request: PendingJoinRequest) => {
         logger.sig("Approving peer:", request.peerName, "publicKey:", request.publicKey);
 
-        const connection = new Connection((c) => {
-            currentBoardActor.value?.send({ type: 'UPDATE_CONNECTION', connection: c });
-        });
+        const connection = shallowReactive(new Connection((c) => {
+            updateConnection(c);
+        }));
 
         connection.onClose = () => {
             currentBoardActor.value?.send({
@@ -476,11 +553,10 @@ export function useGameSession() {
             pendingConnections.value.delete(request.connectionId);
         };
 
+        const ident = await waitForIdentity();
         connection.remotePublicKey = request.publicKey;
         connection.openDataChannel();
-        await connection.prepareOfferSignal(
-            boardSnapshot.value?.context?.playerName || identity.value?.name || "Anonymous"
-        );
+        await connection.prepareOfferSignal(ident.name, ident.publicKey);
 
         pendingConnections.value.set(request.connectionId, connection);
 
@@ -615,23 +691,102 @@ export function useGameSession() {
         }
     };
 
-    const updateOffer = async (connection: Connection, offer: string) => {
-        try {
-            const signal = Signal.fromString(offer);
-            const wallet = SecureWallet.getInstance();
-            const ident = await wallet.getIdentity();
-            if (ident) {
-                await connection.acceptOffer(signal, ident.name);
-                currentBoardActor.value?.send({ type: 'UPDATE_CONNECTION', connection });
+    const onAddManualConnection = async () => {
+        logger.sig("Host generating manual WebRTC connection");
+        const ident = await waitForIdentity();
+        const connection = shallowReactive(new Connection((c: any) => {
+            logger.sig(`Manual Host Connection status: ${c.status} for ${c.id}`);
+            updateConnection(c);
+        }));
+        
+        connection.localPlayerId = ident.id;
+        connection.localPlayerName = ident.name || "Anonymous";
+        connection.localPublicKey = ident.publicKey;
+        
+        connection.onClose = () => {
+            currentBoardActor.value?.send({
+                type: 'PEER_DISCONNECTED',
+                connectionId: connection.id
+            });
+        };
+
+        connection.openDataChannel();
+        await connection.prepareOfferSignal(connection.localPlayerName, ident.publicKey);
+        
+        pendingConnections.value.set(connection.id, connection as any);
+        pendingConnections.value = new Map(pendingConnections.value); // Trigger sync
+        updateConnection(connection);
+    };
+
+    const onCreateGuestManualConnection = async (initialOffer?: string) => {
+        if (manualGuestConnectionId.value) {
+            const existing = pendingConnections.value.get(manualGuestConnectionId.value);
+            if (existing && existing.status !== ConnectionStatus.closed) {
+                logger.sig("Guest manual connection already exists, skipping duplicate initialization", manualGuestConnectionId.value);
+                if (initialOffer && existing.status === ConnectionStatus.readyToAccept) {
+                    logger.sig("Applying initialOffer to existing connection");
+                    updateOffer(existing as any, initialOffer);
+                }
+                return;
             }
-        } catch (e) {
-            logger.error("Failed to update offer:", e);
+        }
+
+        logger.sig("Guest creating placeholder for manual join, offering initialOffer?", !!initialOffer);
+        const ident = await waitForIdentity();
+        const connection = shallowReactive(new Connection((c: any) => {
+            logger.sig(`Manual Guest Connection status: ${c.status} for ${c.id}`);
+            updateConnection(c);
+        }));
+        
+        connection.localPlayerId = ident.id;
+        connection.localPlayerName = ident.name || "Anonymous";
+        connection.localPublicKey = ident.publicKey;
+        
+        manualGuestConnectionId.value = connection.id;
+        pendingConnections.value.set(connection.id, connection as any);
+        pendingConnections.value = new Map(pendingConnections.value); // Trigger sync
+
+        connection.onClose = () => {
+            logger.sig(`Manual Guest Connection closed: ${connection.id}`);
+            if (manualGuestConnectionId.value === connection.id) {
+                manualGuestConnectionId.value = null;
+            }
+            currentBoardActor.value?.send({
+                type: 'PEER_DISCONNECTED',
+                connectionId: connection.id
+            });
+        };
+
+        connection.status = ConnectionStatus.readyToAccept;
+        connection.signal = new Signal({ type: 'offer', sdp: '' }, '');
+        updateConnection(connection);
+
+        if (initialOffer) {
+            // Speed up automated intake
+            setTimeout(() => {
+                logger.sig("Auto-applying parsed query string offer");
+                updateOffer(connection, initialOffer);
+            }, 0);
         }
     };
 
-    const updateAnswer = (connection: Connection, answer: string) => {
+    const updateOffer = async (connection: Connection, offer: string) => {
         try {
-            const signal = Signal.fromString(answer);
+            const signal = await Signal.decompress(offer);
+            const ident = await waitForIdentity();
+            if (ident) {
+                connection.setDataChannelCallback();
+            await connection.acceptOffer(signal, ident.name, ident.publicKey);
+                currentBoardActor.value?.send({ type: 'UPDATE_CONNECTION', connection });
+            }
+        } catch (e) {
+            logger.error("Failed to accept offer:", e);
+        }
+    };
+
+    const updateAnswer = async (connection: Connection, answer: string) => {
+        try {
+            const signal = await Signal.decompress(answer);
             connection.acceptAnswer(signal);
             currentBoardActor.value?.send({ type: 'UPDATE_CONNECTION', connection });
         } catch (e) {
@@ -643,6 +798,8 @@ export function useGameSession() {
         if (document.visibilityState === 'visible') {
             logger.sig("App became visible, checking signaling status...");
             const hasActiveP2P = connectedPeers.value.length > 0;
+
+            if (boardId.value === 'manual' || hostSignalingMode.value === 'manual') return;
 
             if (signalingClient.value && !signalingClient.value.isConnected) {
                 // Only re-register if we are not in an active game session with peers
@@ -698,15 +855,20 @@ export function useGameSession() {
         });
     }, { deep: true, immediate: true });
 
-    watch([boardId, isInsideBoard], async () => {
-        const shouldConnect = isInsideBoard.value && boardId.value;
+    watch([boardId, isInsideBoard, boardSnapshot], async () => {
+        // Wait for machine to transition out of idle so we know for sure if we are initiator
+        if (!boardSnapshot.value || boardSnapshot.value.matches('idle')) return;
+
+        // Only auto-connect for guests joining via standard route. 
+        // Hosts now initialize via `initializeServerSignaling()` explicitly.
+        const shouldConnect = isInsideBoard.value && boardId.value && route.query.mode !== 'manual' && !isInitiator.value;
         if (shouldConnect) {
             await setupSignaling(gameId.value, boardId.value);
         }
     }, { immediate: true });
 
     watch([signalingClient, boardSnapshot, boardId], async () => {
-        if (!signalingClient.value?.isConnected || !boardId.value || hasRegistered.value) return;
+        if (!signalingClient.value?.isConnected || !boardId.value || route.query.mode === 'manual' || hasRegistered.value) return;
 
         const wallet = SecureWallet.getInstance();
         const ident = await wallet.getIdentity();
@@ -718,7 +880,7 @@ export function useGameSession() {
         const isHosting = state.matches('hosting') || state.matches('preparation');
         const isJoining = state.matches('joining');
 
-        if (isHosting && state.context.isInitiator) {
+        if (isHosting && state.context.isInitiator && hostSignalingMode.value === 'server') {
             signalingClient.value.hostRegister(boardId.value, gameId.value, ident.name, ident.publicKey);
             hasRegistered.value = true;
         } else if (isJoining || !state.context.isInitiator) {
@@ -728,7 +890,7 @@ export function useGameSession() {
     });
 
     watch(boardId, async (newId) => {
-        if (newId && newId !== 'manual' && isInsideBoard.value) {
+        if (newId && route.query.mode !== 'manual' && isInsideBoard.value) {
             const session = await SessionManager.getSession(newId);
             const actor = getBoardActor(newId, identity.value?.name || "Anonymous", false);
             const ctx = (actor.getSnapshot() as any).context;
@@ -752,6 +914,16 @@ export function useGameSession() {
             }
         });
     });
+
+    const initializeServerSignaling = async () => {
+        hostSignalingMode.value = 'server';
+        await setupSignaling(gameId.value, boardId.value);
+    };
+
+    const initializeManualSignaling = () => {
+        hostSignalingMode.value = 'manual';
+        onAddManualConnection();
+    };
 
     return {
         identity,
@@ -781,7 +953,13 @@ export function useGameSession() {
         onCancelSignaling,
         onBackToGames,
         onBackToDiscovery,
+        isKnownIdentity,
+        onAddManualConnection,
+        onCreateGuestManualConnection,
         updateOffer,
-        updateAnswer
+        updateAnswer,
+        hostSignalingMode,
+        initializeServerSignaling,
+        initializeManualSignaling
     };
 }

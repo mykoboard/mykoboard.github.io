@@ -6,7 +6,8 @@ import { useGameSession } from '../composables/useGameSession'
 import { Connection } from '../lib/webrtc'
 import { db, type KnownIdentity } from '../lib/db'
 import { toast } from 'vue-sonner'
-import PreparationPhase from '../components/board/PreparationPhase.vue'
+import PreparationPhaseServer from '../components/board/PreparationPhaseServer.vue'
+import PreparationPhaseManual from '../components/board/PreparationPhaseManual.vue'
 import ActivePhase from '../components/board/ActivePhase.vue'
 import FinishedPhase from '../components/board/FinishedPhase.vue'
 import Players from '../components/board/Players.vue'
@@ -30,7 +31,7 @@ const {
     send,
     playerInfos,
     connectedPeers: baseConnectedPeers,
-    pendingSignaling,
+    pendingSignaling: basePendingSignaling,
     pendingJoinRequests,
     isInitiator,
     isGameStarted,
@@ -39,19 +40,22 @@ const {
     onApprovePeer,
     onRejectPeer,
     saveIdentityOnApprove,
-    connectWithOffer,
     updateOffer,
     updateAnswer,
     startGame,
     onFinishGame,
     onAddLedger,
-    handlePlayAgain,
     onAcceptGuest,
     onRejectGuest,
     onCancelSignaling,
     onBackToGames: rawCloseAndBack,
     signalingClient,
-    isServerConnecting
+    isServerConnecting,
+    onAddManualConnection,
+    onCreateGuestManualConnection,
+    hostSignalingMode,
+    initializeServerSignaling,
+    initializeManualSignaling
 } = useGameSession()
 
 const handleSavePlayerIdentity = async (player: PlayerInfo) => {
@@ -79,6 +83,7 @@ const handleSavePlayerIdentity = async (player: PlayerInfo) => {
 }
 
 const connectedPeers = computed(() => baseConnectedPeers.value as Connection[])
+const pendingSignaling = computed(() => basePendingSignaling.value as Connection[])
 const onBackToGames = () => {
     rawCloseAndBack();
     onBackToDiscovery();
@@ -110,8 +115,15 @@ onMounted(async () => {
             send({ type: 'HOST', maxPlayers, boardId: boardId.value })
         } else {
             // User is a guest joining via link
-            console.log('[BOARDVIEW] Initializing GUEST state for boardId:', boardId.value)
+            const isManualMode = route.query.mode === 'manual'
+            console.log(`[BOARDVIEW] Initializing GUEST state for boardId: ${boardId.value} (manual: ${isManualMode})`)
             send({ type: 'JOIN', boardId: boardId.value })
+            
+            if (isManualMode) {
+                const offer = route.query.offer as string | undefined
+                // Immediate initialization attempt
+                onCreateGuestManualConnection(offer);
+            }
         }
     }
     
@@ -154,34 +166,57 @@ onUnmounted(() => {
           :framework="game.framework"
         />
 
-        <PreparationPhase
-          v-else
-          :state="snapshot"
-          :isInitiator="isInitiator"
-          :signalingMode="signalingMode"
-          :isServerConnecting="isServerConnecting"
-          :signalingClient="signalingClient"
-          :pendingSignaling="pendingSignaling"
-          :pendingJoinRequests="pendingJoinRequests"
-          :isKnownIdentity="isKnownIdentity"
-          :onStartGame="startGame"
-          :onHostAGame="onHostAGame"
-          :onUpdateOffer="updateOffer"
-          :onUpdateAnswer="updateAnswer"
-          :onCloseSession="onBackToGames"
-          :onBackToLobby="onBackToDiscovery"
-          :onAcceptGuest="onAcceptGuest"
-          :onRejectGuest="onRejectGuest"
-          :onApprovePeer="onApprovePeer"
-          :onRejectPeer="onRejectPeer"
-          :onSaveIdentity="saveIdentityOnApprove"
-          :onCancelSignaling="onCancelSignaling"
-          :onRemovePlayer="(id) => send({ type: 'REMOVE_PLAYER', playerId: id })"
-          :playerCount="playerInfos.length"
-          :maxPlayers="snapshot?.context?.maxPlayers || 2"
-          :boardId="boardId"
-          :gameId="gameId"
-        />
+        <template v-else>
+          <PreparationPhaseManual
+            v-if="route.query.mode === 'manual' || hostSignalingMode === 'manual'"
+            :state="snapshot"
+            :isInitiator="isInitiator"
+            :pendingSignaling="pendingSignaling"
+            :onStartGame="startGame"
+            :onUpdateOffer="updateOffer"
+            :onUpdateAnswer="updateAnswer"
+            :onCloseSession="onBackToGames"
+            :onBackToLobby="onBackToDiscovery"
+            :onCancelSignaling="onCancelSignaling"
+            :onAddManualConnection="onAddManualConnection"
+            :playerCount="playerInfos.length"
+            :maxPlayers="snapshot?.context?.maxPlayers || 2"
+            :boardId="boardId"
+            :gameId="gameId"
+          />
+          <PreparationPhaseServer
+            v-else
+            :state="snapshot"
+            :isInitiator="isInitiator"
+            :signalingMode="signalingMode"
+            :isServerConnecting="isServerConnecting"
+            :signalingClient="signalingClient"
+            :pendingSignaling="pendingSignaling"
+            :pendingJoinRequests="pendingJoinRequests"
+            :isKnownIdentity="isKnownIdentity"
+            :hostSignalingMode="hostSignalingMode"
+            :initializeServerSignaling="initializeServerSignaling"
+            :initializeManualSignaling="initializeManualSignaling"
+            :onStartGame="startGame"
+            :onHostAGame="onHostAGame"
+            :onUpdateOffer="updateOffer"
+            :onUpdateAnswer="updateAnswer"
+            :onCloseSession="onBackToGames"
+            :onBackToLobby="onBackToDiscovery"
+            :onAcceptGuest="onAcceptGuest"
+            :onRejectGuest="onRejectGuest"
+            :onApprovePeer="onApprovePeer"
+            :onRejectPeer="onRejectPeer"
+            :onSaveIdentity="saveIdentityOnApprove"
+            :onCancelSignaling="onCancelSignaling"
+            :onAddManualConnection="onAddManualConnection"
+            :onRemovePlayer="(id) => send({ type: 'REMOVE_PLAYER', playerId: id })"
+            :playerCount="playerInfos.length"
+            :maxPlayers="snapshot?.context?.maxPlayers || 2"
+            :boardId="boardId"
+            :gameId="gameId"
+          />
+        </template>
 
         <div class="mt-12 max-w-2xl">
           <Players 

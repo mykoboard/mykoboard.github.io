@@ -12,7 +12,7 @@ import {
   AlertDialogCancel, 
   AlertDialogAction 
 } from 'radix-vue'
-import SignalingStep from './SignalingStep.vue'
+
 import type { Connection } from '../../lib/webrtc'
 
 interface PendingJoinRequest {
@@ -43,12 +43,16 @@ const props = defineProps<{
     onApprovePeer?: (request: PendingJoinRequest) => void;
     onRejectPeer?: (request: PendingJoinRequest) => void;
     onSaveIdentity?: (request: PendingJoinRequest) => Promise<void>;
-    onCancelSignaling: (connection: Connection) => void;
     onRemovePlayer: (id: string) => void;
+    onCancelSignaling: (connection: Connection) => void;
+    onAddManualConnection?: () => void;
     playerCount: number;
     maxPlayers: number;
     boardId?: string;
     gameId?: string;
+    hostSignalingMode?: 'server' | 'manual' | null;
+    initializeServerSignaling?: () => void;
+    initializeManualSignaling?: () => void;
 }>()
 
 const friendStatus = ref<Record<string, boolean>>({})
@@ -69,9 +73,11 @@ const truncateKey = (key: string) => {
 
 const isCopied = ref(false)
 
-const sessionLink = computed(() => {
-    return `${window.location.origin}${window.location.pathname}#/games/${props.gameId}/${props.boardId}`
+const offerUrlBase = computed(() => {
+    return `${window.location.origin}${window.location.pathname}#/games/${props.gameId || 'x'}/${props.boardId || 'y'}`
 })
+
+const sessionLink = offerUrlBase
 
 const handleCopyLink = async () => {
     try {
@@ -112,16 +118,16 @@ const handleApprove = async (request: PendingJoinRequest) => {
     delete saveIdentityFlags.value[request.connectionId]
 }
 
-const isPreparation = computed(() => props.state.matches('preparation'))
-const isHosting = computed(() => props.state.matches('hosting'))
-const isJoining = computed(() => props.state.matches('joining'))
-const isApproving = computed(() => props.state.matches('approving'))
+const isPreparation = computed(() => props.state?.matches('preparation') || false)
+const isHosting = computed(() => props.state?.matches('hosting') || false)
+const isJoining = computed(() => props.state?.matches('joining') || false)
+const isApproving = computed(() => props.state?.matches('approving') || false)
 </script>
 
 <template>
   <div class="space-y-8">
     <!-- Host Approval Overlay -->
-    <div v-if="isApproving && state.context.pendingGuest" class="fixed inset-0 z-[100] flex items-center justify-center bg-[#0A0A0A]/80 backdrop-blur-xl animate-fade-in p-6">
+    <div v-if="isApproving && state?.context?.pendingGuest" class="fixed inset-0 z-[100] flex items-center justify-center bg-[#0A0A0A]/80 backdrop-blur-xl animate-fade-in p-6">
       <div class="glass-dark p-10 w-full max-w-md shadow-2xl border border-white/10 rounded-[2.5rem] space-y-8 animate-zoom-in">
         <div class="flex flex-col items-center text-center space-y-6">
           <div class="h-20 w-20 bg-primary/10 rounded-[1.5rem] flex items-center justify-center border border-primary/20 shadow-neon">
@@ -130,7 +136,7 @@ const isApproving = computed(() => props.state.matches('approving'))
           <div class="space-y-2">
             <h2 class="text-2xl font-black text-white uppercase tracking-tight">Handshake Request</h2>
             <p class="text-white/40 uppercase tracking-widest text-[10px] font-medium leading-relaxed">
-              Entity <span class="font-black text-primary px-1">{{ state.context.pendingGuest.name }}</span> attempts to bridge into session.
+              Entity <span class="font-black text-primary px-1">{{ state?.context?.pendingGuest?.name }}</span> attempts to bridge into session.
             </p>
           </div>
         </div>
@@ -236,7 +242,43 @@ const isApproving = computed(() => props.state.matches('approving'))
         </p>
       </div>
 
-      <div v-if="isInitiator" class="flex flex-col items-center gap-6">
+      <!-- Network Protocol Selection (Host Only) -->
+      <div v-if="isInitiator && !hostSignalingMode && !isJoining" class="flex flex-col items-center gap-6 pt-4 border-t border-white/5">
+        <h3 class="text-sm font-black text-white uppercase tracking-widest px-4 text-center">Select Network Protocol</h3>
+        <p class="text-[10px] text-white/40 uppercase tracking-[0.2em] font-medium max-w-sm text-center">
+          Choose how peer nodes will discover and bridge to this session.
+        </p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+          <button
+            @click="initializeServerSignaling"
+            class="group relative flex flex-col items-center justify-center p-6 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/40 rounded-3xl transition-all duration-300"
+          >
+            <div class="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 rounded-3xl transition-opacity duration-500"></div>
+            <div class="h-12 w-12 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 mb-4 group-hover:scale-110 transition-transform duration-500">
+               <div class="w-2.5 h-2.5 bg-primary rounded-full animate-pulse shadow-neon" />
+            </div>
+            <span class="text-xs font-black text-white uppercase tracking-widest">Public Discovery</span>
+            <span class="text-[9px] text-white/40 uppercase tracking-widest mt-2 whitespace-nowrap">AWS Signaling Relay</span>
+          </button>
+
+          <button
+            @click="initializeManualSignaling"
+            class="group relative flex flex-col items-center justify-center p-6 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/40 rounded-3xl transition-all duration-300"
+          >
+            <div class="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 rounded-3xl transition-opacity duration-500"></div>
+            <div class="h-12 w-12 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 mb-4 group-hover:scale-110 transition-transform duration-500">
+               <Link class="w-5 h-5 text-primary" />
+            </div>
+            <span class="text-xs font-black text-white uppercase tracking-widest">Offline Bridge</span>
+            <span class="text-[9px] text-white/40 uppercase tracking-widest mt-2 whitespace-nowrap">Manual URL Vectors</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- General Server Setup Steps (Only shown after host picks 'server' or if guest) -->
+      <template v-else>
+        <div v-if="isInitiator" class="flex flex-col items-center gap-6">
         <button
           v-if="isPreparation"
           @click="onStartGame"
@@ -336,7 +378,7 @@ const isApproving = computed(() => props.state.matches('approving'))
       <!-- Session Shareability & Manual Signaling -->
       <div v-if="isInitiator" class="pt-8 border-t border-white/5 space-y-6">
         <!-- Share Link (Server Mode) -->
-        <div v-if="signalingMode === 'server'" class="glass-dark p-8 rounded-[2rem] border border-white/10 shadow-glass-dark space-y-6 group hover:border-primary/30 transition-all duration-500">
+        <div class="glass-dark p-8 rounded-[2rem] border border-white/10 shadow-glass-dark space-y-6 group hover:border-primary/30 transition-all duration-500">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               <div class="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
@@ -376,30 +418,9 @@ const isApproving = computed(() => props.state.matches('approving'))
           </div>
         </div>
 
-        <!-- Manual Signaling -->
-        <div v-if="signalingMode === 'manual' && pendingSignaling.length > 0" class="space-y-4 text-left">
-          <h3 class="text-[11px] font-black text-white/20 uppercase tracking-[0.3em] px-1">Pending Link Authentications</h3>
-          <div class="grid grid-cols-1 gap-6">
-            <SignalingStep
-              v-for="conn in pendingSignaling"
-              :key="conn.id"
-              :connection="conn"
-              :onOfferChange="onUpdateOffer"
-              :onAnswerChange="onUpdateAnswer"
-              :onCancel="onCancelSignaling"
-            />
-          </div>
-        </div>
-      </div>
 
-      <div v-if="!isInitiator && isJoining && signalingMode === 'manual' && pendingSignaling.length > 0" class="pt-8 border-t border-white/5 text-left">
-        <SignalingStep
-          :connection="pendingSignaling[0]"
-          :onOfferChange="onUpdateOffer"
-          :onAnswerChange="onUpdateAnswer"
-          :onCancel="onCancelSignaling"
-        />
-      </div>
+        </div>
+      </template>
     </div>
 
     <div v-if="!isHosting && !isJoining && !isPreparation && !isApproving" class="py-24 flex flex-col items-center justify-center space-y-6 border border-white/5 bg-white/5 rounded-[3rem] backdrop-blur-sm animate-fade-in">
@@ -421,4 +442,3 @@ const isApproving = computed(() => props.state.matches('approving'))
     </div>
   </div>
 </template>
-
