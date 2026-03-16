@@ -3,14 +3,14 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getGameById } from '../lib/GameRegistry'
 import { useGameSession } from '../composables/useGameSession'
-import { Connection } from '../lib/webrtc'
+import { Connection, ConnectionStatus } from '../lib/webrtc'
 import { db, type KnownIdentity } from '../lib/db'
 import { toast } from 'vue-sonner'
 import PreparationPhaseServer from '../components/board/PreparationPhaseServer.vue'
 import PreparationPhaseManual from '../components/board/PreparationPhaseManual.vue'
 import ActivePhase from '../components/board/ActivePhase.vue'
 import FinishedPhase from '../components/board/FinishedPhase.vue'
-import Players from '../components/board/Players.vue'
+import LobbyPlayerList from '../components/board/LobbyPlayerList.vue'
 import type { PlayerInfo } from '@mykoboard/integration'
 
 const route = useRoute()
@@ -21,7 +21,6 @@ const boardId = computed(() => route.params.boardId as string)
 const game = computed(() => getGameById(gameId.value || ""))
 
 const onBackToDiscovery = () => router.push('/games')
-const onBackToLobby = () => router.push('/games')
 
 // Always use server mode for signaling
 const signalingMode = 'server' as const
@@ -55,7 +54,9 @@ const {
     onCreateGuestManualConnection,
     hostSignalingMode,
     initializeServerSignaling,
-    initializeManualSignaling
+    initializeManualSignaling,
+    topologyMode,
+    setTopologyMode
 } = useGameSession()
 
 const handleSavePlayerIdentity = async (player: PlayerInfo) => {
@@ -84,10 +85,68 @@ const handleSavePlayerIdentity = async (player: PlayerInfo) => {
 
 const connectedPeers = computed(() => baseConnectedPeers.value as Connection[])
 const pendingSignaling = computed(() => basePendingSignaling.value as Connection[])
+const currentTurnPlayerId = computed(() => (snapshot.value as any)?.context?.currentPlayer || (snapshot.value as any)?.context?.turn || null)
+
 const onBackToGames = () => {
     rawCloseAndBack();
     onBackToDiscovery();
 }
+
+const topology = computed(() => {
+    const edges: { from: string; to: string }[] = []
+    const seen = new Set<string>()
+    const mode = topologyMode.value
+    const host = playerInfos.value.find(p => p.isHost)
+    const globalMap = (snapshot.value as any)?.context?.topologyMap as Map<string, string[]> | undefined
+
+    if (globalMap && globalMap.size > 0) {
+        // Use Global Topology Map
+        globalMap.forEach((targets, source) => {
+            targets.forEach(target => {
+                const pair = [source, target].sort()
+                const key = pair.join(':')
+                if (!seen.has(key)) {
+                    edges.push({ from: pair[0], to: pair[1] })
+                    seen.add(key)
+                }
+            })
+        })
+        return edges
+    }
+
+    // Fallback/Legacy Logic (for Star mode or early bootstrap)
+    if (mode === 'star') {
+        // Star Topology: Only show lines from Host to everyone else
+        if (!host) return edges
+        
+        playerInfos.value.forEach(player => {
+            if (player.id !== host.id && player.isConnected) {
+                edges.push({ from: host.id, to: player.id })
+            }
+        })
+    } else {
+        // Mesh Topology: Show all direct P2P connections we know about
+        // Local connections
+        connectedPeers.value.forEach(conn => {
+            if (conn.status === ConnectionStatus.connected) {
+                const localPlayer = playerInfos.value.find(p => p.isLocal)
+                if (localPlayer) {
+                    const pair = [localPlayer.id, conn.id].sort()
+                    const key = pair.join(':')
+                    if (!seen.has(key)) {
+                        edges.push({ from: pair[0], to: pair[1] })
+                        seen.add(key)
+                    }
+                }
+            }
+        })
+
+        // If we are Host, we also know about the P2P links we coordinated
+        // In a more advanced version, we'd sync the full topology map
+    }
+    
+    return edges
+})
 
 const isFinished = computed(() => (snapshot.value as any)?.matches('finished') || false)
 const isPreparation = computed(() => !isGameStarted.value && !isFinished.value)
@@ -219,8 +278,13 @@ onUnmounted(() => {
         </template>
 
         <div class="mt-12 max-w-2xl">
-          <Players 
+          <LobbyPlayerList 
             :players="playerInfos"
+            :connections="topology"
+            :topology-mode="topologyMode"
+            :is-initiator="isInitiator"
+            :on-set-topology-mode="setTopologyMode"
+            :currentTurnPlayerId="currentTurnPlayerId"
             :onRemove="isInitiator ? (id) => send({ type: 'REMOVE_PLAYER', playerId: id }) : undefined"
             :onSaveIdentity="handleSavePlayerIdentity"
             :isKnownIdentity="isKnownIdentity"
@@ -233,4 +297,3 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
-

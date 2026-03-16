@@ -5,7 +5,7 @@ import { useSelector } from "@xstate/vue";
 import { Connection, ConnectionStatus, Signal } from "../lib/webrtc";
 import { logger } from "../lib/logger";
 import { getGameById } from "../lib/GameRegistry";
-import { Ledger, createLobbyMessage, isLobbyMessage, PlayerInfo } from "@mykoboard/integration";
+import { Ledger, PlayerInfo } from "@mykoboard/integration";
 import { SecureWallet, type PlayerIdentity } from "../lib/wallet";
 import { SessionManager } from "../lib/sessions";
 import { SignalingService } from "../lib/signaling";
@@ -209,10 +209,30 @@ export function useGameSession() {
     const lastStatusMap = new Map<string, string>();
     const lastSignalMap = new Map<string, string>();
 
+    const broadcast = (msg: any) => {
+        const data = JSON.stringify(msg);
+        const mode = (boardSnapshot.value as any)?.context?.topologyMode || 'star';
+
+        connectedPeers.value.forEach(c => {
+            if (c.status === ConnectionStatus.connected) {
+                // In star mode: 
+                // - If I am Host (isInitiator), send to all guests.
+                // - If I am Guest, send ONLY to the Host connection.
+                if (mode === 'star' && !isInitiator.value) {
+                    if (c.isHostConnection) { // We need this flag or check remotePublicKey
+                        c.send(data);
+                    }
+                } else {
+                    // Mesh mode OR I am Host in Star mode: send to all neighbors
+                    c.send(data);
+                }
+            }
+        });
+    };
+
     const syncParticipants = () => {
         if (!isInitiator.value || !currentBoardActor.value || !identity.value) return;
         
-        // Use direct maps to bypass computed lag
         const actorConnections = (boardSnapshot.value as any)?.context?.connections || new Map();
         const liveConnections = new Map(actorConnections);
         pendingConnections.value.forEach((c: any, id: string) => liveConnections.set(id, c));
@@ -229,23 +249,208 @@ export function useGameSession() {
                 }))
         ];
         
-        currentBoardActor.value.send({ type: 'SYNC_PARTICIPANTS', participants });
+        const mode = (boardSnapshot.value as any)?.context?.topologyMode || 'star';
+        const topologyMap = (boardSnapshot.value as any)?.context?.topologyMap;
+        const topologyObj = topologyMap ? Object.fromEntries(topologyMap.entries()) : {};
+
+        currentBoardActor.value.send({ type: 'SYNC_PARTICIPANTS', participants, topologyMode: mode });
         
-        liveConnections.forEach((c: any) => {
-            if (c.status === ConnectionStatus.connected) {
-                c.send(JSON.stringify(createLobbyMessage('SYNC_PARTICIPANTS' as any, participants)));
-            }
+        broadcast({
+            namespace: 'player',
+            type: 'SYNC_PARTICIPANTS',
+            payload: { participants, topologyMode: mode, topologyMap: topologyObj }
         });
     };
 
-    const registerConnectionHandlers = (connection: Connection) => {
+    const handlePlayerNamespace = (msg: any, connection: Connection) => {
         const actor = currentBoardActor.value;
+        if (!actor) return;
+
+        const { type, payload } = msg;
+
+        if (type === 'SYNC_PARTICIPANTS') {
+            actor.send({ 
+                type: 'SYNC_PARTICIPANTS', 
+                participants: payload.participants,
+                topologyMode: payload.topologyMode,
+                topologyMap: payload.topologyMap
+            } as any);
+        }
+        
+        if (type === 'CONNECTIVITY') {
+            const { peerId, connections } = payload;
+            actor.send({ type: 'UPDATE_TOPOLOGY', peerId: peerId, connections });
+            if (isInitiator.value) {
+                syncParticipants();
+            }
+        }
+
+        // --- MEDIATED P2P SIGNALING HANDLERS ---
+        
+        if (type === 'REQUEST_P2P_OFFER') {
+            const { targetPeerId, targetPlayerName, targetPublicKey } = payload;
+            logger.sig(`[P2P] Received REQUEST_P2P_OFFER for target ${targetPeerId}`);
+            
+            (async () => {
+                const p2pConnection = shallowReactive(new Connection((c) => {
+                    updateConnection(c);
+                }));
+                
+                const ident = await waitForIdentity();
+                p2pConnection.localPlayerId = ident.id;
+                p2pConnection.localPlayerName = ident.name;
+                p2pConnection.localPublicKey = ident.publicKey;
+                p2pConnection.remotePlayerName = targetPlayerName;
+                p2pConnection.remotePublicKey = targetPublicKey;
+                
+                p2pConnection.openDataChannel();
+                await p2pConnection.prepareOfferSignal(ident.name, ident.publicKey);
+                
+                updateConnection(p2pConnection);
+                pendingConnections.value.set(targetPeerId, p2pConnection as any);
+                
+                const checkOffer = setInterval(() => {
+                    if (p2pConnection.signal) {
+                        clearInterval(checkOffer);
+                        connection.send(JSON.stringify({
+                            namespace: 'player',
+                            type: 'PEER_P2P_OFFER',
+                            payload: {
+                                targetPeerId,
+                                offer: p2pConnection.serializedSignal,
+                                peerName: ident.name,
+                                publicKey: ident.publicKey
+                            }
+                        }));
+                    }
+                }, 100);
+            })();
+        }
+
+        if (type === 'PEER_P2P_OFFER') {
+            if (isInitiator.value) {
+                // Host forwards to target
+                const { targetPeerId, offer, peerName, publicKey } = payload;
+                const targetConn = connectedPeers.value.find(c => c.id === targetPeerId);
+                if (targetConn) {
+                    logger.sig(`[P2P] Forwarding Offer from ${connection.id} to ${targetPeerId}`);
+                    targetConn.send(JSON.stringify({
+                        namespace: 'player',
+                        type: 'PEER_P2P_OFFER',
+                        payload: {
+                            sourcePeerId: connection.id,
+                            offer,
+                            peerName,
+                            publicKey
+                        }
+                    }));
+                }
+            } else {
+                // Guest receives forwarded offer
+                const { sourcePeerId, offer, peerName, publicKey } = payload;
+                logger.sig(`[P2P] Received forwarded Offer from ${sourcePeerId}`);
+                
+                (async () => {
+                    const ident = await waitForIdentity();
+                    const p2pConnection = shallowReactive(new Connection((c) => {
+                        updateConnection(c);
+                    }));
+                    
+                    p2pConnection.localPlayerId = ident.id;
+                    p2pConnection.localPlayerName = ident.name;
+                    p2pConnection.localPublicKey = ident.publicKey;
+                    p2pConnection.remotePlayerName = peerName;
+                    p2pConnection.remotePublicKey = publicKey;
+                    
+                    p2pConnection.setDataChannelCallback();
+                    await p2pConnection.acceptOffer(offer, ident.name, ident.publicKey);
+                    
+                    updateConnection(p2pConnection);
+                    pendingConnections.value.set(sourcePeerId, p2pConnection as any);
+                    
+                    const checkAnswer = setInterval(() => {
+                        if (p2pConnection.signal) {
+                            clearInterval(checkAnswer);
+                            connection.send(JSON.stringify({
+                                namespace: 'player',
+                                type: 'PEER_P2P_ANSWER',
+                                payload: {
+                                    targetPeerId: sourcePeerId,
+                                    answer: p2pConnection.serializedSignal,
+                                    peerName: ident.name,
+                                    publicKey: ident.publicKey
+                                }
+                            }));
+                        }
+                    }, 100);
+                })();
+            }
+        }
+
+        if (type === 'PEER_P2P_ANSWER') {
+            if (isInitiator.value) {
+                // Host forwards to target
+                const { targetPeerId, answer, peerName, publicKey } = payload;
+                const targetConn = connectedPeers.value.find(c => c.id === targetPeerId);
+                if (targetConn) {
+                    logger.sig(`[P2P] Forwarding Answer from ${connection.id} to ${targetPeerId}`);
+                    targetConn.send(JSON.stringify({
+                        namespace: 'player',
+                        type: 'PEER_P2P_ANSWER',
+                        payload: {
+                            sourcePeerId: connection.id,
+                            answer,
+                            peerName,
+                            publicKey
+                        }
+                    }));
+                }
+            } else {
+                // Guest receives forwarded answer
+                const { sourcePeerId, answer } = payload;
+                logger.sig(`[P2P] Received forwarded Answer from ${sourcePeerId}`);
+                const p2pConn = pendingConnections.value.get(sourcePeerId);
+                if (p2pConn) {
+                    (async () => {
+                        await p2pConn.acceptAnswer(answer);
+                        pendingConnections.value.delete(sourcePeerId);
+                    })();
+                }
+            }
+        }
+    };
+
+    const handleGameNamespace = (msg: any, connection: Connection) => {
+        const actor = currentBoardActor.value;
+        if (!actor) return;
+
+        const { type, payload } = msg;
+
+        if (type === 'START_GAME') actor.send({ type: 'START_GAME' });
+        if (type === 'GAME_STARTED') actor.send({ type: 'GAME_STARTED' });
+        if (type === 'GAME_RESET') actor.send({ type: 'GAME_RESET' });
+        if (type === 'NEW_BOARD') router.replace(`/games/${gameId.value}/${payload}`);
+        if (type === 'SYNC_PLAYER_STATUS') actor.send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: payload });
+        if (type === 'SYNC_LEDGER') actor.send({ type: 'SYNC_LEDGER', ledger: payload });
+    };
+    const registerConnectionHandlers = (connection: Connection) => {
+       const actor = currentBoardActor.value;
         if (!actor || (connection as any)._hasListener) return;
 
-        connection.addMessageListener((data: string) => {
+        connection.addMessageListener(async (data: string) => {
             try {
                 const msg = JSON.parse(data);
-                // Allow PLAYER_IDENTITY even if not in standard enum
+                if (msg.namespace === 'player') {
+                    handlePlayerNamespace(msg, connection);
+                    return;
+                }
+
+                if (msg.namespace === 'game') {
+                    handleGameNamespace(msg, connection);
+                    return;
+                }
+                
+                // Legacy / Fallback handling for non-namespaced messages
                 if (msg.type === 'PLAYER_IDENTITY') {
                     connection.remotePlayerName = msg.payload.name;
                     connection.remotePublicKey = msg.payload.publicKey;
@@ -253,26 +458,7 @@ export function useGameSession() {
                     if (isInitiator.value) syncParticipants();
                     return;
                 }
-                
-                if (!isLobbyMessage(msg)) return;
-                if (msg.type === 'START_GAME') actor.send({ type: 'START_GAME' });
-                if (msg.type === 'GAME_STARTED') actor.send({ type: 'GAME_STARTED' });
-                if (msg.type === 'GAME_RESET') actor.send({ type: 'GAME_RESET' });
-                if (msg.type === 'NEW_BOARD') router.replace(`/games/${gameId.value}/${msg.payload}`);
-                if (msg.type === 'SYNC_PLAYER_STATUS') actor.send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: msg.payload });
-                if (msg.type === 'SYNC_PARTICIPANTS') actor.send({ type: 'SYNC_PARTICIPANTS', participants: msg.payload });
-                if (msg.type === 'SYNC_LEDGER') {
-                    const entries = msg.payload as any[];
-                    for (const entry of entries) {
-                        if (entry.signature && entry.signerPublicKey) {
-                            SecureWallet.verify(entry.action, entry.signature, entry.signerPublicKey).then(isValid => {
-                                if (!isValid) logger.error("Invalid signature in ledger entry", entry);
-                            });
-                        }
-                    }
-                    actor.send({ type: 'SYNC_LEDGER', ledger: msg.payload });
-                }
-            } catch { }
+           } catch { }
         });
 
         const onOpen = () => {
@@ -318,7 +504,7 @@ export function useGameSession() {
         if (isInitiator.value && hostSignalingMode.value !== 'server') return;
 
         logger.sig("setupSignaling called with gameId:", gameIdArg, "boardId:", boardIdArg, "resolved currentBoardId:", currentBoardId);
-        if (!currentBoardId || currentBoardId === 'manual' || isManualMode || hostSignalingMode.value === 'manual') return;
+        if (!currentBoardId || currentBoardId === 'manual' || isManualMode || hostSignalingMode.value === 'manual' || route.query.mode === 'manual') return;
 
         if (connectionBoardId.value !== currentBoardId && signalingClient.value?.isConnected) {
             logger.sig("Switching signaling board assignment from", connectionBoardId.value, "to", currentBoardId);
@@ -412,28 +598,16 @@ export function useGameSession() {
                             const connection = shallowReactive(new Connection((c) => {
                                 actor.send({ type: 'UPDATE_CONNECTION', connection: c });
                             }));
+                            connection.isHostConnection = true; // Guest to Host link
 
                             // Add message listener to route messages to board actor
                             connection.addMessageListener((data: string) => {
                                 try {
                                     const message = JSON.parse(data);
-                                    if (!isLobbyMessage(message)) return;
-                                    if (message.type === 'START_GAME') actor.send({ type: 'START_GAME' });
-                                    if (message.type === 'GAME_STARTED') actor.send({ type: 'GAME_STARTED' });
-                                    if (message.type === 'GAME_RESET') actor.send({ type: 'GAME_RESET' });
-                                    if (message.type === 'NEW_BOARD') router.replace(`/games/${gameIdArg}/${message.payload}`);
-                                    if (message.type === 'SYNC_PLAYER_STATUS') actor.send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: message.payload });
-                                    if (message.type === 'SYNC_PARTICIPANTS') actor.send({ type: 'SYNC_PARTICIPANTS', participants: message.payload });
-                                    if (message.type === 'SYNC_LEDGER') {
-                                        const entries = message.payload as any[];
-                                        for (const entry of entries) {
-                                            if (entry.signature && entry.signerPublicKey) {
-                                                SecureWallet.verify(entry.action, entry.signature, entry.signerPublicKey).then(isValid => {
-                                                    if (!isValid) logger.error("Invalid signature in ledger entry", entry);
-                                                });
-                                            }
-                                        }
-                                        actor.send({ type: 'SYNC_LEDGER', ledger: entries });
+                                    if (message.namespace === 'game') {
+                                        handleGameNamespace(message, connection);
+                                    } else if (message.namespace === 'player') {
+                                        handlePlayerNamespace(message, connection);
                                     }
                                 } catch (e) {
                                     logger.error("Failed to parse message:", e);
@@ -621,7 +795,7 @@ export function useGameSession() {
     };
 
     const onAddLedger = async (action: { type: string, payload: any }) => {
-        if (!isInitiator.value || !currentBoardActor.value) return;
+        if (!currentBoardActor.value) return;
         const wallet = SecureWallet.getInstance();
         const ident = await wallet.getIdentity();
         if (!ident) return;
@@ -634,17 +808,19 @@ export function useGameSession() {
 
         const updatedLedger = ledger.getEntries();
         currentBoardActor.value.send({ type: 'SYNC_LEDGER', ledger: updatedLedger });
-        (connectedPeers.value as any).forEach((c: any) => {
-            c.send(JSON.stringify(createLobbyMessage('SYNC_LEDGER', updatedLedger)));
+        broadcast({
+            namespace: 'game',
+            type: 'SYNC_LEDGER',
+            payload: updatedLedger
         });
     };
 
     const handlePlayAgain = () => {
         const newBoardId = uuidv4();
-        (connectedPeers.value as any).forEach((c: any) => {
-            if (c.status === ConnectionStatus.connected) {
-                c.send(JSON.stringify(createLobbyMessage('NEW_BOARD', newBoardId)));
-            }
+        broadcast({
+            namespace: 'game',
+            type: 'NEW_BOARD',
+            payload: newBoardId
         });
         signalingClient.value?.deleteOffer();
         currentBoardActor.value?.send({ type: 'CLOSE_SESSION' });
@@ -732,6 +908,7 @@ export function useGameSession() {
         }
 
         logger.sig("Guest creating placeholder for manual join, offering initialOffer?", !!initialOffer);
+        hostSignalingMode.value = 'manual';
         const ident = await waitForIdentity();
         const connection = shallowReactive(new Connection((c: any) => {
             logger.sig(`Manual Guest Connection status: ${c.status} for ${c.id}`);
@@ -799,7 +976,7 @@ export function useGameSession() {
             logger.sig("App became visible, checking signaling status...");
             const hasActiveP2P = connectedPeers.value.length > 0;
 
-            if (boardId.value === 'manual' || hostSignalingMode.value === 'manual') return;
+            if (boardId.value === 'manual' || hostSignalingMode.value === 'manual' || route.query.mode === 'manual') return;
 
             if (signalingClient.value && !signalingClient.value.isConnected) {
                 // Only re-register if we are not in an active game session with peers
@@ -844,14 +1021,10 @@ export function useGameSession() {
             publicKey: p.publicKey
         }));
 
-        (connectedPeers.value as any).forEach((c: any) => {
-            if (c.status === ConnectionStatus.connected) {
-                try {
-                    c.send(JSON.stringify(createLobbyMessage('SYNC_PARTICIPANTS', participants)));
-                } catch (e) {
-                    logger.error("Failed to sync participants", e);
-                }
-            }
+        broadcast({
+            namespace: 'player',
+            type: 'SYNC_PARTICIPANTS',
+            payload: { participants }
         });
     }, { deep: true, immediate: true });
 
@@ -903,17 +1076,86 @@ export function useGameSession() {
         }
     }, { immediate: true });
 
+    // Track initiated P2P connections to avoid spamming requests
+    const initiatedP2P = new Set<string>();
+
+    watch(view, (newView) => {
+        broadcast({
+            namespace: 'game',
+            type: 'SYNC_PLAYER_STATUS',
+            payload: newView
+        });
+    });
+
+    // Broadcast local connections to help build the global topology map
     watch(connectedPeers, (peers) => {
+        const myId = identity.value?.id;
+        if (!myId) return;
+
+        const connections = peers
+            .filter(c => c.status === ConnectionStatus.connected)
+            .map(c => c.id);
+
+        broadcast({
+            namespace: 'player',
+            type: 'CONNECTIVITY',
+            payload: { peerId: myId, connections }
+        });
+    }, { deep: true });
+
+    watch([connectedPeers, () => (boardSnapshot.value as any)?.context?.topologyMode], ([peers, mode]) => {
         (peers as any).forEach((c: any) => {
             if (!(c as any)._hasInitialSync) {
-                c.send(JSON.stringify(createLobbyMessage('SYNC_PLAYER_STATUS', view.value)));
+                // Direct send to the new peer only for bootstrap
+                c.send(JSON.stringify({
+                    namespace: 'game',
+                    type: 'SYNC_PLAYER_STATUS',
+                    payload: view.value
+                }));
                 if (isInitiator.value && boardId.value && boardId.value !== 'manual') {
-                    c.send(JSON.stringify(createLobbyMessage('NEW_BOARD', boardId.value)));
+                    c.send(JSON.stringify({
+                        namespace: 'game',
+                        type: 'NEW_BOARD',
+                        payload: boardId.value
+                    }));
                 }
                 (c as any)._hasInitialSync = true;
             }
         });
-    });
+
+        // Host coordinates P2P Mesh
+        if (isInitiator.value && mode === 'mesh') {
+            const connectedGuests = (peers as Connection[]).filter(c => c.status === ConnectionStatus.connected);
+            
+            for (let i = 0; i < connectedGuests.length; i++) {
+                for (let j = i + 1; j < connectedGuests.length; j++) {
+                    const g1 = connectedGuests[i];
+                    const g2 = connectedGuests[j];
+                    
+                    if (!g1.remotePublicKey || !g2.remotePublicKey) continue;
+
+                    const pairId = [g1.remotePublicKey, g2.remotePublicKey].sort().join(':');
+                    
+                    if (!initiatedP2P.has(pairId)) {
+                        logger.sig(`[P2P] Host requesting connection between ${g1.remotePlayerName} and ${g2.remotePlayerName}`);
+                        
+                        // Ask G1 to offer to G2
+                        g1.send(JSON.stringify({
+                            namespace: 'player',
+                            type: 'REQUEST_P2P_OFFER',
+                            payload: {
+                                targetPeerId: g2.id,
+                                targetPlayerName: g2.remotePlayerName,
+                                targetPublicKey: g2.remotePublicKey
+                            }
+                        }));
+                       
+                        initiatedP2P.add(pairId);
+                    }
+                }
+            }
+        }
+    }, { deep: true });
 
     const initializeServerSignaling = async () => {
         hostSignalingMode.value = 'server';
@@ -960,6 +1202,8 @@ export function useGameSession() {
         updateAnswer,
         hostSignalingMode,
         initializeServerSignaling,
-        initializeManualSignaling
+        initializeManualSignaling,
+        topologyMode: computed(() => (boardSnapshot.value as any)?.context?.topologyMode || 'star'),
+        setTopologyMode: (mode: 'star' | 'mesh') => currentBoardActor.value?.send({ type: 'SET_TOPOLOGY_MODE', mode })
     };
 }

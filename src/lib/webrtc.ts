@@ -22,6 +22,7 @@ export class Connection {
   dataChannel?: RTCDataChannel
   iceCandidates: RTCIceCandidate[]
   status: ConnectionStatus
+  public isHostConnection: boolean = false;
   signal: Signal | null = null
   serializedSignal: string = ""
   iceGatheringState: RTCIceGatheringState
@@ -42,9 +43,9 @@ export class Connection {
     this.signal = new Signal({ type: "offer", sdp: "" }, "");
 
     let iceTimer: any = null;
-    this.peerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        this.iceCandidates.push(event.candidate);
+    this.peerConnection.onicecandidate = (_event) => { // Reverted to original to maintain syntactic correctness
+      if (_event.candidate) {
+        this.iceCandidates.push(_event.candidate);
         // Update view when new ICE candidates are gathered if we are in started or answered status
         if (this.status === ConnectionStatus.started || this.status === ConnectionStatus.answered) {
           this.updateSignal();
@@ -58,7 +59,7 @@ export class Connection {
       }
     };
 
-    this.peerConnection.onconnectionstatechange = (event) => {
+    this.peerConnection.onconnectionstatechange = () => {
       const state = this.peerConnection.connectionState;
       logger.webrtc(this.id + ': Connection state changed to ' + state);
 

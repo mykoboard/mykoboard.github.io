@@ -1,7 +1,7 @@
 import { createMachine, assign } from 'xstate';
 import { Connection, ConnectionStatus } from '../lib/webrtc';
 import { logger } from '../lib/logger';
-import { createLobbyMessage, LedgerEntry } from '@mykoboard/integration';
+import { LedgerEntry } from '@mykoboard/integration';
 
 interface BoardContext {
     connections: Map<string, Connection>;
@@ -15,6 +15,8 @@ interface BoardContext {
     externalParticipants: { id: string; name: string; isHost: boolean }[];
     maxPlayers: number;
     boardId: string;
+    topologyMode: 'star' | 'mesh';
+    topologyMap: Map<string, string[]>;
 }
 
 type BoardEvent =
@@ -33,9 +35,11 @@ type BoardEvent =
     | { type: 'REJECT_GUEST' }
     | { type: 'FINISH_GAME' }
     | { type: 'RESET_GAME' }
-    | { type: 'SYNC_PARTICIPANTS'; participants: { id: string, name: string, isHost: boolean }[] }
+    | { type: 'SYNC_PARTICIPANTS'; participants: { id: string, name: string, isHost: boolean }[]; topologyMode?: 'star' | 'mesh' }
     | { type: 'LOAD_LEDGER'; ledger: LedgerEntry[] }
-    | { type: 'GAME_RESET' };
+    | { type: 'GAME_RESET' }
+    | { type: 'SET_TOPOLOGY_MODE'; mode: 'star' | 'mesh' }
+    | { type: 'UPDATE_TOPOLOGY'; peerId: string; connections: string[] };
 
 export const boardMachine = createMachine({
     types: {} as {
@@ -57,6 +61,8 @@ export const boardMachine = createMachine({
         externalParticipants: [],
         maxPlayers: input.maxPlayers || 2,
         boardId: input.boardId || '',
+        topologyMode: 'star',
+        topologyMap: new Map<string, string[]>(),
     }),
     states: {
         idle: {
@@ -173,7 +179,14 @@ export const boardMachine = createMachine({
             actions: assign({ ledger: ({ event }) => event.ledger })
         },
         SYNC_PARTICIPANTS: {
-            actions: assign({ externalParticipants: ({ event }) => event.participants })
+            actions: assign(({ event }) => ({
+                externalParticipants: event.participants,
+                topologyMode: event.topologyMode || 'star',
+                topologyMap: (event as any).topologyMap ? new Map(Object.entries((event as any).topologyMap)) : undefined
+            }))
+        },
+        UPDATE_TOPOLOGY: {
+            actions: 'updateTopology'
         },
         GAME_STARTED: {
             actions: 'setGameStarted'
@@ -184,6 +197,9 @@ export const boardMachine = createMachine({
         CLOSE_SESSION: {
             target: '.idle',
             actions: ['resetContext', 'closeAllConnections']
+        },
+        SET_TOPOLOGY_MODE: {
+            actions: assign({ topologyMode: ({ event }) => event.mode })
         }
     }
 }, {
@@ -256,10 +272,17 @@ export const boardMachine = createMachine({
                 (connection as any)._synced = true;
 
                 logger.lobby('STATE', `Syncing new connection: ${connection.id}`);
-                connection.send(JSON.stringify(createLobbyMessage('SYNC_LEDGER', context.ledger)));
+                connection.send(JSON.stringify({
+                    namespace: 'game',
+                    type: 'SYNC_LEDGER',
+                    payload: context.ledger
+                }));
 
                 if (context.isGameStarted) {
-                    connection.send(JSON.stringify(createLobbyMessage('GAME_STARTED')));
+                    connection.send(JSON.stringify({
+                        namespace: 'game',
+                        type: 'GAME_STARTED'
+                    }));
                 }
             }
         },
@@ -289,7 +312,10 @@ export const boardMachine = createMachine({
             if (!context.isInitiator) return;
             context.connections.forEach(c => {
                 if (c.status === ConnectionStatus.connected) {
-                    c.send(JSON.stringify(createLobbyMessage('START_GAME')));
+                    c.send(JSON.stringify({
+                        namespace: 'game',
+                        type: 'START_GAME'
+                    }));
                 }
             });
         },
@@ -297,7 +323,10 @@ export const boardMachine = createMachine({
             if (!context.isInitiator) return;
             context.connections.forEach(c => {
                 if (c.status === ConnectionStatus.connected) {
-                    c.send(JSON.stringify(createLobbyMessage('GAME_RESET')));
+                    c.send(JSON.stringify({
+                        namespace: 'game',
+                        type: 'GAME_RESET'
+                    }));
                 }
             });
         },
@@ -310,6 +339,12 @@ export const boardMachine = createMachine({
                 context.pendingGuest.connection.acceptAnswer(context.pendingGuest.answer);
             }
         },
+        updateTopology: assign(({ context, event }) => {
+            if (event.type !== 'UPDATE_TOPOLOGY') return context;
+            const newMap = new Map(context.topologyMap);
+            newMap.set(event.peerId, event.connections);
+            return { topologyMap: newMap };
+        }),
         rejectGuest: ({ context }) => {
             if (context.pendingGuest) {
                 logger.sig("Rejecting guest:", context.pendingGuest.name);
@@ -326,7 +361,9 @@ export const boardMachine = createMachine({
             maxPlayers: context.maxPlayers,
             pendingGuest: null,
             externalParticipants: [],
-            boardId: ''
+            boardId: '',
+            topologyMode: 'star',
+            topologyMap: new Map<string, string[]>()
         })),
         clearPendingGuest: assign({ pendingGuest: null })
     },

@@ -3,9 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useMachine } from '@xstate/react';
 import { ludoMachine, createLudoPieces, Color, Piece, Player, getMovablePieces, applyLedgerToLudoState } from './ludoMachine';
-import { createGameMessage, isGameMessage, GameProps, PlayerInfo, SimpleConnection } from '@mykoboard/integration';
+import { GameProps, PlayerInfo } from '@mykoboard/integration';
 
-const COLORS: Color[] = ['red', 'green', 'yellow', 'blue'];
 
 const COLORS_HEX: Record<Color, string> = {
     yellow: '#facc15',
@@ -14,9 +13,8 @@ const COLORS_HEX: Record<Color, string> = {
     red: '#ef4444'
 };
 
-const SAFE_INDICES = [1, 9, 14, 22, 27, 35, 40, 48];
 
-export default function Ludo({ connections, playerNames, playerInfos, isInitiator, ledger, onAddLedger, onFinishGame }: GameProps) {
+export default function Ludo({ playerInfos, isInitiator, ledger, onAddLedger }: GameProps) {
     const players = useMemo((): Player[] => {
         return playerInfos.slice(0, 4).map((info: PlayerInfo, i: number) => ({
             id: info.isLocal ? 'local' : info.id,
@@ -47,27 +45,6 @@ export default function Ludo({ connections, playerNames, playerInfos, isInitiato
     }, [players, send, state.value]);
 
     useEffect(() => {
-        const handleMessage = (data: string) => {
-            try {
-                const message = JSON.parse(data);
-                if (!isGameMessage(message)) return;
-
-                if (isInitiator) {
-                    if (message.type === 'ROLL_DICE_REQUEST') {
-                        const val = Math.floor(Math.random() * 6) + 1;
-                        onAddLedger?.({ type: 'ROLL_DICE', payload: { value: val } });
-                    } else if (message.type === 'MOVE_PIECE_REQUEST') {
-                        onAddLedger?.({ type: 'MOVE_PIECE', payload: { pieceId: message.payload.pieceId } });
-                    }
-                }
-            } catch (e) { }
-        };
-
-        connections.forEach((c: SimpleConnection) => c.addMessageListener(handleMessage));
-        return () => connections.forEach((c: SimpleConnection) => c.removeMessageListener(handleMessage));
-    }, [connections, isInitiator, onAddLedger]);
-
-    useEffect(() => {
         if (!ledger || players.length < 2) return;
         const newContext = applyLedgerToLudoState(players, ledger);
         send({ type: 'SYNC_STATE', context: newContext });
@@ -75,12 +52,8 @@ export default function Ludo({ connections, playerNames, playerInfos, isInitiato
 
     const handleRoll = () => {
         if (!isMyTurn || !state.matches('rolling') || diceValue !== null) return;
-        if (isInitiator) {
-            const val = Math.floor(Math.random() * 6) + 1;
-            onAddLedger?.({ type: 'ROLL_DICE', payload: { value: val } });
-        } else {
-            connections.forEach((c: SimpleConnection) => c.send(JSON.stringify(createGameMessage('ROLL_DICE_REQUEST'))));
-        }
+        const val = Math.floor(Math.random() * 6) + 1;
+        onAddLedger?.({ type: 'ROLL_DICE', payload: { value: val } });
     };
 
     const handlePieceClick = (pieceId: string) => {
@@ -91,11 +64,7 @@ export default function Ludo({ connections, playerNames, playerInfos, isInitiato
         const movable = getMovablePieces(pieces, piece.color, diceValue!);
         if (!movable.find(p => p.id === pieceId)) return;
 
-        if (isInitiator) {
-            onAddLedger?.({ type: 'MOVE_PIECE', payload: { pieceId } });
-        } else {
-            connections.forEach((c: SimpleConnection) => c.send(JSON.stringify(createGameMessage('MOVE_PIECE_REQUEST', { pieceId }))));
-        }
+        onAddLedger?.({ type: 'MOVE_PIECE', payload: { pieceId } });
     };
 
     const boardSize = 600;
