@@ -250,20 +250,23 @@ const isApproving = computed(() => props.state?.matches('approving') || false)
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
           <button
             @click="initializeServerSignaling"
+            disabled
             :class="[
-                'group relative flex flex-col items-center justify-center p-6 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/40 rounded-3xl transition-all duration-300',
+                'group relative flex flex-col items-center justify-center p-6 bg-white/5 border border-white/10 rounded-3xl transition-all duration-300 cursor-not-allowed opacity-50 grayscale',
                 !isInitiator ? 'md:col-span-2' : ''
             ]"
           >
-            <div class="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 rounded-3xl transition-opacity duration-500"></div>
-            <div class="h-12 w-12 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 mb-4 group-hover:scale-110 transition-transform duration-500">
-               <div class="w-2.5 h-2.5 bg-primary rounded-full animate-pulse shadow-neon" />
+            <div class="h-12 w-12 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 mb-4">
+               <div class="w-2.5 h-2.5 bg-white/20 rounded-full" />
             </div>
-            <span class="text-xs font-black text-white uppercase tracking-widest">
+            <span class="text-xs font-black text-white/40 uppercase tracking-widest">
                 {{ isInitiator ? 'Public Discovery' : 'Connect to Discovery Mesh' }}
             </span>
-            <span class="text-[9px] text-white/40 uppercase tracking-widest mt-2 whitespace-nowrap">
-                AWS Signaling Relay
+            <div class="absolute top-4 right-4 px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-full">
+                <span class="text-[8px] font-black text-amber-500 uppercase tracking-widest leading-none">Protocol Restricted</span>
+            </div>
+            <span class="text-[9px] text-white/20 uppercase tracking-widest mt-2 whitespace-nowrap">
+                AWS Signaling Relay (Offline)
             </span>
           </button>
  
