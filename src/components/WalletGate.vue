@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, inject } from 'vue'
 import { 
   DialogRoot, 
   DialogPortal, 
@@ -7,11 +7,11 @@ import {
   DialogContent, 
   DialogTitle, 
   DialogDescription,
-  DialogHeader
 } from 'radix-vue'
 import { Fingerprint, Sparkles, ShieldCheck, UserCircle } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import { SecureWallet, type PlayerIdentity } from '../lib/wallet'
+import * as Keys from '../application/InjectionKeys'
+import { PlayerIdentity } from '../domain/identity/PlayerIdentity'
 import Input from './ui/Input.vue'
 
 const isOpen = ref(false)
@@ -21,9 +21,10 @@ const isCreating = ref(false)
 const identity = ref<PlayerIdentity | null>(null)
 const isLoaded = ref(false)
 
+const identityRepo = inject(Keys.IdentityRepoKey)!
+
 onMounted(async () => {
-    const wallet = SecureWallet.getInstance()
-    const id = await wallet.getIdentity()
+    const id = await identityRepo.getIdentity()
     if (id) {
         identity.value = id
     } else {
@@ -40,8 +41,7 @@ const handleCreateIdentity = async () => {
 
     isCreating.value = true
     try {
-        const wallet = SecureWallet.getInstance()
-        const newIdentity = await wallet.createIdentity(name.value, subscriptionToken.value)
+        const newIdentity = await identityRepo.createIdentity(name.value, subscriptionToken.value)
         identity.value = newIdentity
         toast.success("Identity Secured!", {
             description: "Your hardware-backed wallet is ready."

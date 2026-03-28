@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, inject } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getGameById } from '../lib/GameRegistry'
 import { useGameSession } from '../composables/useGameSession'
-import { Connection, ConnectionStatus } from '../lib/webrtc'
-import { db, type KnownIdentity } from '../lib/db'
 import { toast } from 'vue-sonner'
 import PreparationPhaseServer from '../components/board/PreparationPhaseServer.vue'
 import PreparationPhaseManual from '../components/board/PreparationPhaseManual.vue'
@@ -12,6 +10,8 @@ import ActivePhase from '../components/board/ActivePhase.vue'
 import FinishedPhase from '../components/board/FinishedPhase.vue'
 import LobbyPlayerList from '../components/board/LobbyPlayerList.vue'
 import type { PlayerInfo } from '@mykoboard/integration'
+import * as Keys from '../application/InjectionKeys'
+import { PeerConnectionStatus } from '../application/ports/IPeerConnectionPort'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,15 +22,16 @@ const game = computed(() => getGameById(gameId.value || ""))
 
 const onBackToDiscovery = () => router.push('/games')
 
-// Always use server mode for signaling
-const signalingMode = 'server' as const
+// Inject Hexagonal Ports
+const sessionRepo = inject(Keys.SessionRepoKey)!
+const knownIdentityRepo = inject(Keys.KnownIdentityRepoKey)!
 
 const {
     snapshot,
     send,
     playerInfos,
-    connectedPeers: baseConnectedPeers,
-    pendingSignaling: basePendingSignaling,
+    connectedPeers,
+    pendingSignaling,
     pendingJoinRequests,
     isInitiator,
     isGameStarted,
@@ -60,31 +61,24 @@ const {
 } = useGameSession()
 
 const handleSavePlayerIdentity = async (player: PlayerInfo) => {
-    console.log('[BoardView] handleSavePlayerIdentity called for:', player.name, 'publicKey:', player.publicKey)
+    if (!player.publicKey) return
     
-    if (!player.publicKey) {
-        console.warn('[BoardView] Cannot save - no public key')
-        return
+    try {
+        await knownIdentityRepo.addKnownIdentity({
+            id: `identity-${Date.now()}`,
+            name: player.name,
+            publicKey: player.publicKey,
+            addedAt: Date.now()
+        })
+        
+        toast.success('Identity Saved', {
+            description: `${player.name} has been added to your known identities.`
+        })
+    } catch (err) {
+        toast.error('Failed to save identity')
     }
-    
-    const newIdentity: KnownIdentity = {
-        id: `identity-${Date.now()}`,
-        name: player.name,
-        publicKey: player.publicKey,
-        addedAt: Date.now()
-    }
-    
-    console.log('[BoardView] Saving identity to DB:', newIdentity)
-    await db.addKnownIdentity(newIdentity)
-    
-    console.log('[BoardView] Identity saved successfully')
-    toast.success('Identity Saved', {
-        description: `${player.name} has been added to your known identities.`
-    })
 }
 
-const connectedPeers = computed(() => baseConnectedPeers.value as Connection[])
-const pendingSignaling = computed(() => basePendingSignaling.value as Connection[])
 const currentTurnPlayerId = computed(() => (snapshot.value as any)?.context?.currentPlayer || (snapshot.value as any)?.context?.turn || null)
 
 const onBackToGames = () => {
@@ -100,7 +94,6 @@ const topology = computed(() => {
     const globalMap = (snapshot.value as any)?.context?.topologyMap as Map<string, string[]> | undefined
 
     if (globalMap && globalMap.size > 0) {
-        // Use Global Topology Map
         globalMap.forEach((targets, source) => {
             targets.forEach(target => {
                 const pair = [source, target].sort()
@@ -114,21 +107,16 @@ const topology = computed(() => {
         return edges
     }
 
-    // Fallback/Legacy Logic (for Star mode or early bootstrap)
     if (mode === 'star') {
-        // Star Topology: Only show lines from Host to everyone else
         if (!host) return edges
-        
         playerInfos.value.forEach(player => {
             if (player.id !== host.id && player.isConnected) {
                 edges.push({ from: host.id, to: player.id })
             }
         })
     } else {
-        // Mesh Topology: Show all direct P2P connections we know about
-        // Local connections
         connectedPeers.value.forEach(conn => {
-            if (conn.status === ConnectionStatus.connected) {
+            if (conn.status === PeerConnectionStatus.connected) {
                 const localPlayer = playerInfos.value.find(p => p.isLocal)
                 if (localPlayer) {
                     const pair = [localPlayer.id, conn.id].sort()
@@ -140,9 +128,6 @@ const topology = computed(() => {
                 }
             }
         })
-
-        // If we are Host, we also know about the P2P links we coordinated
-        // In a more advanced version, we'd sync the full topology map
     }
     
     return edges
@@ -159,28 +144,20 @@ const handleBeforeUnload = (e: BeforeUnloadEvent) => {
 }
 
 onMounted(async () => {
-    // Cleanup old hosted sessions on mount
-    await db.cleanupOldHostedSessions()
+    await sessionRepo.cleanupOldHostedSessions()
     
-    // Initialize state machine based on route and hosting status
     if (boardId.value && snapshot.value?.matches('idle')) {
-        // Check if this user is hosting this boardId
-        const isHostingSession = await db.isHosting(boardId.value)
+        const isHostingSession = await sessionRepo.isHosting(boardId.value)
         
         if (isHostingSession) {
-            // User is the host
             const maxPlayers = parseInt(route.query.maxPlayers as string) || 2
-            console.log('[BOARDVIEW] Initializing HOST state for boardId:', boardId.value, 'maxPlayers:', maxPlayers)
             send({ type: 'HOST', maxPlayers, boardId: boardId.value })
         } else {
-            // User is a guest joining via link
             const isManualMode = route.query.mode === 'manual'
-            console.log(`[BOARDVIEW] Initializing GUEST state for boardId: ${boardId.value} (manual: ${isManualMode})`)
             send({ type: 'JOIN', boardId: boardId.value })
             
             if (isManualMode) {
                 const offer = route.query.offer as string | undefined
-                // Immediate initialization attempt
                 onCreateGuestManualConnection(offer);
             }
         }
@@ -247,7 +224,6 @@ onUnmounted(() => {
             v-else
             :state="snapshot"
             :isInitiator="isInitiator"
-            :signalingMode="signalingMode"
             :isServerConnecting="isServerConnecting"
             :signalingClient="signalingClient"
             :pendingSignaling="pendingSignaling"

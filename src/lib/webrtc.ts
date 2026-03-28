@@ -124,6 +124,7 @@ export class Connection {
         if (readyState == "open") {
           logger.webrtc(this.id + ': Sending Ping (Identity)');
           this.send(JSON.stringify({
+            namespace: 'player',
             type: 'PLAYER_IDENTITY',
             payload: {
               id: this.localPlayerId,
@@ -153,7 +154,7 @@ export class Connection {
 
       this.status = ConnectionStatus.started;
       this.localPublicKey = publicKey;
-      this.updateSignal(publicKey);
+      await this.updateSignal(publicKey);
       this.updateView(this);
     } catch (e: any) {
       this.onCreateSessionDescriptionError(e);

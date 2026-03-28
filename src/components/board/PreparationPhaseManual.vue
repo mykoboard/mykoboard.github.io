@@ -14,18 +14,18 @@ import {
   AlertDialogAction 
 } from 'radix-vue'
 import SignalingStep from './SignalingStep.vue'
-import type { Connection } from '../../lib/webrtc'
+import { IPeerConnectionPort } from '../../application/ports/IPeerConnectionPort'
 
 const props = defineProps<{
     state: any;
     isInitiator: boolean;
-    pendingSignaling: Connection[];
+    pendingSignaling: IPeerConnectionPort[];
     onStartGame: () => void;
-    onUpdateOffer: (connection: Connection, offer: string) => void;
-    onUpdateAnswer: (connection: Connection, answer: string) => void;
+    onUpdateOffer: (connection: IPeerConnectionPort, offer: string) => void;
+    onUpdateAnswer: (connection: IPeerConnectionPort, answer: string) => void;
     onCloseSession: () => void;
     onBackToLobby: () => void;
-    onCancelSignaling: (connection: Connection) => void;
+    onCancelSignaling: (connection: IPeerConnectionPort) => void;
     onAddManualConnection?: () => void;
     playerCount: number;
     maxPlayers: number;
@@ -41,7 +41,9 @@ const isJoining = computed(() => props.state?.matches('joining') || !props.isIni
 const hasQueryOffer = computed(() => !!route.query.offer)
 const isManualGuestWithoutOffer = computed(() => !props.isInitiator && !hasQueryOffer.value)
 const isProcessingOffer = computed(() => {
-    return !props.isInitiator && hasQueryOffer.value && props.pendingSignaling.length > 0 && props.pendingSignaling[0].status === 'readyToAccept';
+    // Note: status check here might need adjustment based on how IPeerConnectionPort exposes it
+    const status = (props.pendingSignaling[0] as any).status;
+    return !props.isInitiator && hasQueryOffer.value && props.pendingSignaling.length > 0 && (status === 'new' || status === 'readyToAccept');
 })
 
 const offerUrlBase = computed(() => {
@@ -166,7 +168,7 @@ const offerUrlBase = computed(() => {
           </div>
 
           <!-- Missing Offer Warning -->
-          <div v-else-if="isManualGuestWithoutOffer && pendingSignaling[0].status === 'readyToAccept'" class="glass-dark p-8 rounded-[2rem] border border-rose-500/20 bg-rose-500/5 space-y-4 animate-zoom-in">
+          <div v-else-if="isManualGuestWithoutOffer && (pendingSignaling[0] as any).status === 'readyToAccept'" class="glass-dark p-8 rounded-[2rem] border border-rose-500/20 bg-rose-500/5 space-y-4 animate-zoom-in">
              <div class="flex items-center gap-3 text-rose-500">
                <AlertTriangle class="w-6 h-6" />
                <h3 class="text-sm font-black uppercase tracking-wider">Invalid Join Vector</h3>
@@ -238,24 +240,6 @@ const offerUrlBase = computed(() => {
           </AlertDialogRoot>
         </div>
       </div>
-    </div>
-
-    <div v-if="!isHosting && !isJoining && !isPreparation" class="py-24 flex flex-col items-center justify-center space-y-6 border border-white/5 bg-white/5 rounded-[3rem] backdrop-blur-sm animate-fade-in">
-      <div class="relative">
-        <div class="h-20 w-20 bg-white/5 rounded-full flex items-center justify-center transition-transform hover:scale-110 duration-500">
-          <div class="h-4 w-4 bg-white/10 rounded-full animate-ping"></div>
-        </div>
-      </div>
-      <div class="text-center space-y-2">
-        <div class="text-xs font-black uppercase tracking-[0.5em] text-white/30">Null Reference: No Active Session</div>
-        <p class="text-[10px] text-white/20 uppercase tracking-widest px-10 leading-relaxed font-medium">Session data not found on current node. Return to discovery mesh.</p>
-      </div>
-      <button
-        @click="onBackToLobby"
-        class="h-12 px-8 rounded-xl border border-white/10 text-white/70 hover:text-primary hover:border-primary/40 font-black uppercase tracking-widest text-[10px] transition-all"
-      >
-        Return to Discovery
-      </button>
     </div>
   </div>
 </template>

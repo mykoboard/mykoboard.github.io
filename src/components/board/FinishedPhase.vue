@@ -2,12 +2,12 @@
 import { computed, shallowRef, watch } from 'vue'
 import { CheckCircle2 } from 'lucide-vue-next'
 import ReactComponentWrapper from '../ReactComponentWrapper.vue'
-import type { Connection } from '../../lib/webrtc'
+import type { IPeerConnectionPort } from '../../application/ports/IPeerConnectionPort'
 import type { PlayerInfo } from '@mykoboard/integration'
 
 const props = defineProps<{
     GameComponent: any;
-    connectedPeers: Connection[];
+    connectedPeers: IPeerConnectionPort[];
     playerInfos: PlayerInfo[];
     isInitiator: boolean;
     ledger: any[];
@@ -79,4 +79,3 @@ const componentProps = computed(() => ({
     </div>
   </div>
 </template>
-

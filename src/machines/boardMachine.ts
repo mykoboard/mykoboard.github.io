@@ -1,17 +1,16 @@
 import { createMachine, assign } from 'xstate';
-import { Connection, ConnectionStatus } from '../lib/webrtc';
-import { logger } from '../lib/logger';
 import { LedgerEntry } from '@mykoboard/integration';
+import { Participant } from '../domain/game-session/Participant';
 
 interface BoardContext {
-    connections: Map<string, Connection>;
+    participants: Map<string, Participant>;
     playerStatuses: Map<string, 'lobby' | 'game'>;
     isInitiator: boolean;
     isGameStarted: boolean;
     isGameFinished: boolean;
     playerName: string;
     ledger: LedgerEntry[];
-    pendingGuest: { id: string; name: string; answer: any; connection: Connection } | null;
+    pendingGuest: { id: string; name: string; answer: any } | null;
     externalParticipants: { id: string; name: string; isHost: boolean }[];
     maxPlayers: number;
     boardId: string;
@@ -22,7 +21,7 @@ interface BoardContext {
 type BoardEvent =
     | { type: 'HOST'; maxPlayers?: number; boardId: string }
     | { type: 'JOIN'; boardId: string }
-    | { type: 'UPDATE_CONNECTION'; connection: Connection }
+    | { type: 'UPDATE_PARTICIPANT'; participant: Participant }
     | { type: 'SET_PLAYER_STATUS'; playerId: string; status: 'lobby' | 'game' }
     | { type: 'START_GAME' }
     | { type: 'GAME_STARTED' }
@@ -30,7 +29,7 @@ type BoardEvent =
     | { type: 'REMOVE_PLAYER'; playerId: string }
     | { type: 'SYNC_LEDGER'; ledger: LedgerEntry[] }
     | { type: 'PEER_DISCONNECTED'; connectionId: string }
-    | { type: 'REQUEST_JOIN'; connectionId: string; peerName: string; answer: any; connection: Connection }
+    | { type: 'REQUEST_JOIN'; connectionId: string; peerName: string; answer: any }
     | { type: 'ACCEPT_GUEST' }
     | { type: 'REJECT_GUEST' }
     | { type: 'FINISH_GAME' }
@@ -50,7 +49,7 @@ export const boardMachine = createMachine({
     id: 'board',
     initial: 'idle',
     context: ({ input }) => ({
-        connections: new Map<string, Connection>(),
+        participants: new Map<string, Participant>(),
         playerStatuses: new Map<string, 'lobby' | 'game'>(),
         isInitiator: input.isInitiator || false,
         isGameStarted: false,
@@ -92,8 +91,7 @@ export const boardMachine = createMachine({
                         pendingGuest: ({ event }) => ({
                             id: event.connectionId,
                             name: event.peerName,
-                            answer: event.answer,
-                            connection: event.connection
+                            answer: event.answer
                         })
                     })
                 }
@@ -135,8 +133,7 @@ export const boardMachine = createMachine({
                         pendingGuest: ({ event }) => ({
                             id: event.connectionId,
                             name: event.peerName,
-                            answer: event.answer,
-                            connection: event.connection
+                            answer: event.answer
                         })
                     })
                 }
@@ -160,11 +157,11 @@ export const boardMachine = createMachine({
         }
     },
     on: {
-        UPDATE_CONNECTION: {
-            actions: ['updateConnection', 'syncConnection']
+        UPDATE_PARTICIPANT: {
+            actions: ['updateParticipant', 'syncParticipant']
         },
         PEER_DISCONNECTED: {
-            actions: ['updateConnectionStatus', 'removeConnection']
+            actions: ['updateParticipantStatus', 'removeParticipant']
         },
         SET_PLAYER_STATUS: {
             actions: 'setPlayerStatus'
@@ -196,7 +193,7 @@ export const boardMachine = createMachine({
         },
         CLOSE_SESSION: {
             target: '.idle',
-            actions: ['resetContext', 'closeAllConnections']
+            actions: ['resetContext', 'closeAllParticipants']
         },
         SET_TOPOLOGY_MODE: {
             actions: assign({ topologyMode: ({ event }) => event.mode })
@@ -212,132 +209,63 @@ export const boardMachine = createMachine({
             newStatuses.set(event.playerId, event.status);
             return { playerStatuses: newStatuses };
         }),
-        updateConnectionStatus: assign(({ context, event }) => {
+        updateParticipantStatus: assign(({ context, event }) => {
             if (event.type !== 'PEER_DISCONNECTED') return context;
-            const newConnections = new Map(context.connections);
-            const conn = newConnections.get(event.connectionId);
-            if (conn) {
-                conn.status = ConnectionStatus.closed;
+            const newParticipants = new Map(context.participants);
+            const p = newParticipants.get(event.connectionId);
+            if (p) {
+                p.status = 'closed';
             }
-            return { connections: newConnections };
+            return { participants: newParticipants };
         }),
-        updateConnection: assign(({ context, event }) => {
-            if (event.type !== 'UPDATE_CONNECTION') return context;
+        updateParticipant: assign(({ context, event }) => {
+            if (event.type !== 'UPDATE_PARTICIPANT') return context;
 
-            const connection = event.connection;
+            const participant = event.participant;
 
-            if (connection.status === ConnectionStatus.closed && !context.connections.has(connection.id)) {
-                return context;
-            }
-
-            const existing = context.connections.get(connection.id);
-            if (existing) {
-                // If the incoming connection is the SAME instance, we can't rely on comparing 
-                // it to 'existing'. Instead, we check if the values have changed relative 
-                // to what the Machine previously recorded.
-                const statusChanged = (existing as any)._lastKnownStatus !== connection.status;
-                const signalChanged = (existing as any)._lastKnownSignal !== (connection.signal?.toString() || "");
-                const iceGatheringChanged = (existing as any)._lastKnownIceGathering !== (connection as any).iceGatheringState;
-                const identityChanged = (existing as any)._lastKnownRemotePublicKey !== connection.remotePublicKey;
-
-                if (!statusChanged && !signalChanged && !iceGatheringChanged && !identityChanged) {
-                    return context;
-                }
-            }
-
-            // Record the NEW state BEFORE updating the context
-            const connectionProxy = (connection as any);
-            connectionProxy._lastKnownStatus = connection.status;
-            connectionProxy._lastKnownSignal = connection.signal?.toString() || "";
-            connectionProxy._lastKnownIceGathering = connectionProxy.iceGatheringState;
-            connectionProxy._lastKnownRemotePublicKey = connection.remotePublicKey;
-
-            const newConnections = new Map(context.connections);
-            newConnections.set(connection.id, connection);
+            const newParticipants = new Map(context.participants);
+            newParticipants.set(participant.id, participant);
 
             const newStatuses = new Map(context.playerStatuses);
-            if (!newStatuses.has(connection.id)) {
-                newStatuses.set(connection.id, 'lobby');
+            if (!newStatuses.has(participant.id)) {
+                newStatuses.set(participant.id, 'lobby');
             }
 
-            return { connections: newConnections, playerStatuses: newStatuses };
+            return { participants: newParticipants, playerStatuses: newStatuses };
         }),
-        syncConnection: ({ context, event }) => {
-            if (event.type !== 'UPDATE_CONNECTION') return;
-
-            const connection = event.connection;
-
-            if (context.isInitiator && connection.status === ConnectionStatus.connected) {
-                if ((connection as any)._synced) return;
-                (connection as any)._synced = true;
-
-                logger.lobby('STATE', `Syncing new connection: ${connection.id}`);
-                connection.send(JSON.stringify({
-                    namespace: 'game',
-                    type: 'SYNC_LEDGER',
-                    payload: context.ledger
-                }));
-
-                if (context.isGameStarted) {
-                    connection.send(JSON.stringify({
-                        namespace: 'game',
-                        type: 'GAME_STARTED'
-                    }));
-                }
-            }
+        syncParticipant: () => {
+             // Side effect to be handled by application layer/listener
+             // This previously called connection.send()
         },
-        removeConnection: assign(({ context, event }) => {
+        removeParticipant: assign(({ context, event }) => {
             if (event.type !== 'PEER_DISCONNECTED') return context;
-            const newConnections = new Map(context.connections);
-            newConnections.delete(event.connectionId);
-            return { connections: newConnections };
+            const newParticipants = new Map(context.participants);
+            newParticipants.delete(event.connectionId);
+            return { participants: newParticipants };
         }),
         removePlayer: assign(({ context, event }) => {
             if (event.type !== 'REMOVE_PLAYER') return context;
-            const newConnections = new Map(context.connections);
-            const connection = newConnections.get(event.playerId);
-            if (connection) {
-                connection.close();
-                newConnections.delete(event.playerId);
-            }
+            const newParticipants = new Map(context.participants);
+            newParticipants.delete(event.playerId);
             const newStatuses = new Map(context.playerStatuses);
             newStatuses.delete(event.playerId);
-            return { connections: newConnections, playerStatuses: newStatuses };
+            return { participants: newParticipants, playerStatuses: newStatuses };
         }),
         syncLedger: assign(({ context, event }) => {
             if (event.type !== 'SYNC_LEDGER') return context;
             return { ledger: event.ledger };
         }),
-        broadcastStartGame: ({ context }) => {
-            if (!context.isInitiator) return;
-            context.connections.forEach(c => {
-                if (c.status === ConnectionStatus.connected) {
-                    c.send(JSON.stringify({
-                        namespace: 'game',
-                        type: 'START_GAME'
-                    }));
-                }
-            });
+        broadcastStartGame: () => {
+             // Side effect to be handled by application layer/listener
         },
-        broadcastResetGame: ({ context }) => {
-            if (!context.isInitiator) return;
-            context.connections.forEach(c => {
-                if (c.status === ConnectionStatus.connected) {
-                    c.send(JSON.stringify({
-                        namespace: 'game',
-                        type: 'GAME_RESET'
-                    }));
-                }
-            });
+        broadcastResetGame: () => {
+             // Side effect to be handled by application layer/listener
         },
-        closeAllConnections: ({ context }) => {
-            context.connections.forEach(c => c.close());
+        closeAllParticipants: () => {
+             // Side effect to be handled by application layer/listener
         },
-        acceptGuest: ({ context }) => {
-            if (context.pendingGuest) {
-                logger.sig("Accepting guest:", context.pendingGuest.name);
-                context.pendingGuest.connection.acceptAnswer(context.pendingGuest.answer);
-            }
+        acceptGuest: () => {
+             // Side effect to be handled by application layer/listener
         },
         updateTopology: assign(({ context, event }) => {
             if (event.type !== 'UPDATE_TOPOLOGY') return context;
@@ -345,14 +273,11 @@ export const boardMachine = createMachine({
             newMap.set(event.peerId, event.connections);
             return { topologyMap: newMap };
         }),
-        rejectGuest: ({ context }) => {
-            if (context.pendingGuest) {
-                logger.sig("Rejecting guest:", context.pendingGuest.name);
-                context.pendingGuest.connection.close();
-            }
+        rejectGuest: () => {
+             // Side effect to be handled by application layer/listener
         },
         resetContext: assign(({ context }) => ({
-            connections: new Map<string, Connection>(),
+            participants: new Map<string, Participant>(),
             playerStatuses: new Map<string, 'lobby' | 'game'>(),
             ledger: [],
             isGameStarted: false,
@@ -369,8 +294,8 @@ export const boardMachine = createMachine({
     },
     guards: {
         hasConnections: ({ context }) => {
-            return Array.from(context.connections.values()).some(
-                c => c.status === ConnectionStatus.connected
+            return Array.from(context.participants.values()).some(
+                p => p.status === 'connected'
             );
         }
     }

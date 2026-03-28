@@ -1,22 +1,23 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { User } from 'lucide-vue-next'
-import { SecureWallet, type PlayerIdentity } from '../lib/wallet'
 import { sanitizeAvatarUrl } from '../lib/utils'
+import * as Keys from '../application/InjectionKeys'
+import type { PlayerIdentity } from '../domain/identity/PlayerIdentity'
 import { 
   NavigationMenuRoot, 
   NavigationMenuList, 
   NavigationMenuItem, 
-  NavigationMenuLink 
 } from 'radix-vue'
 
 const router = useRouter()
 const identity = ref<PlayerIdentity | null>(null)
 
+const identityRepo = inject(Keys.IdentityRepoKey)!
+
 onMounted(async () => {
-    const wallet = SecureWallet.getInstance()
-    identity.value = await wallet.getIdentity()
+    identity.value = await identityRepo.getIdentity()
 })
 
 const goHome = () => router.push('/')

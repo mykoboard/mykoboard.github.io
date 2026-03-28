@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import Hero from '../components/HeroView.vue'
 import Features from '../components/FeaturesView.vue'
 import HowItWorks from '../components/HowItWorksView.vue'
-import { SecureWallet } from '../lib/wallet'
+import * as Keys from '../application/InjectionKeys'
 
 const router = useRouter()
 
 onMounted(async () => {
-    const wallet = SecureWallet.getInstance()
-    const hasId = await wallet.hasIdentity()
-    if (hasId) {
+    const identityRepo = inject(Keys.IdentityRepoKey)!
+    const id = await identityRepo.getIdentity()
+    if (id) {
         router.replace('/games')
     }
 })

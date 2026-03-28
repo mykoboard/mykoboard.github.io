@@ -41,19 +41,6 @@ export const games: GameMetadata[] = [
         infoComponent: React.lazy(() => import('ludo/GameInfo')),
     },
     {
-        id: 'galactic-hegemony',
-        name: "Galactic Hegemony",
-        image: "/img/games/galactic-hegemony/card.webp",
-        description: "Decentralized P2P strategy game. Compete for cosmic dominance in a serverless galaxy!",
-        minPlayers: 2,
-        maxPlayers: 6,
-        framework: 'react',
-        // @ts-ignore
-        component: React.lazy(() => import('galactic-hegemony/GalacticHegemony')),
-        // @ts-ignore
-        infoComponent: React.lazy(() => import('galactic-hegemony/GameInfo')),
-    },
-    {
         id: 'planning-poker',
         name: "Planning Poker",
         image: "/img/games/planning-poker/card.webp",

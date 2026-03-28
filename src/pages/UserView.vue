@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { User, Key, Fingerprint, Sparkles, Shield, History, AlertTriangle, Trash2, Users } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import Header from '../components/HeaderView.vue'
 import Input from '../components/ui/Input.vue'
 import PastMatches from '../components/PastMatchesView.vue'
-import { SecureWallet, type PlayerIdentity } from '../lib/wallet'
-import { SessionManager } from '../lib/sessions'
 import { sanitizeAvatarUrl } from '../lib/utils'
-import { db, type KnownIdentity } from '../lib/db'
+import * as Keys from '../application/InjectionKeys'
+import type { PlayerIdentity } from '../domain/identity/PlayerIdentity'
+import type { KnownIdentity } from '../domain/identity/IKnownIdentityRepository'
+
 import { 
   AlertDialogRoot, 
   AlertDialogTrigger, 
@@ -36,22 +37,30 @@ const newIdentityName = ref('')
 const newIdentityPublicKey = ref('')
 const isAddingIdentity = ref(false)
 
+// Inject Hexagonal Ports
+const identityRepo = inject(Keys.IdentityRepoKey)!
+const sessionRepo = inject(Keys.SessionRepoKey)!
+const knownIdentityRepo = inject(Keys.KnownIdentityRepoKey)!
+
 const loadData = async () => {
-    const wallet = SecureWallet.getInstance()
-    const id = await wallet.getIdentity()
+    const id = await identityRepo.getIdentity()
     if (id) {
         identity.value = id
         name.value = id.name
         avatar.value = id.avatar || ""
-        token.value = id.subscriptionToken
+        token.value = id.subscriptionToken || ""
     } else {
         identity.value = null
         name.value = ""
         avatar.value = ""
         token.value = ""
     }
-    activeSessions.value = await SessionManager.getSessions()
-    knownIdentities.value = await db.getAllKnownIdentities()
+    
+    // Use the session repository for games
+    activeSessions.value = await sessionRepo.getAllGames()
+    
+    // Use the known identity repository for the network
+    knownIdentities.value = await knownIdentityRepo.getAllKnownIdentities()
 }
 
 onMounted(loadData)
@@ -60,7 +69,7 @@ const hasChanges = computed(() => {
     if (!identity.value) return false
     return name.value !== identity.value.name ||
            avatar.value !== (identity.value.avatar || "") ||
-           token.value !== identity.value.subscriptionToken
+           token.value !== (identity.value.subscriptionToken || "")
 })
 
 const handleCreateIdentity = async () => {
@@ -70,8 +79,7 @@ const handleCreateIdentity = async () => {
     }
     isCreating.value = true
     try {
-        const wallet = SecureWallet.getInstance()
-        await wallet.createIdentity(name.value.trim(), token.value.trim())
+        await identityRepo.createIdentity(name.value.trim(), token.value.trim())
         await loadData()
         toast.success("Identity Generated", {
             description: "Your local decentralized node is now active."
@@ -90,13 +98,12 @@ const handleUpdateProfile = async () => {
     }
     isSaving.value = true
     try {
-        const wallet = SecureWallet.getInstance()
-        await wallet.updateIdentity({
+        await identityRepo.updateIdentity({
             name: name.value,
             avatar: avatar.value,
             subscriptionToken: token.value
         })
-        identity.value = await wallet.getIdentity()
+        identity.value = await identityRepo.getIdentity()
         toast.success("Identity Reconfigured", {
             description: "Your neural profile has been updated."
         })
@@ -108,17 +115,16 @@ const handleUpdateProfile = async () => {
 }
 
 const onDeleteSession = async (id: string) => {
-    await SessionManager.removeSession(id)
-    activeSessions.value = await SessionManager.getSessions()
+    await sessionRepo.removeSession(id)
+    activeSessions.value = await sessionRepo.getAllGames()
     toast.success("Match history deleted")
 }
 
 const handleClearAllData = async () => {
     isClearing.value = true
     try {
-        const wallet = SecureWallet.getInstance()
-        await wallet.clearIdentity()
-        await SessionManager.clearAllSessions()
+        await identityRepo.clearIdentity()
+        await sessionRepo.clearAllSessions()
         toast.success("All Data Cleared")
         router.replace('/')
     } catch (error) {
@@ -146,8 +152,8 @@ const handleAddKnownIdentity = async () => {
             publicKey: newIdentityPublicKey.value.trim(),
             addedAt: Date.now()
         }
-        await db.addKnownIdentity(newIdentity)
-        knownIdentities.value = await db.getAllKnownIdentities()
+        await knownIdentityRepo.addKnownIdentity(newIdentity)
+        knownIdentities.value = await knownIdentityRepo.getAllKnownIdentities()
         newIdentityName.value = ''
         newIdentityPublicKey.value = ''
         toast.success('Known Identity Added', {
@@ -162,8 +168,8 @@ const handleAddKnownIdentity = async () => {
 
 const handleRemoveKnownIdentity = async (id: string, name: string) => {
     try {
-        await db.deleteKnownIdentity(id)
-        knownIdentities.value = await db.getAllKnownIdentities()
+        await knownIdentityRepo.deleteKnownIdentity(id)
+        knownIdentities.value = await knownIdentityRepo.getAllKnownIdentities()
         toast.success('Identity Removed', {
             description: `${name} has been removed from your network.`
         })
@@ -174,7 +180,7 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background">
+  <div class="min-h-screen bg-background text-foreground">
     <div class="max-w-4xl mx-auto p-6 space-y-12">
       <Header />
 
@@ -485,4 +491,3 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
     </div>
   </div>
 </template>
-

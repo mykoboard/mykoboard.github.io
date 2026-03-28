@@ -12,8 +12,7 @@ import {
   AlertDialogCancel, 
   AlertDialogAction 
 } from 'radix-vue'
-
-import type { Connection } from '../../lib/webrtc'
+import { IPeerConnectionPort } from '../../application/ports/IPeerConnectionPort'
 
 interface PendingJoinRequest {
     connectionId: string;
@@ -26,16 +25,15 @@ interface PendingJoinRequest {
 const props = defineProps<{
     state: any;
     isInitiator: boolean;
-    signalingMode: 'manual' | 'server' | null;
     isServerConnecting: boolean;
     signalingClient: any;
-    pendingSignaling: Connection[];
+    pendingSignaling: IPeerConnectionPort[];
     pendingJoinRequests?: PendingJoinRequest[];
     isKnownIdentity?: (publicKey: string) => Promise<boolean>;
     onStartGame: () => void;
     onHostAGame: () => void;
-    onUpdateOffer: (connection: Connection, offer: string) => void;
-    onUpdateAnswer: (connection: Connection, answer: string) => void;
+    onUpdateOffer: (connection: IPeerConnectionPort, offer: string) => void;
+    onUpdateAnswer: (connection: IPeerConnectionPort, answer: string) => void;
     onCloseSession: () => void;
     onBackToLobby: () => void;
     onAcceptGuest: () => void;
@@ -44,7 +42,7 @@ const props = defineProps<{
     onRejectPeer?: (request: PendingJoinRequest) => void;
     onSaveIdentity?: (request: PendingJoinRequest) => Promise<void>;
     onRemovePlayer: (id: string) => void;
-    onCancelSignaling: (connection: Connection) => void;
+    onCancelSignaling: (connection: IPeerConnectionPort) => void;
     onAddManualConnection?: () => void;
     playerCount: number;
     maxPlayers: number;
@@ -158,7 +156,7 @@ const isApproving = computed(() => props.state?.matches('approving') || false)
       </div>
     </div>
 
-    <!-- Pending Join Requests (New Flow) -->
+    <!-- Pending Join Requests -->
     <div v-if="isInitiator && pendingJoinRequests && pendingJoinRequests.length > 0" class="glass-dark p-8 border border-primary/20 shadow-glass-dark rounded-[2.5rem] animate-zoom-in space-y-6">
       <div class="flex items-center gap-4">
         <div class="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20">
@@ -186,7 +184,6 @@ const isApproving = computed(() => props.state?.matches('approving') || false)
             </div>
           </div>
 
-          <!-- Save identity switch for unknown identities - positioned above buttons -->
           <div v-if="!friendStatus[request.publicKey]" class="flex items-center justify-end gap-2 px-1 pb-2">
             <span class="text-xs text-white/50 uppercase tracking-wider font-medium">Auto-approve next time</span>
             <button
@@ -242,27 +239,36 @@ const isApproving = computed(() => props.state?.matches('approving') || false)
         </p>
       </div>
 
-      <!-- Network Protocol Selection (Host Only) -->
-      <div v-if="isInitiator && !hostSignalingMode && !isJoining" class="flex flex-col items-center gap-6 pt-4 border-t border-white/5">
-        <h3 class="text-sm font-black text-white uppercase tracking-widest px-4 text-center">Select Network Protocol</h3>
+      <div v-if="(!hostSignalingMode || (isInitiator && !hostSignalingMode)) && !isJoining" class="flex flex-col items-center gap-6 pt-4 border-t border-white/5">
+        <h3 class="text-sm font-black text-white uppercase tracking-widest px-4 text-center">
+          {{ isInitiator ? 'Select Network Protocol' : 'Signal Mesh Authorization' }}
+        </h3>
         <p class="text-[10px] text-white/40 uppercase tracking-[0.2em] font-medium max-w-sm text-center">
-          Choose how peer nodes will discover and bridge to this session.
+          {{ isInitiator ? 'Choose how peer nodes will discover and bridge to this session.' : 'Authorize this node to bridge into the discovery mesh to synchronize with the host.' }}
         </p>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
           <button
             @click="initializeServerSignaling"
-            class="group relative flex flex-col items-center justify-center p-6 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/40 rounded-3xl transition-all duration-300"
+            :class="[
+                'group relative flex flex-col items-center justify-center p-6 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/40 rounded-3xl transition-all duration-300',
+                !isInitiator ? 'md:col-span-2' : ''
+            ]"
           >
             <div class="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 rounded-3xl transition-opacity duration-500"></div>
             <div class="h-12 w-12 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20 mb-4 group-hover:scale-110 transition-transform duration-500">
                <div class="w-2.5 h-2.5 bg-primary rounded-full animate-pulse shadow-neon" />
             </div>
-            <span class="text-xs font-black text-white uppercase tracking-widest">Public Discovery</span>
-            <span class="text-[9px] text-white/40 uppercase tracking-widest mt-2 whitespace-nowrap">AWS Signaling Relay</span>
+            <span class="text-xs font-black text-white uppercase tracking-widest">
+                {{ isInitiator ? 'Public Discovery' : 'Connect to Discovery Mesh' }}
+            </span>
+            <span class="text-[9px] text-white/40 uppercase tracking-widest mt-2 whitespace-nowrap">
+                AWS Signaling Relay
+            </span>
           </button>
-
+ 
           <button
+            v-if="isInitiator"
             @click="initializeManualSignaling"
             class="group relative flex flex-col items-center justify-center p-6 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-primary/40 rounded-3xl transition-all duration-300"
           >
@@ -276,7 +282,6 @@ const isApproving = computed(() => props.state?.matches('approving') || false)
         </div>
       </div>
 
-      <!-- General Server Setup Steps (Only shown after host picks 'server' or if guest) -->
       <template v-else>
         <div v-if="isInitiator" class="flex flex-col items-center gap-6">
         <button
@@ -375,9 +380,7 @@ const isApproving = computed(() => props.state?.matches('approving') || false)
         </AlertDialogRoot>
       </div>
 
-      <!-- Session Shareability & Manual Signaling -->
       <div v-if="isInitiator" class="pt-8 border-t border-white/5 space-y-6">
-        <!-- Share Link (Server Mode) -->
         <div class="glass-dark p-8 rounded-[2rem] border border-white/10 shadow-glass-dark space-y-6 group hover:border-primary/30 transition-all duration-500">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -417,28 +420,8 @@ const isApproving = computed(() => props.state?.matches('approving') || false)
             </button>
           </div>
         </div>
-
-
         </div>
       </template>
-    </div>
-
-    <div v-if="!isHosting && !isJoining && !isPreparation && !isApproving" class="py-24 flex flex-col items-center justify-center space-y-6 border border-white/5 bg-white/5 rounded-[3rem] backdrop-blur-sm animate-fade-in">
-      <div class="relative">
-        <div class="h-20 w-20 bg-white/5 rounded-full flex items-center justify-center transition-transform hover:scale-110 duration-500">
-          <div class="h-4 w-4 bg-white/10 rounded-full animate-ping"></div>
-        </div>
-      </div>
-      <div class="text-center space-y-2">
-        <div class="text-xs font-black uppercase tracking-[0.5em] text-white/30">Null Reference: No Active Session</div>
-        <p class="text-[10px] text-white/20 uppercase tracking-widest px-10 leading-relaxed font-medium">Session data not found on current node. Return to discovery mesh.</p>
-      </div>
-      <button
-        @click="onBackToLobby"
-        class="h-12 px-8 rounded-xl border border-white/10 text-white/70 hover:text-primary hover:border-primary/40 font-black uppercase tracking-widest text-[10px] transition-all"
-      >
-        Return to Discovery
-      </button>
     </div>
   </div>
 </template>
