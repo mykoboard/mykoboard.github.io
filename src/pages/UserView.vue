@@ -115,7 +115,7 @@ const handleUpdateProfile = async () => {
 }
 
 const onDeleteSession = async (id: string) => {
-    await sessionRepo.removeSession(id)
+    await sessionRepo.deleteGame(id)
     activeSessions.value = await sessionRepo.getAllGames()
     toast.success("Match history deleted")
 }
@@ -124,7 +124,7 @@ const handleClearAllData = async () => {
     isClearing.value = true
     try {
         await identityRepo.clearIdentity()
-        await sessionRepo.clearAllSessions()
+        await sessionRepo.clearAllGames()
         toast.success("All Data Cleared")
         router.replace('/')
     } catch (error) {
