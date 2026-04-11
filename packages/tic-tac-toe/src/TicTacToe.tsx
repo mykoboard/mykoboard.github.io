@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useMachine } from '@xstate/react';
@@ -11,7 +11,7 @@ import {
     SimpleConnection
 } from '@mykoboard/integration';
 
-export default function TicTacToe({ connections, playerNames, playerInfos, isInitiator, ledger, onAddLedger, onFinishGame }: GameProps) {
+export default function TicTacToe({ connections, playerNames, isInitiator, ledger, onAddLedger, onFinishGame }: GameProps) {
     const [state, send] = useMachine(ticTacToeMachine, {
         input: { isInitiator }
     });
@@ -121,30 +121,58 @@ export default function TicTacToe({ connections, playerNames, playerInfos, isIni
     const amIParticipant = isInitiator || playerNames.length > 1;
 
     return (
-        <Card className="p-6 flex flex-col items-center space-y-4 bg-white/50 backdrop-blur-sm border-2 border-primary/20 shadow-xl rounded-2xl">
-            <div className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-                Tic-Tac-Toe
+        <Card className="p-8 flex flex-col items-center space-y-6 glass-dark border border-white/10 shadow-2xl rounded-[2.5rem] relative overflow-hidden">
+            {/* Decorative background glow */}
+            <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/20 blur-[80px] rounded-full" />
+            <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-purple-600/20 blur-[80px] rounded-full" />
+
+            <div className="text-3xl font-black bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent tracking-tight">
+                TIC-TAC-TOE
             </div>
-            <div className={`text-lg font-medium ${isMyTurn && amIParticipant ? 'text-green-600 animate-pulse' : 'text-gray-500'}`}>
+
+            <div className={`px-6 py-2 rounded-full text-sm font-bold tracking-wider uppercase transition-all duration-300 border
+                ${isMyTurn && amIParticipant 
+                    ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 shadow-[0_0_15px_-3px_rgba(34,211,238,0.2)] animate-pulse' 
+                    : 'bg-white/5 text-white/40 border-white/5'}`}>
                 {status}
             </div>
-            <div className="grid grid-cols-3 gap-3">
+
+            <div className="grid grid-cols-3 gap-4 p-2 bg-white/5 rounded-3xl border border-white/5">
                 {board.map((square, i) => (
                     <button
                         key={i}
                         onClick={() => handleClick(i)}
                         disabled={!isMyTurn || !!square || state.matches('won') || state.matches('draw') || !amIParticipant}
-                        className={`w-20 h-20 text-3xl font-black rounded-xl transition-all duration-200 border-2 
-              ${square === 'X' ? 'text-blue-600 border-blue-200 bg-blue-50' : square === 'O' ? 'text-rose-600 border-rose-200 bg-rose-50' : 'hover:bg-primary/5 hover:border-primary/30 border-gray-100 bg-white'}
-              ${(!isMyTurn || !!square || state.matches('won') || state.matches('draw') || !amIParticipant) ? 'opacity-50 cursor-not-allowed' : ''}
-              flex items-center justify-center shadow-sm hover:shadow-md active:scale-95`}
+                        className={`w-24 h-24 text-4xl font-black rounded-2xl transition-all duration-300 border-2 relative group
+              ${square === 'X' 
+                ? 'text-cyan-400 border-cyan-500/30 bg-cyan-500/5 shadow-[0_0_20px_-5px_rgba(34,211,238,0.3)]' 
+                : square === 'O' 
+                  ? 'text-rose-400 border-rose-500/30 bg-rose-500/5 shadow-[0_0_20px_-5px_rgba(244,63,94,0.3)]' 
+                  : 'hover:bg-white/10 hover:border-white/20 border-white/5 bg-white/2'}
+              ${(!isMyTurn || !!square || state.matches('won') || state.matches('draw') || !amIParticipant) ? 'opacity-40 cursor-not-allowed' : 'active:scale-90'}
+              flex items-center justify-center shadow-inner`}
                     >
-                        {square}
+                        {square === 'X' && (
+                            <span className="drop-shadow-[0_0_8px_rgba(34,211,238,0.8)] animate-in zoom-in duration-300">X</span>
+                        )}
+                        {square === 'O' && (
+                            <span className="drop-shadow-[0_0_8px_rgba(244,63,94,0.8)] animate-in zoom-in duration-300">O</span>
+                        )}
+                        {!square && isMyTurn && amIParticipant && (
+                            <span className="opacity-0 group-hover:opacity-20 transition-opacity text-white">
+                                {mySymbol}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
+
             {(state.matches('won') || state.matches('draw')) && amIParticipant && !onFinishGame && (
-                <Button onClick={handleReset} variant="outline" className="mt-4 hover:bg-primary hover:text-white transition-colors">
+                <Button 
+                    onClick={handleReset} 
+                    variant="outline" 
+                    className="mt-6 px-8 py-6 rounded-2xl border-white/10 bg-white/5 hover:bg-white/10 hover:text-cyan-400 hover:border-cyan-500/40 transition-all duration-300 font-bold tracking-wide"
+                >
                     Play Again
                 </Button>
             )}
