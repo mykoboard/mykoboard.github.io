@@ -13,13 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout mykoboard
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: mykoboard
           fetch-depth: 0
 
       - name: Checkout apex-nebula
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: mykoboard/apex-nebula
           path: apex-nebula
