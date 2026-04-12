@@ -24,9 +24,6 @@ export default defineConfig(({ mode }) => ({
         "ludo": mode === 'development'
           ? "http://localhost:5002/packages/ludo/assets/remoteEntry.js"
           : "https://mykoboard.com/packages/ludo/assets/remoteEntry.js",
-        "galactic-hegemony": mode === 'development'
-          ? "http://localhost:5003/packages/galactic-hegemony/assets/remoteEntry.js"
-          : "https://mykoboard.com/packages/galactic-hegemony/assets/remoteEntry.js",
         "planning-poker": mode === 'development'
           ? "http://localhost:5004/packages/planning-poker/assets/remoteEntry.js"
           : "https://mykoboard.com/packages/planning-poker/assets/remoteEntry.js",
