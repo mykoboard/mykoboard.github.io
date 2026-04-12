@@ -1,1 +1,0 @@
-.list-move,.list-enter-active,.list-leave-active{transition:all .5s ease}.list-enter-from,.list-leave-to{opacity:0;transform:translate(-30px)}.list-leave-active{position:absolute}@keyframes pulse-subtle{0%,to{opacity:1;transform:scale(1)}50%{opacity:.95;transform:scale(1.005)}}.animate-pulse-subtle{animation:pulse-subtle 4s infinite ease-in-out}
