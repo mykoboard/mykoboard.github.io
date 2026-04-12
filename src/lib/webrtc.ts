@@ -128,7 +128,7 @@ export class Connection {
               name: this.localPlayerName,
               publicKey: this.localPublicKey
             }
-          }));
+          ));
         }
       };
 
