@@ -22,7 +22,6 @@ Remove all 52+ uses of `any` type across the codebase to comply with Developer s
 - **Packages** - 22 violations
   - `packages/integration` - 8 violations
   - `packages/planning-poker` - 2 violations
-  - `packages/galactic-hegemony` - 2 violations
 
 **Acceptance Criteria**:
 - [ ] Zero `any` types in all TypeScript files

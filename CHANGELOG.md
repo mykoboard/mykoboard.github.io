@@ -32,7 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Secure wallet integration with cryptographic verification
 - Planning Poker game implementation
 - Tic-Tac-Toe game implementation
-- Galactic Hegemony game (alpha)
 - Dynamic lobby with live signaling
 - IndexedDB-based local storage
 - AWS Free Tier signaling service
