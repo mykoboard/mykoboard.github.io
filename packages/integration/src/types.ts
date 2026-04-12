@@ -10,7 +10,7 @@ export interface PlayerInfo {
 }
 
 export interface SimpleConnection {
-    id: string;
+    publicKey: string;
     send: (data: string) => void;
     addMessageListener: (callback: (data: string) => void) => void;
     removeMessageListener: (callback: (data: string) => void) => void;

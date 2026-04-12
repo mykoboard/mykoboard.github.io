@@ -17,7 +17,7 @@ const COLORS_HEX: Record<Color, string> = {
 export default function Ludo({ playerInfos, isInitiator, ledger, onAddLedger }: GameProps) {
     const players = useMemo((): Player[] => {
         return playerInfos.slice(0, 4).map((info: PlayerInfo, i: number) => ({
-            id: info.isLocal ? 'local' : info.id,
+            publicKey: info.isLocal ? 'local' : info.publicKey,
             name: info.name,
             color: (['yellow', 'green', 'red', 'blue'] as Color[])[i] // TL, TR, BR, BL order
         }));
@@ -29,7 +29,7 @@ export default function Ludo({ playerInfos, isInitiator, ledger, onAddLedger }: 
 
     const { pieces, currentPlayerIndex, diceValue, lastRoll } = state.context;
     const currentPlayer = players[currentPlayerIndex];
-    const isMyTurn = currentPlayer?.id === 'local';
+    const isMyTurn = currentPlayer?.publicKey === 'local';
 
     useEffect(() => {
         if (state.matches('waitingForPlayers') && players.length >= 2) {
@@ -79,9 +79,9 @@ export default function Ludo({ playerInfos, isInitiator, ledger, onAddLedger }: 
                 </div>
                 <div className="flex items-center gap-3">
                     {players.map((p, i) => (
-                        <div key={p.id} className={`flex items-center space-x-2 px-4 py-2 rounded-2xl transition-all duration-500 ${i === currentPlayerIndex ? 'bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-2 ring-primary/10' : 'opacity-40 grayscale'}`}>
+                        <div key={p.publicKey} className={`flex items-center space-x-2 px-4 py-2 rounded-2xl transition-all duration-500 ${i === currentPlayerIndex ? 'bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-2 ring-primary/10' : 'opacity-40 grayscale'}`}>
                             <div className="w-4 h-4 rounded-full" style={{ backgroundColor: COLORS_HEX[p.color] }} />
-                            <span className="text-sm font-black text-slate-700">{p.name} {p.id === 'local' && '(You)'}</span>
+                            <span className="text-sm font-black text-slate-700">{p.name} {p.publicKey === 'local' && '(You)'}</span>
                         </div>
                     ))}
                 </div>

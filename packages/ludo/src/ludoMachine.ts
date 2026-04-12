@@ -11,7 +11,7 @@ export interface Piece {
 }
 
 export interface Player {
-    id: string;
+    publicKey: string;
     name: string;
     color: Color;
 }
@@ -22,7 +22,7 @@ interface LudoContext {
     pieces: Piece[];
     diceValue: number | null;
     isInitiator: boolean;
-    winners: string[]; // List of player IDs who finished
+    winners: string[]; // List of player publicKeys who finished
     rollsInTurn: number;
     lastRoll: number | null;
     ledger?: LedgerEntry[];

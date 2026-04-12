@@ -91,7 +91,7 @@ export default function PlanningPoker({
         };
 
         connections.forEach((c: SimpleConnection) => {
-            const listener = (data: string) => handleMessage(data, c.id);
+            const listener = (data: string) => handleMessage(data, c.publicKey);
             c.addMessageListener(listener);
             (c as any)._pokerListener = listener;
         });
@@ -114,24 +114,24 @@ export default function PlanningPoker({
         setLocalVote(value);
 
         if (isInitiator) {
-            hostVotesRef.current[localPlayer.id] = value;
+            hostVotesRef.current[localPlayer.publicKey] = value;
             onAddLedger?.({
                 type: 'COMMIT',
-                payload: { playerId: localPlayer.id }
+                payload: { playerId: localPlayer.publicKey }
             });
         } else {
-            hostVotesRef.current[localPlayer.id] = value;
+            hostVotesRef.current[localPlayer.publicKey] = value;
             // Immediately mark as voted for UI feedback
             send({
                 type: 'SYNC_STATE',
                 context: {
                     ...state.context,
-                    votedPlayers: new Set([...state.context.votedPlayers, localPlayer.id])
+                    votedPlayers: new Set([...state.context.votedPlayers, localPlayer.publicKey])
                 }
             });
             connections.forEach((c: SimpleConnection) => {
                 c.send(JSON.stringify(createGameMessage('VOTE_REQUEST', {
-                    playerId: localPlayer.id,
+                    playerId: localPlayer.publicKey,
                     value
                 })));
             });
@@ -173,10 +173,10 @@ export default function PlanningPoker({
     const localPlayer = playerInfos.find(p => p.isLocal);
     // For local player, show their local vote or the confirmed vote from host
     const myDisplayVote = localPlayer
-        ? (localVote || hostVotesRef.current[localPlayer.id])
+        ? (localVote || hostVotesRef.current[localPlayer.publicKey])
         : null;
 
-    const allVoted = playerInfos.length > 0 && playerInfos.every(p => votedPlayers.has(p.id));
+    const allVoted = playerInfos.length > 0 && playerInfos.every(p => votedPlayers.has(p.publicKey));
 
     const consensus = useMemo(() => {
         if (!isRevealed || Object.keys(votes).length === 0) return null;
@@ -387,10 +387,10 @@ export default function PlanningPoker({
                         <div className="space-y-4">
                             {playerInfos.map((player) => (
                                 <div
-                                    key={player.id}
+                                    key={player.publicKey}
                                     className={cn(
                                         "p-5 rounded-2xl border transition-all duration-300 flex items-center justify-between",
-                                        votedPlayers.has(player.id)
+                                        votedPlayers.has(player.publicKey)
                                             ? "bg-primary/5 border-primary/20"
                                             : "bg-white/5 border-white/5 opacity-60"
                                     )}
@@ -400,7 +400,7 @@ export default function PlanningPoker({
                                             <div className="w-10 h-10 rounded-xl bg-slate-900 border border-white/10 flex items-center justify-center overflow-hidden">
                                                 <User className="w-5 h-5 text-slate-500" />
                                             </div>
-                                            {votedPlayers.has(player.id) && (
+                                            {votedPlayers.has(player.publicKey) && (
                                                 <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-primary rounded-full border-2 border-[#020617] flex items-center justify-center">
                                                     <CheckCircle2 className="w-2 h-2 text-[#020617]" />
                                                 </div>
@@ -420,11 +420,11 @@ export default function PlanningPoker({
                                                 "w-10 h-10 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center text-primary font-black animate-in zoom-in duration-500",
                                                 consensus?.label === "UNANIMOUS" && "shadow-neon scale-110"
                                             )}>
-                                                {votes[player.id] || "—"}
+                                                {votes[player.publicKey] || "—"}
                                             </div>
                                         ) : (
                                             <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-                                                {votedPlayers.has(player.id) ? (
+                                                {votedPlayers.has(player.publicKey) ? (
                                                     <Clock className="w-4 h-4 text-slate-600 animate-spin-slow" />
                                                 ) : (
                                                     <div className="w-1.5 h-1.5 bg-slate-800 rounded-full" />

@@ -52,9 +52,9 @@ export async function createLocalWebRTCPair(): Promise<[SimpleConnection, Simple
     ]);
 
     // 7. Wrap them in the SimpleConnection interface
-    const wrapChannel = (id: string, channel: RTCDataChannel): SimpleConnection => {
+    const wrapChannel = (publicKey: string, channel: RTCDataChannel): SimpleConnection => {
         return {
-            id,
+            publicKey,
             send: (data: string) => channel.send(data),
             addMessageListener: (callback: (data: string) => void) => {
                 const handler = (e: MessageEvent) => callback(e.data);

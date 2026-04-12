@@ -5,7 +5,7 @@ import { PlayerInfo } from '@mykoboard/integration'
 import './index.css'
 
 const mockPlayers: PlayerInfo[] = [
-    { id: 'local', name: 'Developer', isLocal: true, isHost: true, status: 'game', isConnected: true }
+    { publicKey: 'local', name: 'Developer', isLocal: true, isHost: true, status: 'game', isConnected: true }
 ];
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
