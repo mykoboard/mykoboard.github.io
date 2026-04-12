@@ -45,11 +45,11 @@ export function useBoardState() {
         const externalParticipants = (ctx.externalParticipants as any[]) || [];
 
         const localParticipant = storedParticipants.find(
-            p => p.id === identity.value?.id || p.publicKey === identity.value?.publicKey || p.isYou
+            p => p.publicKey === identity.value?.publicKey || p.isYou
         );
 
         const localPlayer: PlayerInfo = {
-            id: identity.value?.id || 'local',
+            publicKey: identity.value?.publicKey || 'local',
             name:
                 identity.value?.name ||
                 (ctx.playerName !== 'Anonymous' ? ctx.playerName : null) ||
@@ -90,13 +90,12 @@ export function useBoardState() {
                 const publicKey = c.remotePublicKey;
                 if (publicKey && !processedPublicKeys.has(publicKey)) {
                     infos.push({
-                        id: c.id,
+                        publicKey,
                         name: c.remotePlayerName || 'Anonymous',
-                        status: ctx.playerStatuses.get(c.id) || 'lobby',
+                        status: ctx.playerStatuses.get(publicKey) || 'lobby',
                         isConnected: c.status === ConnectionStatus.connected,
                         isLocal: false,
                         isHost: false,
-                        publicKey,
                     });
                     processedPublicKeys.add(publicKey);
                 }
@@ -107,7 +106,7 @@ export function useBoardState() {
         storedParticipants.forEach(p => {
             if (!p.isYou && p.publicKey && !processedPublicKeys.has(p.publicKey)) {
                 infos.push({
-                    id: p.id,
+                    publicKey: p.publicKey,
                     name: p.name,
                     status:
                         currentSession?.status === 'finished' || isGameStarted.value
@@ -116,7 +115,6 @@ export function useBoardState() {
                     isConnected: false,
                     isLocal: false,
                     isHost: p.isHost,
-                    publicKey: p.publicKey,
                 });
                 processedPublicKeys.add(p.publicKey);
             }
@@ -145,7 +143,6 @@ export function useBoardState() {
                     status: s.matches('finished') ? 'finished' : 'active',
                     ledger: s.context.ledger,
                     participants: playerInfos.value.map(p => ({
-                        id: p.id,
                         name: p.name,
                         isYou: p.isLocal,
                         isHost: p.isHost,

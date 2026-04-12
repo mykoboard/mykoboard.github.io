@@ -36,7 +36,7 @@ export function useP2PNegotiation({
         await connection.prepareOffer(ident.name || 'Anonymous', ident.publicKey);
 
         connection.onClose(() => {
-            currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
+            currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id, publicKey: connection.remotePublicKey });
         });
 
         pendingConnections.set(connection.id, connection);
@@ -71,7 +71,7 @@ export function useP2PNegotiation({
         connection.onClose(() => {
             logger.sig(`Manual Guest Connection closed: ${connection.id}`);
             if (manualGuestConnectionId.value === connection.id) manualGuestConnectionId.value = null;
-            currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
+            currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id, publicKey: connection.remotePublicKey });
         });
 
         updateConnection(connection);
@@ -85,9 +85,6 @@ export function useP2PNegotiation({
             const ident = await identityRepo.getIdentity();
             if (!ident) return;
             if (signal.publicKey) connection.remotePublicKey = signal.publicKey;
-
-            const hostPlayer = playerInfos.value.find(p => p.isHost);
-            if (hostPlayer) connection.remotePlayerId = hostPlayer.id;
 
             await connection.acceptOffer(offer, ident.name, ident.publicKey);
             updateConnection(connection);

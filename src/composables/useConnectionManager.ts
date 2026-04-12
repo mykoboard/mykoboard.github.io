@@ -64,14 +64,13 @@ export function useConnectionManager({
         if (!isInitiator.value || !currentBoardActor.value || !identity) return;
 
         const participants = [
-            { id: identity.id, name: identity.name, isHost: true, publicKey: identity.publicKey },
+            { publicKey: identity.publicKey, name: identity.name, isHost: true },
             ...Array.from(pendingConnections.values())
-                .filter(c => c.status === PeerConnectionStatus.connected)
+                .filter(c => c.status === PeerConnectionStatus.connected && c.remotePublicKey)
                 .map(c => ({ 
-                    id: c.id, 
+                    publicKey: c.remotePublicKey!, 
                     name: c.remotePlayerName || 'Anonymous', 
                     isHost: false, 
-                    publicKey: c.remotePublicKey 
                 })),
         ];
 
@@ -83,12 +82,12 @@ export function useConnectionManager({
 
         const peerIds = connectedPeers.value
             .filter(c => c.status === PeerConnectionStatus.connected)
-            .map(c => c.remotePlayerId || c.id);
+            .map(c => c.remotePublicKey).filter((pk): pk is string => !!pk);
 
         broadcast({
             namespace: 'player',
             type: 'SYNC_PARTICIPANTS',
-            payload: { participants, topologyMode: mode, topologyMap: topologyObj, peerId: identity.id, connections: peerIds },
+            payload: { participants, topologyMode: mode, topologyMap: topologyObj, publicKey: identity.publicKey, connections: peerIds },
         });
     };
 
@@ -115,9 +114,9 @@ export function useConnectionManager({
         const { type, payload } = msg;
 
         if (type === 'SYNC_PARTICIPANTS') {
-            const { participants, topologyMode, topologyMap, connections, peerId } = payload;
+            const { participants, topologyMode, topologyMap, connections, publicKey: senderPublicKey } = payload;
             if (participants) actor.send({ type: 'SYNC_PARTICIPANTS', participants, topologyMode, topologyMap } as any);
-            if (connections && peerId) actor.send({ type: 'UPDATE_TOPOLOGY', peerId, connections });
+            if (connections && senderPublicKey) actor.send({ type: 'UPDATE_TOPOLOGY', publicKey: senderPublicKey, connections });
         }
 
         if (type === 'PLAYER_IDENTITY') {
@@ -130,11 +129,11 @@ export function useConnectionManager({
 
         if (type === 'TOPOLOGY_GOSSIP') {
             const { peerId, connections: peerConnections } = payload;
-            actor.send({ type: 'UPDATE_TOPOLOGY', peerId, connections: peerConnections });
+            actor.send({ type: 'UPDATE_TOPOLOGY', publicKey: peerId, connections: peerConnections });
         }
 
         if (type === 'REQUEST_P2P_OFFER') {
-            const { targetPeerId, targetPlayerName, targetPublicKey } = payload;
+            const { targetPublicKey, targetPlayerName } = payload;
             (async () => {
                 const ident = await identityRepo.getIdentity();
                 if (!ident) return;
@@ -143,12 +142,11 @@ export function useConnectionManager({
                 // Set metadata on adapter/inner connection
                 p2pConnection.remotePlayerName = targetPlayerName;
                 p2pConnection.remotePublicKey = targetPublicKey;
-                p2pConnection.remotePlayerId = targetPeerId;
                 
                 await p2pConnection.prepareOffer(ident.name, ident.publicKey);
 
                 updateConnection(p2pConnection);
-                pendingConnections.set(targetPeerId, p2pConnection);
+                pendingConnections.set(targetPublicKey, p2pConnection);
 
                 const checkOffer = setInterval(() => {
                     if (p2pConnection.serializedSignal) {
@@ -156,7 +154,7 @@ export function useConnectionManager({
                         connection.send(JSON.stringify({
                             namespace: 'player',
                             type: 'PEER_P2P_OFFER',
-                            payload: { targetPeerId, offer: p2pConnection.serializedSignal, peerName: ident.name, publicKey: ident.publicKey },
+                            payload: { targetPublicKey, offer: p2pConnection.serializedSignal, peerName: ident.name, publicKey: ident.publicKey },
                         }));
                     }
                 }, 100);
@@ -165,17 +163,17 @@ export function useConnectionManager({
 
         if (type === 'PEER_P2P_OFFER') {
             if (isInitiator.value) {
-                const { targetPeerId, offer, peerName, publicKey } = payload;
-                const targetConn = connectedPeers.value.find(c => c.id === targetPeerId);
+                const { targetPublicKey, offer, peerName, publicKey } = payload;
+                const targetConn = connectedPeers.value.find(c => c.remotePublicKey === targetPublicKey);
                 if (targetConn) {
                     targetConn.send(JSON.stringify({
                         namespace: 'player',
                         type: 'PEER_P2P_OFFER',
-                        payload: { sourcePeerId: connection.id, offer, peerName, publicKey },
+                        payload: { sourcePublicKey: connection.remotePublicKey, offer, peerName, publicKey },
                     }));
                 }
             } else {
-                const { sourcePeerId, offer, peerName, publicKey } = payload;
+                const { sourcePublicKey, offer, peerName, publicKey } = payload;
                 (async () => {
                     const ident = await identityRepo.getIdentity();
                     if (!ident) return;
@@ -183,12 +181,11 @@ export function useConnectionManager({
                     
                     p2pConnection.remotePlayerName = peerName;
                     p2pConnection.remotePublicKey = publicKey;
-                    p2pConnection.remotePlayerId = sourcePeerId;
 
                     await p2pConnection.acceptOffer(offer, ident.name, ident.publicKey);
 
                     updateConnection(p2pConnection);
-                    pendingConnections.set(sourcePeerId, p2pConnection);
+                    pendingConnections.set(sourcePublicKey, p2pConnection);
 
                     const checkAnswer = setInterval(() => {
                         if (p2pConnection.serializedSignal) {
@@ -196,7 +193,7 @@ export function useConnectionManager({
                             connection.send(JSON.stringify({
                                 namespace: 'player',
                                 type: 'PEER_P2P_ANSWER',
-                                payload: { targetPeerId: sourcePeerId, answer: p2pConnection.serializedSignal, peerName: ident.name, publicKey: ident.publicKey },
+                                payload: { targetPublicKey: sourcePublicKey, answer: p2pConnection.serializedSignal, peerName: ident.name, publicKey: ident.publicKey },
                             }));
                         }
                     }, 100);
@@ -206,22 +203,22 @@ export function useConnectionManager({
 
         if (type === 'PEER_P2P_ANSWER') {
             if (isInitiator.value) {
-                const { targetPeerId, answer, peerName, publicKey } = payload;
-                const targetConn = connectedPeers.value.find(c => c.id === targetPeerId);
+                const { targetPublicKey, answer, peerName, publicKey } = payload;
+                const targetConn = connectedPeers.value.find(c => c.remotePublicKey === targetPublicKey);
                 if (targetConn) {
                     targetConn.send(JSON.stringify({
                         namespace: 'player',
                         type: 'PEER_P2P_ANSWER',
-                        payload: { sourcePeerId: connection.id, answer, peerName, publicKey },
+                        payload: { sourcePublicKey: connection.remotePublicKey, answer, peerName, publicKey },
                     }));
                 }
             } else {
-                const { sourcePeerId, answer } = payload;
-                const p2pConn = pendingConnections.get(sourcePeerId);
+                const { sourcePublicKey, answer } = payload;
+                const p2pConn = pendingConnections.get(sourcePublicKey);
                 if (p2pConn) {
                     (async () => {
                         await p2pConn.acceptAnswer(answer);
-                        pendingConnections.delete(sourcePeerId);
+                        pendingConnections.delete(sourcePublicKey);
                     })();
                 }
             }
@@ -238,7 +235,11 @@ export function useConnectionManager({
         if (type === 'GAME_STARTED') actor.send({ type: 'GAME_STARTED' });
         if (type === 'GAME_RESET') actor.send({ type: 'GAME_RESET' });
         if (type === 'NEW_BOARD') router.replace(`/games/${gameId.value}/${payload}`);
-        if (type === 'SYNC_PLAYER_STATUS') actor.send({ type: 'SET_PLAYER_STATUS', playerId: connection.id, status: payload });
+        if (type === 'SYNC_PLAYER_STATUS') {
+            if (connection.remotePublicKey) {
+                actor.send({ type: 'SET_PLAYER_STATUS', publicKey: connection.remotePublicKey, status: payload });
+            }
+        }
         if (type === 'SYNC_LEDGER') actor.send({ type: 'SYNC_LEDGER', ledger: payload });
     };
 
@@ -288,16 +289,17 @@ export function useConnectionManager({
         (connection as any)._lastGathering = connection.iceGatheringState;
 
         // Map Port to Domain Participant Type
-        actor.send({ 
-            type: 'UPDATE_PARTICIPANT', 
-            participant: {
-                id: connection.id,
-                name: connection.remotePlayerName || 'Guest',
-                status: connection.status as any,
-                isHost: connection.isHostConnection,
-                publicKey: connection.remotePublicKey
-            }
-        });
+        if (connection.remotePublicKey) {
+            actor.send({ 
+                type: 'UPDATE_PARTICIPANT', 
+                participant: {
+                    publicKey: connection.remotePublicKey,
+                    name: connection.remotePlayerName || 'Guest',
+                    status: connection.status as any,
+                    isHost: connection.isHostConnection
+                }
+            });
+        }
         
         registerConnectionHandlers(connection);
 
@@ -338,7 +340,7 @@ export function useConnectionManager({
                             g1.send(JSON.stringify({
                                 namespace: 'player',
                                 type: 'REQUEST_P2P_OFFER',
-                                payload: { targetPeerId: g2.id, targetPlayerName: g2.remotePlayerName, targetPublicKey: g2.remotePublicKey },
+                                payload: { targetPublicKey: g2.remotePublicKey, targetPlayerName: g2.remotePlayerName },
                             }));
                             initiatedP2P.add(pairId);
                         }

@@ -106,16 +106,17 @@ export function useSignaling({
 
                             const actor = getBoardActor(targetId, ident.name, false);
                             const connection = createPeerConnection(() => { 
-                                actor.send({ 
-                                    type: 'UPDATE_PARTICIPANT', 
-                                    participant: {
-                                        id: connection.id,
-                                        name: connection.remotePlayerName || 'Guest',
-                                        status: (connection.status as any),
-                                        isHost: connection.isHostConnection,
-                                        publicKey: connection.remotePublicKey
-                                    } 
-                                }); 
+                                if (connection.remotePublicKey) {
+                                    actor.send({ 
+                                        type: 'UPDATE_PARTICIPANT', 
+                                        participant: {
+                                            publicKey: connection.remotePublicKey,
+                                            name: connection.remotePlayerName || 'Guest',
+                                            status: (connection.status as any),
+                                            isHost: connection.isHostConnection
+                                        } 
+                                    });
+                                }
                             });
                             
                             connection.onMessage((data: string) => {
@@ -126,12 +127,10 @@ export function useSignaling({
                                 } catch (e) { logger.error('Failed to parse message:', e); }
                             });
 
-                            connection.onClose(() => actor.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id }));
+                            connection.onClose(() => actor.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id, publicKey: connection.remotePublicKey }));
                             
                             if (msg.publicKey) connection.remotePublicKey = msg.publicKey;
                             if (msg.peerName) connection.remotePlayerName = msg.peerName;
-                            const hostPlayer = playerInfos.value.find(p => p.isHost);
-                            if (hostPlayer) connection.remotePlayerId = hostPlayer.id;
                             
                             connection.acceptOffer(msg.offer, ident.name, ident.publicKey).then(() => {
                                 const checkAnswer = setInterval(() => {

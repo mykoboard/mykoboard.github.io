@@ -53,9 +53,6 @@ export class WebRtcConnectionAdapter implements IPeerConnectionPort {
     get remotePlayerName(): string | undefined { return this.connection.remotePlayerName; }
     set remotePlayerName(val: string | undefined) { this.connection.remotePlayerName = val || ""; }
 
-    get remotePlayerId(): string | undefined { return (this.connection as any).remotePlayerId; }
-    set remotePlayerId(val: string | undefined) { (this.connection as any).remotePlayerId = val; }
-
     send(data: string | Uint8Array | ArrayBuffer): void {
         // Current lib implementation only supports string
         if (typeof data === 'string') {

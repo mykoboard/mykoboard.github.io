@@ -51,14 +51,13 @@ export function useSessionActions({
         const connection = createPeerConnection(() => { updateConnection(connection); });
 
         connection.onClose(() => {
-            currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
+            currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id, publicKey: connection.remotePublicKey });
             pendingConnections.delete(request.connectionId);
         });
 
         const ident = await identityRepo.getIdentity();
         if (!ident) return;
         connection.remotePublicKey = request.publicKey;
-        connection.remotePlayerId = request.connectionId;
         
         await connection.prepareOffer(ident.name, ident.publicKey);
 
@@ -88,7 +87,6 @@ export function useSessionActions({
     const saveIdentityOnApprove = async (request: PendingJoinRequest) => {
         try {
             await knownIdentityRepo.addKnownIdentity({ 
-                id: `identity-${Date.now()}`, 
                 name: request.peerName, 
                 publicKey: request.publicKey, 
                 addedAt: Date.now() 
@@ -168,7 +166,7 @@ export function useSessionActions({
 
     const onCancelSignaling = (connection: IPeerConnectionPort) => {
         connection.close();
-        currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id });
+        currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id, publicKey: connection.remotePublicKey });
     };
 
     const onBackToGames = () => {

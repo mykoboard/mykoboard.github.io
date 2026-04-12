@@ -20,7 +20,6 @@ export interface IPeerConnectionPort {
     readonly isHostConnection: boolean;
     remotePublicKey?: string;
     remotePlayerName?: string;
-    remotePlayerId?: string;
 
     send(data: string | Uint8Array | ArrayBuffer): void;
     close(): void;

@@ -14,7 +14,6 @@ export enum ConnectionStatus {
 export class Connection {
   id: string
   peerConnection: RTCPeerConnection
-  localPlayerId?: string
   localPlayerName: string
   localPublicKey?: string
   remotePlayerName: string
@@ -126,8 +125,6 @@ export class Connection {
           this.send(JSON.stringify({
             namespace: 'player',
             type: 'PLAYER_IDENTITY',
-            payload: {
-              id: this.localPlayerId,
               name: this.localPlayerName,
               publicKey: this.localPublicKey
             }

@@ -110,16 +110,16 @@ const topology = computed(() => {
     if (mode === 'star') {
         if (!host) return edges
         playerInfos.value.forEach(player => {
-            if (player.id !== host.id && player.isConnected) {
-                edges.push({ from: host.id, to: player.id })
+            if (player.publicKey !== host.publicKey && player.isConnected) {
+                edges.push({ from: host.publicKey, to: player.publicKey })
             }
         })
     } else {
         connectedPeers.value.forEach(conn => {
-            if (conn.status === PeerConnectionStatus.connected) {
+            if (conn.status === PeerConnectionStatus.connected && conn.remotePublicKey) {
                 const localPlayer = playerInfos.value.find(p => p.isLocal)
-                if (localPlayer) {
-                    const pair = [localPlayer.id, conn.id].sort()
+                if (localPlayer && localPlayer.publicKey) {
+                    const pair = [localPlayer.publicKey, conn.remotePublicKey].sort()
                     const key = pair.join(':')
                     if (!seen.has(key)) {
                         edges.push({ from: pair[0], to: pair[1] })
@@ -173,7 +173,7 @@ onUnmounted(() => {
 
 <template>
   <div class="min-h-screen bg-background">
-    <div v-if="game" class="max-w-7xl mx-auto p-6 space-y-12">
+    <div v-if="game" class="w-full p-6 space-y-12">
       <h1 class="text-3xl font-black tracking-tighter uppercase text-white">
         Lobby: <span class="text-gradient">{{ game.name }}</span>
       </h1>
@@ -245,7 +245,7 @@ onUnmounted(() => {
             :onSaveIdentity="saveIdentityOnApprove"
             :onCancelSignaling="onCancelSignaling"
             :onAddManualConnection="onAddManualConnection"
-            :onRemovePlayer="(id) => send({ type: 'REMOVE_PLAYER', playerId: id })"
+            :onRemovePlayer="(pk) => send({ type: 'REMOVE_PLAYER', publicKey: pk })"
             :playerCount="playerInfos.length"
             :maxPlayers="snapshot?.context?.maxPlayers || 2"
             :boardId="boardId"
@@ -253,7 +253,7 @@ onUnmounted(() => {
           />
         </template>
 
-        <div class="mt-12 max-w-2xl">
+        <div class="mt-12 w-full">
           <LobbyPlayerList 
             :players="playerInfos"
             :connections="topology"
@@ -261,7 +261,7 @@ onUnmounted(() => {
             :is-initiator="isInitiator"
             :on-set-topology-mode="setTopologyMode"
             :currentTurnPlayerId="currentTurnPlayerId"
-            :onRemove="isInitiator ? (id) => send({ type: 'REMOVE_PLAYER', playerId: id }) : undefined"
+            :onRemove="isInitiator ? (pk) => send({ type: 'REMOVE_PLAYER', publicKey: pk }) : undefined"
             :onSaveIdentity="handleSavePlayerIdentity"
             :isKnownIdentity="isKnownIdentity"
           />

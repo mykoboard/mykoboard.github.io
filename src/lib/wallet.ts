@@ -1,11 +1,10 @@
-import { nanoid } from 'nanoid';
+import { logger } from './logger';
 
 const DB_NAME = 'mykoboard_wallet';
 const STORE_NAME = 'identity';
 const DB_VERSION = 2;
 
 export interface PlayerIdentity {
-    id: string;
     publicKey: string;
     name: string;
     avatar?: string;
@@ -85,7 +84,6 @@ export class SecureWallet {
         const publicKeyHex = this.bufToHex(new Uint8Array(exportedPublic));
 
         const identity: PlayerIdentity = {
-            id: nanoid(),
             name,
             publicKey: publicKeyHex,
             subscriptionToken

@@ -9,7 +9,7 @@ export interface PokerContext {
 }
 
 export type PokerEvent =
-    | { type: 'COMMIT'; payload: { playerId: string } }
+    | { type: 'COMMIT'; payload: { publicKey: string } }
     | { type: 'REVEAL'; payload: { votes: Record<string, string> } }
     | { type: 'RESET' }
     | { type: 'SET_DESCRIPTION'; payload: { description: string } }
@@ -37,7 +37,7 @@ export const planningPokerMachine = createMachine({
                 COMMIT: {
                     actions: assign(({ context, event }) => {
                         const nextVoted = new Set(context.votedPlayers);
-                        nextVoted.add(event.payload.playerId);
+                        nextVoted.add(event.payload.publicKey);
                         return { votedPlayers: nextVoted };
                     })
                 },
@@ -88,7 +88,7 @@ export function applyLedgerToPokerState(_players: any[], ledger: any[]): PokerCo
 
         switch (action.type) {
             case 'COMMIT':
-                context.votedPlayers.add(action.payload.playerId);
+                context.votedPlayers.add(action.payload.publicKey);
                 break;
             case 'REVEAL':
                 context.votes = action.payload.votes;

@@ -5,7 +5,7 @@ export type ResourceType = 'credits' | 'matter' | 'data' | 'influence';
 export type TechPath = 'military' | 'economic' | 'science';
 
 export interface PlayerState {
-    id: string;
+    publicKey: string;
     name: string;
     resources: Record<ResourceType, number>;
     workers: number;
@@ -56,8 +56,8 @@ export interface GalacticHegemonyContext {
 }
 
 export type GalacticHegemonyEvent =
-    | { type: 'PLACE_WORKER'; slotId: string; playerId: string; techPath?: TechPath; planetId?: string; shipType?: 'frigate' | 'dreadnought' }
-    | { type: 'CONTRIBUTE'; playerId: string; resources: { matter?: number; data?: number } }
+    | { type: 'PLACE_WORKER'; slotId: string; publicKey: string; techPath?: TechPath; planetId?: string; shipType?: 'frigate' | 'dreadnought' }
+    | { type: 'CONTRIBUTE'; publicKey: string; resources: { matter?: number; data?: number } }
     | { type: 'SYNC_STATE'; context: Partial<GalacticHegemonyContext> }
     | { type: 'NEXT_PHASE' }
     | { type: 'RESET' };
@@ -165,20 +165,20 @@ export const galacticHegemonyMachine = createMachine({
         }),
         placeWorker: assign(({ context, event }) => {
             if (event.type !== 'PLACE_WORKER') return {};
-            const { slotId, playerId } = event;
+            const { slotId, publicKey } = event;
             const slot = context.slots.find(s => s.id === slotId);
             if (!slot) return {};
 
-            const currentPlayer = context.players.find(p => p.id === playerId);
+            const currentPlayer = context.players.find(p => p.publicKey === publicKey);
             if (!currentPlayer || currentPlayer.availableWorkers <= 0) return {};
 
             // Check if bumping is needed
             const occupantId = slot.occupantId;
             let isBumping = false;
             if (occupantId) {
-                if (occupantId === playerId) return {}; // Can't bump yourself
+                if (occupantId === publicKey) return {}; // Can't bump yourself
 
-                const occupant = context.players.find(p => p.id === occupantId);
+                const occupant = context.players.find(p => p.publicKey === occupantId);
                 // Bumping Rule: More ships in Home Sector (simplified to total ships for now)
                 const myShips = currentPlayer.ships.frigates + (currentPlayer.ships.dreadnoughts * 3);
                 const theirShips = occupant ? (occupant.ships.frigates + (occupant.ships.dreadnoughts * 3)) : 0;
@@ -190,7 +190,7 @@ export const galacticHegemonyMachine = createMachine({
 
             // Pay cost and bribe
             const players = context.players.map(p => {
-                if (p.id === playerId) {
+                if (p.publicKey === publicKey) {
                     const newResources = { ...p.resources };
                     const newTechLevels = { ...p.techLevels };
                     let newPlanetsHand = [...p.planetsHand];
@@ -282,7 +282,7 @@ export const galacticHegemonyMachine = createMachine({
                     };
                 }
 
-                if (isBumping && p.id === occupantId) {
+                if (isBumping && p.publicKey === occupantId) {
                     return {
                         ...p,
                         resources: { ...p.resources, credits: p.resources.credits + 1 }
@@ -295,15 +295,15 @@ export const galacticHegemonyMachine = createMachine({
             });
 
             const slots = context.slots.map(s =>
-                s.id === slotId ? { ...s, occupantId: playerId } : s
+                s.id === slotId ? { ...s, occupantId: publicKey } : s
             );
 
             return { slots, players };
         }),
         contributeToEvent: assign(({ context, event }) => {
             if (event.type !== 'CONTRIBUTE') return {};
-            const { playerId, resources } = event;
-            const player = context.players.find(p => p.id === playerId);
+            const { publicKey, resources } = event;
+            const player = context.players.find(p => p.publicKey === publicKey);
             if (!player) return {};
 
             const matter = resources.matter || 0;
@@ -312,34 +312,34 @@ export const galacticHegemonyMachine = createMachine({
             if (player.resources.matter < matter || player.resources.data < data) return {};
 
             const players = context.players.map(p =>
-                p.id === playerId
+                p.publicKey === publicKey
                     ? { ...p, resources: { ...p.resources, matter: p.resources.matter - matter, data: p.resources.data - data } }
                     : p
             );
 
             const contributions = { ...context.eventContext.contributions };
-            const current = contributions[playerId] || { matter: 0, data: 0 };
-            contributions[playerId] = { matter: current.matter + matter, data: current.data + data };
+            const current = contributions[publicKey] || { matter: 0, data: 0 };
+            contributions[publicKey] = { matter: current.matter + matter, data: current.data + data };
 
             return { players, eventContext: { ...context.eventContext, contributions } };
         }),
         resolveEvent: assign(({ context }) => {
             // Rewards for Dyson Dilemma: +10 Credits for top contributor, -5 Influence for bottom
-            const contributionTotals = Object.entries(context.eventContext.contributions).map(([id, stats]) => ({
-                id,
+            const contributionTotals = Object.entries(context.eventContext.contributions).map(([publicKey, stats]) => ({
+                publicKey,
                 total: stats.matter + stats.data
             })).sort((a, b) => b.total - a.total);
 
             if (contributionTotals.length === 0) return {};
 
-            const topId = contributionTotals[0].id;
-            const bottomId = contributionTotals[contributionTotals.length - 1].id;
+            const topId = contributionTotals[0].publicKey;
+            const bottomId = contributionTotals[contributionTotals.length - 1].publicKey;
 
             const players = context.players.map(p => {
                 let newCredits = p.resources.credits;
                 let newInfluence = p.resources.influence;
-                if (p.id === topId) newCredits += 10;
-                if (p.id === bottomId && contributionTotals.length > 1) newInfluence = Math.max(0, newInfluence - 5);
+                if (p.publicKey === topId) newCredits += 10;
+                if (p.publicKey === bottomId && contributionTotals.length > 1) newInfluence = Math.max(0, newInfluence - 5);
                 return { ...p, resources: { ...p.resources, credits: newCredits, influence: newInfluence } };
             });
 
@@ -374,13 +374,13 @@ export function applyLedgerToGalacticState(players: PlayerState[], ledger: Ledge
     ledger.forEach(entry => {
         const { type, payload } = entry.action;
         if (type === 'PLACE_WORKER') {
-            const { slotId, playerId, techPath, planetId, shipType } = payload;
+            const { slotId, publicKey, techPath, planetId, shipType } = payload;
             const slotIndex = slots.findIndex(s => s.id === slotId);
             if (slotIndex === -1) return;
             const slot = slots[slotIndex];
 
             updatedPlayers = updatedPlayers.map(p => {
-                if (p.id !== playerId) return p;
+                if (p.publicKey !== publicKey) return p;
                 const newResources = { ...p.resources };
                 const newTechLevels = { ...p.techLevels };
                 const newShips = { ...p.ships };
@@ -433,7 +433,7 @@ export function applyLedgerToGalacticState(players: PlayerState[], ledger: Ledge
                 };
             });
 
-            slots[slotIndex] = { ...slot, occupantId: playerId };
+            slots[slotIndex] = { ...slot, occupantId: publicKey };
         }
     });
 

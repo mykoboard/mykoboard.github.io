@@ -6,7 +6,6 @@ export class MockPeerConnectionPort implements IPeerConnectionPort {
     public isHostConnection: boolean = false;
     public remotePublicKey?: string;
     public remotePlayerName?: string;
-    public remotePlayerId?: string;
     public serializedSignal: string = '';
 
     private messageHandlers: ((data: string) => void)[] = [];

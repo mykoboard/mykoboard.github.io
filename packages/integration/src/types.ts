@@ -1,13 +1,12 @@
 import { LedgerEntry } from './ledger';
 
 export interface PlayerInfo {
-    id: string;
+    publicKey: string;
     name: string;
     status: 'lobby' | 'game';
     isConnected: boolean;
     isLocal: boolean;
     isHost: boolean;
-    publicKey?: string; // Public key for identity management
 }
 
 export interface SimpleConnection {

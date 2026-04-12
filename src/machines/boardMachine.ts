@@ -10,8 +10,8 @@ interface BoardContext {
     isGameFinished: boolean;
     playerName: string;
     ledger: LedgerEntry[];
-    pendingGuest: { id: string; name: string; answer: any } | null;
-    externalParticipants: { id: string; name: string; isHost: boolean }[];
+    pendingGuest: { publicKey: string; name: string; answer: any } | null;
+    externalParticipants: { publicKey: string; name: string; isHost: boolean }[];
     maxPlayers: number;
     boardId: string;
     topologyMode: 'star' | 'mesh';
@@ -22,23 +22,23 @@ type BoardEvent =
     | { type: 'HOST'; maxPlayers?: number; boardId: string }
     | { type: 'JOIN'; boardId: string }
     | { type: 'UPDATE_PARTICIPANT'; participant: Participant }
-    | { type: 'SET_PLAYER_STATUS'; playerId: string; status: 'lobby' | 'game' }
+    | { type: 'SET_PLAYER_STATUS'; publicKey: string; status: 'lobby' | 'game' }
     | { type: 'START_GAME' }
     | { type: 'GAME_STARTED' }
     | { type: 'CLOSE_SESSION' }
-    | { type: 'REMOVE_PLAYER'; playerId: string }
+    | { type: 'REMOVE_PLAYER'; publicKey: string }
     | { type: 'SYNC_LEDGER'; ledger: LedgerEntry[] }
-    | { type: 'PEER_DISCONNECTED'; connectionId: string }
-    | { type: 'REQUEST_JOIN'; connectionId: string; peerName: string; answer: any }
+    | { type: 'PEER_DISCONNECTED'; connectionId: string; publicKey?: string }
+    | { type: 'REQUEST_JOIN'; connectionId: string; peerName: string; answer: any; publicKey: string }
     | { type: 'ACCEPT_GUEST' }
     | { type: 'REJECT_GUEST' }
     | { type: 'FINISH_GAME' }
     | { type: 'RESET_GAME' }
-    | { type: 'SYNC_PARTICIPANTS'; participants: { id: string, name: string, isHost: boolean }[]; topologyMode?: 'star' | 'mesh' }
+    | { type: 'SYNC_PARTICIPANTS'; participants: { publicKey: string, name: string, isHost: boolean }[]; topologyMode?: 'star' | 'mesh' }
     | { type: 'LOAD_LEDGER'; ledger: LedgerEntry[] }
     | { type: 'GAME_RESET' }
     | { type: 'SET_TOPOLOGY_MODE'; mode: 'star' | 'mesh' }
-    | { type: 'UPDATE_TOPOLOGY'; peerId: string; connections: string[] };
+    | { type: 'UPDATE_TOPOLOGY'; publicKey: string; connections: string[] };
 
 export const boardMachine = createMachine({
     types: {} as {
@@ -89,7 +89,7 @@ export const boardMachine = createMachine({
                     target: 'approving',
                     actions: assign({
                         pendingGuest: ({ event }) => ({
-                            id: event.connectionId,
+                            publicKey: event.publicKey,
                             name: event.peerName,
                             answer: event.answer
                         })
@@ -131,7 +131,7 @@ export const boardMachine = createMachine({
                     target: 'approving',
                     actions: assign({
                         pendingGuest: ({ event }) => ({
-                            id: event.connectionId,
+                            publicKey: event.publicKey,
                             name: event.peerName,
                             answer: event.answer
                         })
@@ -206,13 +206,13 @@ export const boardMachine = createMachine({
         setPlayerStatus: assign(({ context, event }) => {
             if (event.type !== 'SET_PLAYER_STATUS') return context;
             const newStatuses = new Map(context.playerStatuses);
-            newStatuses.set(event.playerId, event.status);
+            newStatuses.set(event.publicKey, event.status);
             return { playerStatuses: newStatuses };
         }),
         updateParticipantStatus: assign(({ context, event }) => {
-            if (event.type !== 'PEER_DISCONNECTED') return context;
+            if (event.type !== 'PEER_DISCONNECTED' || !event.publicKey) return context;
             const newParticipants = new Map(context.participants);
-            const p = newParticipants.get(event.connectionId);
+            const p = newParticipants.get(event.publicKey);
             if (p) {
                 p.status = 'closed';
             }
@@ -224,11 +224,11 @@ export const boardMachine = createMachine({
             const participant = event.participant;
 
             const newParticipants = new Map(context.participants);
-            newParticipants.set(participant.id, participant);
+            newParticipants.set(participant.publicKey, participant);
 
             const newStatuses = new Map(context.playerStatuses);
-            if (!newStatuses.has(participant.id)) {
-                newStatuses.set(participant.id, 'lobby');
+            if (!newStatuses.has(participant.publicKey)) {
+                newStatuses.set(participant.publicKey, 'lobby');
             }
 
             return { participants: newParticipants, playerStatuses: newStatuses };
@@ -238,17 +238,17 @@ export const boardMachine = createMachine({
              // This previously called connection.send()
         },
         removeParticipant: assign(({ context, event }) => {
-            if (event.type !== 'PEER_DISCONNECTED') return context;
+            if (event.type !== 'PEER_DISCONNECTED' || !event.publicKey) return context;
             const newParticipants = new Map(context.participants);
-            newParticipants.delete(event.connectionId);
+            newParticipants.delete(event.publicKey);
             return { participants: newParticipants };
         }),
         removePlayer: assign(({ context, event }) => {
             if (event.type !== 'REMOVE_PLAYER') return context;
             const newParticipants = new Map(context.participants);
-            newParticipants.delete(event.playerId);
+            newParticipants.delete(event.publicKey);
             const newStatuses = new Map(context.playerStatuses);
-            newStatuses.delete(event.playerId);
+            newStatuses.delete(event.publicKey);
             return { participants: newParticipants, playerStatuses: newStatuses };
         }),
         syncLedger: assign(({ context, event }) => {
@@ -270,7 +270,7 @@ export const boardMachine = createMachine({
         updateTopology: assign(({ context, event }) => {
             if (event.type !== 'UPDATE_TOPOLOGY') return context;
             const newMap = new Map(context.topologyMap);
-            newMap.set(event.peerId, event.connections);
+            newMap.set(event.publicKey, event.connections);
             return { topologyMap: newMap };
         }),
         rejectGuest: () => {

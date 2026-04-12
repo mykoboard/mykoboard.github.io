@@ -2,7 +2,6 @@ import { SecureWallet } from './wallet';
 
 export interface GameAccessClaim {
     type: 'SUBSCRIPTION' | 'GAME_ACCESS';
-    playerId: string;
     expiresAt: number;
     gameId?: string;
     tier?: string;
@@ -45,7 +44,6 @@ export class TokenManager {
 
         const claim: GameAccessClaim = {
             type,
-            playerId: identity.id,
             expiresAt: Date.now() + (daysValid * 24 * 60 * 60 * 1000)
         };
 
