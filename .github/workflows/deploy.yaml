@@ -11,30 +11,36 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
     steps:
-      - name: Checkout source
+      - name: Checkout mykoboard
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # we need full history to push another branch
+          path: mykoboard
+          fetch-depth: 0
+
+      - name: Checkout apex-nebula
+        uses: actions/checkout@v4
+        with:
+          repository: mykoboard/apex-nebula
+          path: apex-nebula
 
       - name: Install Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+        working-directory: mykoboard
 
       - name: Build
         run: bun run build:all
+        working-directory: mykoboard
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages       # branch to push to
-          publish_dir: ./docs            # folder with built files
+          publish_dir: ./mykoboard/docs            # folder with built files
           commit_message: "Deploy from ${GITHUB_SHA}"
