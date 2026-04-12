@@ -34,6 +34,9 @@ export default defineConfig(({ mode }) => ({
       shared: ["vue", "react", "react-dom", "@xstate/react", "@xstate/vue", "xstate", "@mykoboard/integration"],
     }),
   ].filter(Boolean),
+  optimizeDeps: {
+    include: ["vue", "react", "react-dom", "@xstate/react", "@xstate/vue", "xstate", "veaury"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
