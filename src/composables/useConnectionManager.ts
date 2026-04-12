@@ -278,15 +278,19 @@ export function useConnectionManager({
         const prevSignal = lastSignalMap.get(connection.id);
         const existingGathering = (connection as any)._lastGathering || '';
 
+        const existingPubKey = (connection as any)._lastPubKey || '';
+
         if (existingStatus === connection.status && 
             prevSignal === existingSignal &&
-            existingGathering === connection.iceGatheringState) return;
+            existingGathering === connection.iceGatheringState &&
+            existingPubKey === connection.remotePublicKey) return;
 
         const justConnected = connection.status === PeerConnectionStatus.connected && existingStatus !== PeerConnectionStatus.connected;
 
         lastStatusMap.set(connection.id, connection.status);
         lastSignalMap.set(connection.id, existingSignal);
         (connection as any)._lastGathering = connection.iceGatheringState;
+        (connection as any)._lastPubKey = connection.remotePublicKey;
 
         // Map Port to Domain Participant Type
         if (connection.remotePublicKey) {

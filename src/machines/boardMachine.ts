@@ -85,6 +85,10 @@ export const boardMachine = createMachine({
         },
         hosting: {
             on: {
+                UPDATE_PARTICIPANT: [
+                    { target: 'preparation', guard: 'hasConnections', actions: ['updateParticipant', 'syncParticipant'] },
+                    { actions: ['updateParticipant', 'syncParticipant'] }
+                ],
                 REQUEST_JOIN: {
                     target: 'approving',
                     actions: assign({
@@ -101,6 +105,12 @@ export const boardMachine = createMachine({
             ]
         },
         joining: {
+            on: {
+                UPDATE_PARTICIPANT: [
+                    { target: 'preparation', guard: 'hasConnections', actions: ['updateParticipant', 'syncParticipant'] },
+                    { actions: ['updateParticipant', 'syncParticipant'] }
+                ]
+            },
             always: [
                 { target: 'preparation', guard: 'hasConnections' }
             ]
@@ -294,9 +304,10 @@ export const boardMachine = createMachine({
     },
     guards: {
         hasConnections: ({ context }) => {
-            return Array.from(context.participants.values()).some(
-                p => p.status === 'connected'
-            );
+            const participants = Array.from(context.participants.values());
+            const connected = participants.filter(p => p.status === 'connected');
+            
+            return connected.length > 0;
         }
     }
 });

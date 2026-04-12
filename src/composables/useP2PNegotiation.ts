@@ -96,6 +96,8 @@ export function useP2PNegotiation({
     const updateAnswer = async (connection: IPeerConnectionPort, answer: string) => {
         try {
             const signal = await Signal.decompress(answer);
+            if (signal.publicKey) connection.remotePublicKey = signal.publicKey;
+            // Also attempt to get peerName if available in webrtc signals (depends on implementation)
             await connection.acceptAnswer(signal);
             updateConnection(connection);
         } catch (e) {

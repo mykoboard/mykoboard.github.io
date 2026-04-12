@@ -57,4 +57,22 @@ describe('useP2PNegotiation', () => {
         expect(hostSignalingMode.value).toBe('manual');
         expect(pendingConnections.size).toBe(1);
     });
+
+    it('should extract public key when updateAnswer is called', async () => {
+        const { composable, mockPeer, handlers } = setup();
+        
+        // Mock Signal.decompress
+        const lib = require('@/lib/webrtc');
+        const decompressSpy = spyOn(lib.Signal, 'decompress').mockImplementation(async () => ({
+            publicKey: 'pk-remote',
+            session: { type: 'answer', sdp: 'sdp' }
+        }));
+
+        await composable.updateAnswer(mockPeer, 'mock-answer');
+        
+        expect(mockPeer.remotePublicKey).toBe('pk-remote');
+        expect(handlers.updateConnection).toHaveBeenCalledWith(mockPeer);
+        
+        decompressSpy.mockRestore();
+    });
 });

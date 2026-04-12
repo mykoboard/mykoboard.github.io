@@ -125,10 +125,11 @@ export class Connection {
           this.send(JSON.stringify({
             namespace: 'player',
             type: 'PLAYER_IDENTITY',
+            payload: {
               name: this.localPlayerName,
               publicKey: this.localPublicKey
             }
-          ));
+          }));
         }
       };
 
