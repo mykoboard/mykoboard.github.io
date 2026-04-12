@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'bun:test';
-import { AwsSignalingAdapter } from './AwsSignalingAdapter';
-import { setupInfraMocks, MockWebSocket } from '../../tests/infrastructure-mocks';
+import { AwsSignalingAdapter } from '@/infrastructure/signaling/AwsSignalingAdapter';
+import { setupInfraMocks, MockWebSocket } from '../../infrastructure-mocks';
 
 describe('AwsSignalingAdapter', () => {
     let adapter: AwsSignalingAdapter;

@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'bun:test';
-import { IndexedDbSessionRepo } from './IndexedDbSessionRepo';
-import { setupInfraMocks } from '../../tests/infrastructure-mocks';
+import { IndexedDbSessionRepo } from '@/infrastructure/persistence/IndexedDbSessionRepo';
+import { setupInfraMocks } from '../../infrastructure-mocks';
 import { GameSession } from '../../domain/game-session/GameSession';
 
 describe('IndexedDbSessionRepo', () => {

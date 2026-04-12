@@ -41,6 +41,16 @@ export class MockPeerConnectionPort implements IPeerConnectionPort {
         this.statusHandlers.push(callback);
     }
 
+    async prepareOffer(playerName: string, publicKey: string): Promise<void> {
+        this.status = PeerConnectionStatus.started;
+        this.statusHandlers.forEach(h => h(this.status));
+    }
+
+    async acceptOffer(offer: string, playerName: string, publicKey: string): Promise<void> {
+        this.status = PeerConnectionStatus.answered;
+        this.statusHandlers.forEach(h => h(this.status));
+    }
+
     async acceptAnswer(answer: any): Promise<void> {
         this.status = PeerConnectionStatus.connected;
         this.statusHandlers.forEach(h => h(this.status));

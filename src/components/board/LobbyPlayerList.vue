@@ -35,19 +35,19 @@ const dataPulses: { from: string; to: string; progress: number; speed: number }[
 const checkKnownIdentities = async () => {
   for (const player of props.players) {
     if (player.publicKey && !player.isLocal && props.isKnownIdentity) {
-      knownIdentityStatus.value[player.id] = await props.isKnownIdentity(player.publicKey)
+      knownIdentityStatus.value[player.publicKey] = await props.isKnownIdentity(player.publicKey)
     }
   }
 }
 
 const handleToggleSave = async (player: PlayerInfo) => {
-  const currentState = saveIdentityFlags.value[player.id]
+  const currentState = saveIdentityFlags.value[player.publicKey]
   const newState = !currentState
   
   if (newState) {
     await handleSaveIdentity(player)
   } else {
-    saveIdentityFlags.value[player.id] = false
+    saveIdentityFlags.value[player.publicKey] = false
   }
 }
 
@@ -55,12 +55,12 @@ const handleSaveIdentity = async (player: PlayerInfo) => {
   if (!player.publicKey || !props.onSaveIdentity) return
   
   try {
-    saveIdentityFlags.value[player.id] = true
+    saveIdentityFlags.value[player.publicKey] = true
     await props.onSaveIdentity(player)
-    knownIdentityStatus.value[player.id] = true
+    knownIdentityStatus.value[player.publicKey] = true
   } catch (error) {
     console.error('[LobbyPlayerList] Error saving identity:', error)
-    saveIdentityFlags.value[player.id] = false
+    saveIdentityFlags.value[player.publicKey] = false
   }
 }
 
@@ -334,24 +334,24 @@ watch(() => props.players, () => {
         >
           <div 
             v-for="player in players" 
-            :key="player.id" 
-            :ref="setItemRef(player.id)"
+            :key="player.publicKey" 
+            :ref="setItemRef(player.publicKey)"
             :class="[
               'flex items-center gap-5 p-5 rounded-3xl transition-all duration-500 border relative group/item',
-              player.id === currentTurnPlayerId 
+              player.publicKey === currentTurnPlayerId 
                 ? 'bg-primary/10 border-primary shadow-neon-sm animate-pulse-subtle' 
                 : 'bg-white/5 border-white/10 hover:bg-white/[0.08] hover:border-primary/30'
             ]"
           >
             <!-- Turn Indicator Particle Effect -->
-            <div v-if="player.id === currentTurnPlayerId" class="absolute inset-0 bg-primary/5 animate-pulse rounded-3xl pointer-events-none" />
+            <div v-if="player.publicKey === currentTurnPlayerId" class="absolute inset-0 bg-primary/5 animate-pulse rounded-3xl pointer-events-none" />
 
             <!-- Player Avatar/Icon Area -->
             <div class="relative z-10">
               <div 
                 :class="[
                   'w-12 h-12 rounded-2xl bg-gradient-to-br border flex items-center justify-center transition-all duration-500',
-                  player.id === currentTurnPlayerId
+                  player.publicKey === currentTurnPlayerId
                     ? 'from-primary/20 to-primary/5 border-primary shadow-neon-sm scale-110'
                     : 'from-white/10 to-white/5 border-white/10 group-hover/item:border-primary/20 group-hover/item:shadow-neon-sm'
                 ]"
@@ -359,7 +359,7 @@ watch(() => props.players, () => {
                 <span 
                   :class="[
                     'text-lg font-black transition-colors',
-                    player.id === currentTurnPlayerId ? 'text-primary' : 'text-white/80 group-hover/item:text-primary'
+                    player.publicKey === currentTurnPlayerId ? 'text-primary' : 'text-white/80 group-hover/item:text-primary'
                   ]"
                 >
                   {{ player.name.charAt(0).toUpperCase() }}
@@ -367,7 +367,7 @@ watch(() => props.players, () => {
                 
                 <!-- On Turn Icon Overlay -->
                 <div 
-                  v-if="player.id === currentTurnPlayerId" 
+                  v-if="player.publicKey === currentTurnPlayerId" 
                   class="absolute -top-1.5 -right-1.5 p-1 bg-primary rounded-lg shadow-neon-sm animate-bounce"
                 >
                   <Sword class="w-3 h-3 text-primary-foreground" />
@@ -396,7 +396,7 @@ watch(() => props.players, () => {
                 <span 
                   :class="[
                     'text-base font-black uppercase tracking-tight truncate transition-colors',
-                    player.id === currentTurnPlayerId ? 'text-primary' : 'text-white'
+                    player.publicKey === currentTurnPlayerId ? 'text-primary' : 'text-white'
                   ]"
                 >
                   {{ player.name }} 
@@ -411,7 +411,7 @@ watch(() => props.players, () => {
 
                 <!-- Known Identity Badge -->
                 <div 
-                  v-if="!player.isLocal && knownIdentityStatus[player.id]" 
+                  v-if="!player.isLocal && knownIdentityStatus[player.publicKey]" 
                   class="flex items-center gap-1 px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg text-[9px] font-black uppercase tracking-wider"
                 >
                   <ShieldCheck class="w-3 h-3" />
@@ -424,27 +424,27 @@ watch(() => props.players, () => {
                 <div v-if="player.isConnected" class="flex items-center gap-1.5">
                   <Zap class="w-3 h-3 text-primary animate-pulse" />
                   <span class="text-[9px] text-primary/60 font-black uppercase tracking-[0.2em]">
-                    {{ player.id === currentTurnPlayerId ? 'NODE ACTIVE - ON TURN' : 'Node Synchronized' }}
+                    {{ player.publicKey === currentTurnPlayerId ? 'NODE ACTIVE - ON TURN' : 'Node Synchronized' }}
                   </span>
                 </div>
                 <span v-else class="text-[9px] text-rose-500/60 font-black uppercase tracking-[0.2em]">Connection Lost</span>
                 
                 <!-- Auto-approve Toggle -->
                 <div 
-                  v-if="!player.isLocal && player.isConnected && !knownIdentityStatus[player.id]" 
+                  v-if="!player.isLocal && player.isConnected && !knownIdentityStatus[player.publicKey]" 
                   class="flex items-center gap-2 ml-auto"
                 >
                   <button
                     @click="handleToggleSave(player)"
                     :class="[
                       'relative inline-flex h-4 w-8 items-center rounded-full transition-all duration-300 border',
-                      saveIdentityFlags[player.id] ? 'bg-primary border-primary shadow-neon-sm' : 'bg-white/5 border-white/10'
+                      saveIdentityFlags[player.publicKey] ? 'bg-primary border-primary shadow-neon-sm' : 'bg-white/5 border-white/10'
                     ]"
                   >
                     <span
                       :class="[
                         'inline-block h-2 w-2 transform rounded-full bg-white transition-transform duration-300',
-                        saveIdentityFlags[player.id] ? 'translate-x-5' : 'translate-x-1'
+                        saveIdentityFlags[player.publicKey] ? 'translate-x-5' : 'translate-x-1'
                       ]"
                     />
                   </button>
@@ -459,7 +459,7 @@ watch(() => props.players, () => {
             <div v-if="!player.isLocal && onRemove" class="flex items-center z-10">
               <button
                 class="w-10 h-10 flex items-center justify-center text-white/20 hover:text-rose-500 hover:bg-rose-500/10 transition-all border border-transparent hover:border-rose-500/30 rounded-2xl"
-                @click="onRemove(player.id)"
+                @click="onRemove(player.publicKey)"
                 title="Disconnect node"
               >
                 <UserMinus class="w-5 h-5" />

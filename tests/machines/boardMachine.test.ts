@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { createActor } from 'xstate';
-import { boardMachine } from './boardMachine';
+import { boardMachine } from '@/machines/boardMachine';
 
 describe('boardMachine', () => {
     it('should start in idle state', () => {

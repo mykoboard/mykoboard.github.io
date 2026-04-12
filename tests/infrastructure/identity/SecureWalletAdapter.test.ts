@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'bun:test';
-import { SecureWalletAdapter } from './SecureWalletAdapter';
-import { setupInfraMocks } from '../../tests/infrastructure-mocks';
+import { SecureWalletAdapter } from '@/infrastructure/identity/SecureWalletAdapter';
+import { setupInfraMocks } from '../../infrastructure-mocks';
 
 describe('SecureWalletAdapter', () => {
     let wallet: SecureWalletAdapter;

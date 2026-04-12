@@ -33,7 +33,7 @@ export function useBoardState() {
     const topologyMode = computed(() => (boardSnapshot.value as any)?.context?.topologyMode || 'star');
     const view = computed(() => (isInsideBoard.value ? 'game' : 'lobby'));
 
-    const connections = computed(() => boardSnapshot.value?.context?.connections || new Map());
+    const connections = computed(() => boardSnapshot.value?.context?.participants || new Map());
     const connectionList = computed(() => Array.from(connections.value.values()));
 
     const playerInfos = computed((): PlayerInfo[] => {
@@ -85,15 +85,15 @@ export function useBoardState() {
 
         // 3. Direct connections not yet synced to externalParticipants (host view)
         if (isInitiator.value) {
-            const actorConnections = (boardSnapshot.value as any)?.context?.connections || new Map();
-            actorConnections.forEach((c: any) => {
-                const publicKey = c.remotePublicKey;
+            const actorParticipants = (boardSnapshot.value as any)?.context?.participants || new Map();
+            actorParticipants.forEach((c: any) => {
+                const publicKey = c.publicKey;
                 if (publicKey && !processedPublicKeys.has(publicKey)) {
                     infos.push({
                         publicKey,
-                        name: c.remotePlayerName || 'Anonymous',
+                        name: c.name || 'Anonymous',
                         status: ctx.playerStatuses.get(publicKey) || 'lobby',
-                        isConnected: c.status === ConnectionStatus.connected,
+                        isConnected: c.status === 'connected',
                         isLocal: false,
                         isHost: false,
                     });

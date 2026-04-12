@@ -1,12 +1,12 @@
 import { describe, expect, it, beforeEach, spyOn } from 'bun:test';
-import { useSignaling } from './useSignaling';
-import { withSetup } from '../tests/test-utils';
-import { MockSignalingPort } from '../application/ports/mocks/MockSignalingPort';
-import { MockIdentityRepo } from '../application/ports/mocks/MockIdentityRepo';
-import { MockKnownIdentityRepo } from '../application/ports/mocks/MockKnownIdentityRepo';
-import * as Keys from '../application/InjectionKeys';
+import { useSignaling } from '@/composables/useSignaling';
+import { withSetup } from '../test-utils';
+import { MockSignalingPort } from '@/application/ports/mocks/MockSignalingPort';
+import { MockIdentityRepo } from '@/application/ports/mocks/MockIdentityRepo';
+import { MockKnownIdentityRepo } from '@/application/ports/mocks/MockKnownIdentityRepo';
+import * as Keys from '@/application/InjectionKeys';
 import { createActor } from 'xstate';
-import { boardMachine } from '../machines/boardMachine';
+import { boardMachine } from '@/machines/boardMachine';
 import { ref, computed } from 'vue';
 
 describe('useSignaling', () => {

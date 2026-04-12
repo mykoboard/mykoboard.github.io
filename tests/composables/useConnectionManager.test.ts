@@ -1,11 +1,11 @@
 import { describe, expect, it, beforeEach, spyOn } from 'bun:test';
-import { useConnectionManager } from './useConnectionManager';
-import { withSetup } from '../tests/test-utils';
-import { MockPeerConnectionPort } from '../application/ports/mocks/MockPeerConnectionPort';
-import { PeerConnectionStatus } from '../application/ports/IPeerConnectionPort';
-import * as Keys from '../application/InjectionKeys';
+import { useConnectionManager } from '@/composables/useConnectionManager';
+import { withSetup } from '../test-utils';
+import { MockPeerConnectionPort } from '@/application/ports/mocks/MockPeerConnectionPort';
+import { PeerConnectionStatus } from '@/application/ports/IPeerConnectionPort';
+import * as Keys from '@/application/InjectionKeys';
 import { createActor } from 'xstate';
-import { boardMachine } from '../machines/boardMachine';
+import { boardMachine } from '@/machines/boardMachine';
 import { ref } from 'vue';
 
 describe('useConnectionManager', () => {
@@ -27,7 +27,7 @@ describe('useConnectionManager', () => {
             boardId: ref('board-1'),
             gameId: ref('tic-tac-toe')
         }), {
-            [Keys.PeerConnectionFactoryKey as any]: (onSignalUpdate: any) => new MockPeerConnectionPort('test-peer', onSignalUpdate),
+            [Keys.PeerConnectionFactoryKey as any]: (onSignalUpdate: any) => new MockPeerConnectionPort('test-peer', true),
             [Keys.IdentityRepoKey as any]: { getIdentity: async () => ({ id: 'me', name: 'Me', publicKey: 'pk-me' }) },
         });
 
@@ -95,11 +95,11 @@ describe('useConnectionManager', () => {
 
         // Should have sent PEER_P2P_OFFER back via sourcePeer
         // We wait a bit since it's using setInterval internally
-        await new Promise(r => setTimeout(r, 150));
+        await new Promise(r => setTimeout(r, 250));
 
         const sentMessages = sourcePeer.getSentMessages().map(m => JSON.parse(m as string));
         const p2pOffer = sentMessages.find(m => m.type === 'PEER_P2P_OFFER');
         expect(p2pOffer).toBeDefined();
-        expect(p2pOffer?.payload?.targetPeerId).toBe('target-1');
+        expect(p2pOffer?.payload?.targetPublicKey).toBe('pk-target');
     });
 });

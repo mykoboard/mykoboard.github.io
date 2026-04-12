@@ -1,10 +1,10 @@
 import { describe, expect, it, beforeEach, spyOn } from 'bun:test';
-import { useP2PNegotiation } from './useP2PNegotiation';
-import { withSetup } from '../tests/test-utils';
-import { MockPeerConnectionPort } from '../application/ports/mocks/MockPeerConnectionPort';
-import * as Keys from '../application/InjectionKeys';
+import { useP2PNegotiation } from '@/composables/useP2PNegotiation';
+import { withSetup } from '../test-utils';
+import { MockPeerConnectionPort } from '@/application/ports/mocks/MockPeerConnectionPort';
+import * as Keys from '@/application/InjectionKeys';
 import { createActor } from 'xstate';
-import { boardMachine } from '../machines/boardMachine';
+import { boardMachine } from '@/machines/boardMachine';
 import { ref, computed, shallowReactive } from 'vue';
 
 describe('useP2PNegotiation', () => {

@@ -103,9 +103,9 @@ export function useP2PNegotiation({
         }
     };
 
-    const initializeManualSignaling = () => {
+    const initializeManualSignaling = async () => {
         hostSignalingMode.value = 'manual';
-        onAddManualConnection();
+        await onAddManualConnection();
     };
 
     return { manualGuestConnectionId, onAddManualConnection, onCreateGuestManualConnection, updateOffer, updateAnswer, initializeManualSignaling };

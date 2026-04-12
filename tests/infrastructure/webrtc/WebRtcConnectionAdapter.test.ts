@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'bun:test';
-import { WebRtcConnectionAdapter } from './WebRtcConnectionAdapter';
-import { setupInfraMocks } from '../../tests/infrastructure-mocks';
-import { PeerConnectionStatus } from '../../application/ports/IPeerConnectionPort';
+import { WebRtcConnectionAdapter } from '@/infrastructure/webrtc/WebRtcConnectionAdapter';
+import { setupInfraMocks } from '../../infrastructure-mocks';
+import { PeerConnectionStatus } from '@/application/ports/IPeerConnectionPort';
 
 describe('WebRtcConnectionAdapter', () => {
     beforeEach(() => {

@@ -1,14 +1,14 @@
 import { describe, expect, it, beforeEach, spyOn } from 'bun:test';
-import { useSessionActions } from './useSessionActions';
-import { withSetup } from '../tests/test-utils';
-import { MockIdentityRepo } from '../application/ports/mocks/MockIdentityRepo';
-import { MockSessionRepo } from '../application/ports/mocks/MockSessionRepo';
-import { MockKnownIdentityRepo } from '../application/ports/mocks/MockKnownIdentityRepo';
-import { MockPeerConnectionPort } from '../application/ports/mocks/MockPeerConnectionPort';
-import { MockSignalingPort } from '../application/ports/mocks/MockSignalingPort';
-import * as Keys from '../application/InjectionKeys';
+import { useSessionActions } from '@/composables/useSessionActions';
+import { withSetup } from '../test-utils';
+import { MockIdentityRepo } from '@/application/ports/mocks/MockIdentityRepo';
+import { MockSessionRepo } from '@/application/ports/mocks/MockSessionRepo';
+import { MockKnownIdentityRepo } from '@/application/ports/mocks/MockKnownIdentityRepo';
+import { MockPeerConnectionPort } from '@/application/ports/mocks/MockPeerConnectionPort';
+import { MockSignalingPort } from '@/application/ports/mocks/MockSignalingPort';
+import * as Keys from '@/application/InjectionKeys';
 import { createActor } from 'xstate';
-import { boardMachine } from '../machines/boardMachine';
+import { boardMachine } from '@/machines/boardMachine';
 import { ref, shallowReactive } from 'vue';
 
 describe('useSessionActions', () => {
