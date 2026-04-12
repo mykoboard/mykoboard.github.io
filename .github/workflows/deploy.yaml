@@ -18,12 +18,6 @@ jobs:
           path: mykoboard
           fetch-depth: 0
 
-      - name: Checkout apex-nebula
-        uses: actions/checkout@v6
-        with:
-          repository: mykoboard/apex-nebula
-          path: apex-nebula
-
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
         with:

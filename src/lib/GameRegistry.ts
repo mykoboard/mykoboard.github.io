@@ -53,19 +53,6 @@ export const games: GameMetadata[] = [
         // @ts-ignore
         infoComponent: React.lazy(() => import('planning-poker/GameInfo')),
     },
-    {
-        id: 'apex-nebula',
-        name: "Apex Nebula",
-        image: "/img/games/apex-nebula/card.webp",
-        description: "Evolutionary strategy game based on genetic algorithms. Mutate your genome and colonize the nebula!",
-        minPlayers: 2,
-        maxPlayers: 4,
-        framework: 'vue',
-        // @ts-ignore
-        component: () => import('apex-nebula/ApexNebula'),
-        // @ts-ignore
-        infoComponent: () => import('apex-nebula/GameInfo'),
-    },
 ];
 
 export function getGameById(id: string): GameMetadata | undefined {

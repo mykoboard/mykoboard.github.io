@@ -27,9 +27,6 @@ export default defineConfig(({ mode }) => ({
         "planning-poker": mode === 'development'
           ? "http://localhost:5004/packages/planning-poker/assets/remoteEntry.js"
           : "https://mykoboard.com/packages/planning-poker/assets/remoteEntry.js",
-        "apex-nebula": mode === 'development'
-          ? "http://localhost:5005/apex-nebula/assets/remoteEntry.js"
-          : "https://mykoboard.com/apex-nebula/assets/remoteEntry.js",
       },
       shared: ["vue", "react", "react-dom", "@xstate/react", "@xstate/vue", "xstate", "@mykoboard/integration"],
     }),
