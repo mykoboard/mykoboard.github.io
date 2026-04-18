@@ -1,5 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import IndexView from '../pages/IndexView.vue'
+import { createIdentityGuard } from './guards/identityGuard'
+import { compositionRoot } from '../application/CompositionRoot'
 
 const router = createRouter({
     history: createWebHashHistory(),
@@ -40,5 +42,7 @@ const router = createRouter({
         }
     ]
 })
+
+router.beforeEach(createIdentityGuard({ identity: compositionRoot.identityRepo.identity }))
 
 export default router

@@ -9,6 +9,7 @@ import PreparationPhaseManual from '../components/board/PreparationPhaseManual.v
 import ActivePhase from '../components/board/ActivePhase.vue'
 import FinishedPhase from '../components/board/FinishedPhase.vue'
 import LobbyPlayerList from '../components/board/LobbyPlayerList.vue'
+import IdentityRequiredModal from '../components/IdentityRequiredModal.vue'
 import type { PlayerInfo } from '@mykoboard/integration'
 import * as Keys from '../application/InjectionKeys'
 import { PeerConnectionStatus } from '../application/ports/IPeerConnectionPort'
@@ -25,6 +26,10 @@ const onBackToDiscovery = () => router.push('/games')
 // Inject Hexagonal Ports
 const sessionRepo = inject(Keys.SessionRepoKey)!
 const knownIdentityRepo = inject(Keys.KnownIdentityRepoKey)!
+const identityRepo = inject(Keys.IdentityRepoKey)!
+
+const hasIdentity = computed(() => !!identityRepo.identity.value?.publicKey)
+const isIdentityLoading = computed(() => identityRepo.isLoading.value)
 
 const {
     snapshot,
@@ -145,6 +150,11 @@ const handleBeforeUnload = (e: BeforeUnloadEvent) => {
 
 onMounted(async () => {
     await sessionRepo.cleanupOldHostedSessions()
+
+    // Safety net: if identity somehow isn't present yet, skip machine init.
+    // The IdentityRequiredModal will handle collection, and the guard will
+    // redirect on navigation — this covers the async loading window.
+    if (!hasIdentity.value) return
     
     if (boardId.value && snapshot.value?.matches('idle')) {
         const isHostingSession = await sessionRepo.isHosting(boardId.value)
@@ -173,7 +183,10 @@ onUnmounted(() => {
 
 <template>
   <div class="min-h-screen bg-background">
-    <div v-if="game" class="w-full p-6 space-y-12">
+    <!-- Block access while identity is absent (async load window or cleared mid-session) -->
+    <IdentityRequiredModal v-if="!isIdentityLoading && !hasIdentity" />
+
+    <div v-else-if="game" class="w-full p-6 space-y-12">
       <h1 class="text-3xl font-black tracking-tighter uppercase text-white">
         Lobby: <span class="text-gradient">{{ game.name }}</span>
       </h1>
@@ -268,7 +281,7 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-    <div v-else class="p-10 text-center text-white/50 uppercase font-black tracking-widest">
+    <div v-else-if="!isIdentityLoading && hasIdentity" class="p-10 text-center text-white/50 uppercase font-black tracking-widest">
       Game not found in grid.
     </div>
   </div>

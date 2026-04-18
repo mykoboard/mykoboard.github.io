@@ -49,16 +49,12 @@ export function useBoardState() {
         );
 
         const localPlayer: PlayerInfo = {
-            publicKey: identity.value?.publicKey || 'local',
-            name:
-                identity.value?.name ||
-                (ctx.playerName !== 'Anonymous' ? ctx.playerName : null) ||
-                'Anonymous',
+            publicKey: identity.value!.publicKey,
+            name: identity.value!.name,
             status: isGameStarted.value ? 'game' : 'lobby',
             isConnected: true,
             isLocal: true,
             isHost: localParticipant ? localParticipant.isHost : isInitiator.value,
-            publicKey: identity.value?.publicKey,
         };
 
         const infos: PlayerInfo[] = [];

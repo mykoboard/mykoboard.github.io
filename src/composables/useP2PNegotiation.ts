@@ -1,12 +1,10 @@
 import { ref, inject } from 'vue';
 import { logger } from '../lib/logger';
-import type { PlayerInfo } from '@mykoboard/integration';
 import * as Keys from '../application/InjectionKeys';
 import { IPeerConnectionPort, PeerConnectionStatus } from '../application/ports/IPeerConnectionPort';
 import { Signal } from '../lib/webrtc';
 
 interface P2PNegotiationDependencies {
-    playerInfos: import('vue').ComputedRef<PlayerInfo[]>;
     pendingConnections: import('vue').ShallowReactive<Map<string, IPeerConnectionPort>>;
     hostSignalingMode: import('vue').Ref<'server' | 'manual' | null>;
     updateConnection: (connection: IPeerConnectionPort) => void;
@@ -14,7 +12,6 @@ interface P2PNegotiationDependencies {
 }
 
 export function useP2PNegotiation({
-    playerInfos,
     pendingConnections,
     hostSignalingMode,
     updateConnection,
