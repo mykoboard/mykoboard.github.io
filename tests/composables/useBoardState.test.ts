@@ -54,7 +54,12 @@ describe('useBoardState', () => {
     const setup = () => {
         return withSetup(() => useBoardState(), {
             [Keys.IdentityRepoKey as any]: { identity: ref(mockIdentity), isLoading: ref(false) },
-            [Keys.SessionRepoKey as any]: { activeSessions: ref([]), cleanupOldHostedSessions: async () => {} },
+            [Keys.SessionRepoKey as any]: {
+                activeSessions: ref([]),
+                getGame: async () => null,
+                saveGame: async () => {},
+                cleanupOldHostedSessions: async () => {},
+            },
             [Keys.BoardActorFactoryKey as any]: () => mockBoardActor
         });
     };

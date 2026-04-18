@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from 'bun:test';
 import { IndexedDbSessionRepo } from '@/infrastructure/persistence/IndexedDbSessionRepo';
+import { resetSharedDB } from '@/infrastructure/persistence/MykoboardDB';
 import { setupInfraMocks } from '../../infrastructure-mocks';
 import { GameSession } from '../../domain/game-session/GameSession';
 
@@ -7,12 +8,10 @@ describe('IndexedDbSessionRepo', () => {
     let repo: IndexedDbSessionRepo;
 
     beforeEach(async () => {
-        setupInfraMocks();
+        setupInfraMocks();  // fresh in-memory IDB
+        resetSharedDB();    // drop cached promise so repo opens a clean DB
         repo = new IndexedDbSessionRepo();
-        // Clear the mock DB before each test
-        const db = (global as any).indexedDB.open('MykoboardDB', 5).result;
-        await new Promise(r => setTimeout(r, 10)); // wait for open
-        db.transaction('games', 'readwrite').objectStore('games').clear();
+        await new Promise(r => setTimeout(r, 10));
     });
 
     it('should save and retrieve a game session', async () => {

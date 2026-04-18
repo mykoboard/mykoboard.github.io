@@ -1,11 +1,10 @@
 import { computed, watchEffect, watch, inject } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useSelector } from '@xstate/vue';
-import { ConnectionStatus } from '../lib/webrtc';
 import { getGameById } from '../lib/GameRegistry';
-import { SessionManager } from '../lib/sessions';
 import * as Keys from '../application/InjectionKeys';
 import type { PlayerInfo } from '@mykoboard/integration';
+import type { GameSession } from '../domain/game-session/GameSession';
 
 export function useBoardState() {
     const route = useRoute();
@@ -13,7 +12,8 @@ export function useBoardState() {
 
     const identity = inject(Keys.IdentityRepoKey)!.identity;
     const isLoading = inject(Keys.IdentityRepoKey)!.isLoading;
-    const activeSessions = inject(Keys.SessionRepoKey)!.activeSessions;
+    const sessionRepo = inject(Keys.SessionRepoKey)!;
+    const activeSessions = sessionRepo.activeSessions;
     const getBoardActor = inject(Keys.BoardActorFactoryKey)!;
 
     const gameId = computed(() => route.params.gameId as string);
@@ -130,20 +130,30 @@ export function useBoardState() {
             s?.status === 'finished'
         ) {
             if (boardId.value && route.query.mode !== 'manual') {
-                SessionManager.saveSession({
-                    gameId: gameId.value,
-                    boardId: boardId.value,
-                    playerName: s.context.playerName,
-                    gameName: game.value?.name || 'Unknown Game',
-                    lastPlayed: Date.now(),
-                    status: s.matches('finished') ? 'finished' : 'active',
-                    ledger: s.context.ledger,
-                    participants: playerInfos.value.map(p => ({
-                        name: p.name,
-                        isYou: p.isLocal,
-                        isHost: p.isHost,
-                        publicKey: p.publicKey,
-                    })),
+                const incomingParticipants = playerInfos.value.map(p => ({
+                    id: p.publicKey ?? p.name, // stable key
+                    name: p.name,
+                    isYou: p.isLocal,
+                    isHost: p.isHost,
+                    publicKey: p.publicKey,
+                }));
+
+                sessionRepo.getGame(boardId.value).then(existing => {
+                    const existingParticipants = existing?.participants ?? [];
+                    const merged = new Map(existingParticipants.map(p => [p.publicKey ?? p.id, p]));
+                    incomingParticipants.forEach(p => merged.set(p.publicKey ?? p.id, p));
+
+                    const session: GameSession = {
+                        gameId: gameId.value,
+                        boardId: boardId.value,
+                        playerName: s.context.playerName,
+                        gameName: game.value?.name || 'Unknown Game',
+                        lastPlayed: Date.now(),
+                        status: s.matches('finished') ? 'finished' : 'active',
+                        ledger: s.context.ledger,
+                        participants: Array.from(merged.values()),
+                    };
+                    sessionRepo.saveGame(session);
                 });
             }
         }
@@ -154,7 +164,7 @@ export function useBoardState() {
         boardId,
         async (newId) => {
             if (newId && route.query.mode !== 'manual' && isInsideBoard.value) {
-                const session = await SessionManager.getSession(newId);
+                const session = await sessionRepo.getGame(newId);
                 const actor = getBoardActor(newId, identity.value?.name || 'Anonymous', false);
                 const ctx = (actor.getSnapshot() as any).context;
 

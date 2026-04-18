@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { CheckCircle2, Trash2, ExternalLink } from 'lucide-vue-next'
-import type { GameSession } from '../../lib/db'
+import type { GameSession } from '../../domain/game-session/GameSession'
 
 const props = defineProps<{
   activeSessions: GameSession[]

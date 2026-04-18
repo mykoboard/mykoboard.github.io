@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, shallowRef, watch } from 'vue'
+import { computed, shallowRef, watch, inject } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from 'lucide-vue-next'
 import { v4 as uuidv4 } from 'uuid'
 import Header from '../components/HeaderView.vue'
 import ReactComponentWrapper from '../components/ReactComponentWrapper.vue'
 import { getGameById } from '../lib/GameRegistry'
-import { db } from '../lib/db'
+import * as Keys from '../application/InjectionKeys'
+
+const sessionRepo = inject(Keys.SessionRepoKey)!
 
 const route = useRoute()
 const router = useRouter()
@@ -22,8 +24,7 @@ const goToBoard = async () => {
     const boardId = uuidv4()
     const maxPlayers = game.value.maxPlayers || 2
     
-    // Mark this session as hosted by this user
-    await db.markAsHosting(boardId, game.value.id, maxPlayers)
+    await sessionRepo.markAsHosting(boardId, game.value.id, maxPlayers)
     
     router.push(`/games/${game.value.id}/${boardId}?maxPlayers=${maxPlayers}`)
 }

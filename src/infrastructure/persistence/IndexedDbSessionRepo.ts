@@ -1,41 +1,18 @@
 import { GameSession, HostedSession } from '../../domain/game-session/GameSession';
 import { ISessionRepository } from '../../application/ports/ISessionRepository';
-import { ref, Ref } from 'vue';
+import { ref } from 'vue';
+import { getSharedDB } from './MykoboardDB';
 
-const DB_NAME = 'MykoboardDB';
 const STORE_NAME = 'games';
 const HOSTED_SESSIONS_STORE = 'hostedSessions';
-const DB_VERSION = 5;
 
 export class IndexedDbSessionRepo implements ISessionRepository {
     private db: IDBDatabase | null = null;
     public readonly activeSessions = ref<GameSession[]>([]);
 
     private async getDB(): Promise<IDBDatabase> {
-        if (this.db) return this.db;
-
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-            request.onupgradeneeded = (event) => {
-                const db = (event.target as IDBOpenDBRequest).result;
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
-                    db.createObjectStore(STORE_NAME, { keyPath: 'boardId' });
-                }
-                if (!db.objectStoreNames.contains(HOSTED_SESSIONS_STORE)) {
-                    db.createObjectStore(HOSTED_SESSIONS_STORE, { keyPath: 'boardId' });
-                }
-            };
-
-            request.onsuccess = (event) => {
-                this.db = (event.target as IDBOpenDBRequest).result;
-                resolve(this.db);
-            };
-
-            request.onerror = (event) => {
-                reject((event.target as IDBOpenDBRequest).error);
-            };
-        });
+        if (!this.db) this.db = await getSharedDB();
+        return this.db;
     }
 
     async saveGame(game: GameSession): Promise<void> {
