@@ -28,7 +28,7 @@ export function useP2PNegotiation({
         if (!ident) return;
         const connection = createPeerConnection((_c) => { updateConnection(connection); });
 
-        connection.remotePlayerId = connection.id;
+
 
         await connection.prepareOffer(ident.name || 'Anonymous', ident.publicKey);
 
@@ -61,7 +61,7 @@ export function useP2PNegotiation({
             updateConnection(connection);
         });
 
-        connection.remotePlayerId = connection.id;
+
         manualGuestConnectionId.value = connection.id;
         pendingConnections.set(connection.id, connection);
 
