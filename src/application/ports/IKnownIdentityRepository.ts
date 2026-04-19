@@ -9,4 +9,5 @@ export interface IKnownIdentityRepository {
     addKnownIdentity(identity: KnownIdentity): Promise<void>;
     getAllKnownIdentities(): Promise<KnownIdentity[]>;
     deleteKnownIdentity(id: string): Promise<void>;
+    isKnown(publicKey: string): Promise<boolean>;
 }

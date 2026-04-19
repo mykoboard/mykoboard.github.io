@@ -46,5 +46,10 @@ export class IndexedDbKnownIdentityRepo implements IKnownIdentityRepository {
             request.onerror = () => reject(request.error);
         });
     }
+
+    async isKnown(publicKey: string): Promise<boolean> {
+        const all = await this.getAllKnownIdentities();
+        return all.some(i => i.publicKey === publicKey);
+    }
 }
 

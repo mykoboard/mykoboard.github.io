@@ -43,8 +43,7 @@ export function useSessionActions({
     const pendingJoinRequests = ref<PendingJoinRequest[]>([]);
 
     const isKnownIdentity = async (publicKey: string): Promise<boolean> => {
-        const known = await knownIdentityRepo.getAllKnownIdentities();
-        return known.some(f => f.publicKey === publicKey);
+        return knownIdentityRepo.isKnown(publicKey);
     };
 
     const autoApprovePeer = async (request: PendingJoinRequest) => {
@@ -87,6 +86,7 @@ export function useSessionActions({
     const saveIdentityOnApprove = async (request: PendingJoinRequest) => {
         try {
             await knownIdentityRepo.addKnownIdentity({ 
+                id: request.publicKey,
                 name: request.peerName, 
                 publicKey: request.publicKey, 
                 addedAt: Date.now() 
