@@ -1,4 +1,3 @@
-const DEBUG_KEY = 'debug';
 
 const isDev = import.meta.env.DEV;
 
