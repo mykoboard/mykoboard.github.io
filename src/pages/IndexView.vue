@@ -7,9 +7,9 @@ import HowItWorks from '../components/HowItWorksView.vue'
 import * as Keys from '../application/InjectionKeys'
 
 const router = useRouter()
+const identityRepo = inject(Keys.IdentityRepoKey)!
 
 onMounted(async () => {
-    const identityRepo = inject(Keys.IdentityRepoKey)!
     const id = await identityRepo.getIdentity()
     if (id) {
         router.replace('/games')
