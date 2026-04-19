@@ -186,7 +186,10 @@ onUnmounted(() => {
     <!-- Block access while identity is absent (async load window or cleared mid-session) -->
     <IdentityRequiredModal v-if="!isIdentityLoading && !hasIdentity" />
 
-    <div v-else-if="game" class="w-full p-6 space-y-12">
+    <div
+      v-else-if="game"
+      class="w-full p-6 space-y-12"
+    >
       <h1 class="text-3xl font-black tracking-tighter uppercase text-white">
         Lobby: <span class="text-gradient">{{ game.name }}</span>
       </h1>
@@ -194,24 +197,24 @@ onUnmounted(() => {
       <div class="animate-fade-in-up">
         <FinishedPhase
           v-if="isFinished"
-          :GameComponent="game.component"
-          :connectedPeers="connectedPeers"
-          :playerInfos="playerInfos"
-          :isInitiator="isInitiator"
+          :game-component="game.component"
+          :connected-peers="connectedPeers"
+          :player-infos="playerInfos"
+          :is-initiator="isInitiator"
           :ledger="snapshot?.context?.ledger || []"
-          :onBackToLobby="onBackToDiscovery"
+          :on-back-to-lobby="onBackToDiscovery"
           :framework="game.framework"
         />
         
         <ActivePhase
           v-else-if="isGameStarted"
-          :GameComponent="game.component"
-          :connectedPeers="connectedPeers"
-          :playerInfos="playerInfos"
-          :isInitiator="isInitiator"
+          :game-component="game.component"
+          :connected-peers="connectedPeers"
+          :player-infos="playerInfos"
+          :is-initiator="isInitiator"
           :ledger="snapshot?.context?.ledger || []"
-          :onAddLedger="onAddLedger"
-          :onFinishGame="onFinishGame"
+          :on-add-ledger="onAddLedger"
+          :on-finish-game="onFinishGame"
           :framework="game.framework"
         />
 
@@ -219,50 +222,50 @@ onUnmounted(() => {
           <PreparationPhaseManual
             v-if="route.query.mode === 'manual' || hostSignalingMode === 'manual'"
             :state="snapshot"
-            :isInitiator="isInitiator"
-            :pendingSignaling="pendingSignaling"
-            :onStartGame="startGame"
-            :onUpdateOffer="updateOffer"
-            :onUpdateAnswer="updateAnswer"
-            :onCloseSession="onBackToGames"
-            :onBackToLobby="onBackToDiscovery"
-            :onCancelSignaling="onCancelSignaling"
-            :onAddManualConnection="onAddManualConnection"
-            :playerCount="playerInfos.length"
-            :maxPlayers="snapshot?.context?.maxPlayers || 2"
-            :boardId="boardId"
-            :gameId="gameId"
+            :is-initiator="isInitiator"
+            :pending-signaling="pendingSignaling"
+            :on-start-game="startGame"
+            :on-update-offer="updateOffer"
+            :on-update-answer="updateAnswer"
+            :on-close-session="onBackToGames"
+            :on-back-to-lobby="onBackToDiscovery"
+            :on-cancel-signaling="onCancelSignaling"
+            :on-add-manual-connection="onAddManualConnection"
+            :player-count="playerInfos.length"
+            :max-players="snapshot?.context?.maxPlayers || 2"
+            :board-id="boardId"
+            :game-id="gameId"
           />
           <PreparationPhaseServer
             v-else
             :state="snapshot"
-            :isInitiator="isInitiator"
-            :isServerConnecting="isServerConnecting"
-            :signalingClient="signalingClient"
-            :pendingSignaling="pendingSignaling"
-            :pendingJoinRequests="pendingJoinRequests"
-            :isKnownIdentity="isKnownIdentity"
-            :hostSignalingMode="hostSignalingMode"
-            :initializeServerSignaling="initializeServerSignaling"
-            :initializeManualSignaling="initializeManualSignaling"
-            :onStartGame="startGame"
-            :onHostAGame="onHostAGame"
-            :onUpdateOffer="updateOffer"
-            :onUpdateAnswer="updateAnswer"
-            :onCloseSession="onBackToGames"
-            :onBackToLobby="onBackToDiscovery"
-            :onAcceptGuest="onAcceptGuest"
-            :onRejectGuest="onRejectGuest"
-            :onApprovePeer="onApprovePeer"
-            :onRejectPeer="onRejectPeer"
-            :onSaveIdentity="saveIdentityOnApprove"
-            :onCancelSignaling="onCancelSignaling"
-            :onAddManualConnection="onAddManualConnection"
-            :onRemovePlayer="(pk) => send({ type: 'REMOVE_PLAYER', publicKey: pk })"
-            :playerCount="playerInfos.length"
-            :maxPlayers="snapshot?.context?.maxPlayers || 2"
-            :boardId="boardId"
-            :gameId="gameId"
+            :is-initiator="isInitiator"
+            :is-server-connecting="isServerConnecting"
+            :signaling-client="signalingClient"
+            :pending-signaling="pendingSignaling"
+            :pending-join-requests="pendingJoinRequests"
+            :is-known-identity="isKnownIdentity"
+            :host-signaling-mode="hostSignalingMode"
+            :initialize-server-signaling="initializeServerSignaling"
+            :initialize-manual-signaling="initializeManualSignaling"
+            :on-start-game="startGame"
+            :on-host-a-game="onHostAGame"
+            :on-update-offer="updateOffer"
+            :on-update-answer="updateAnswer"
+            :on-close-session="onBackToGames"
+            :on-back-to-lobby="onBackToDiscovery"
+            :on-accept-guest="onAcceptGuest"
+            :on-reject-guest="onRejectGuest"
+            :on-approve-peer="onApprovePeer"
+            :on-reject-peer="onRejectPeer"
+            :on-save-identity="saveIdentityOnApprove"
+            :on-cancel-signaling="onCancelSignaling"
+            :on-add-manual-connection="onAddManualConnection"
+            :on-remove-player="(pk) => send({ type: 'REMOVE_PLAYER', publicKey: pk })"
+            :player-count="playerInfos.length"
+            :max-players="snapshot?.context?.maxPlayers || 2"
+            :board-id="boardId"
+            :game-id="gameId"
           />
         </template>
 
@@ -273,15 +276,18 @@ onUnmounted(() => {
             :topology-mode="topologyMode"
             :is-initiator="isInitiator"
             :on-set-topology-mode="setTopologyMode"
-            :currentTurnPlayerId="currentTurnPlayerId"
-            :onRemove="isInitiator ? (pk) => send({ type: 'REMOVE_PLAYER', publicKey: pk }) : undefined"
-            :onSaveIdentity="handleSavePlayerIdentity"
-            :isKnownIdentity="isKnownIdentity"
+            :current-turn-player-id="currentTurnPlayerId"
+            :on-remove="isInitiator ? (pk) => send({ type: 'REMOVE_PLAYER', publicKey: pk }) : undefined"
+            :on-save-identity="handleSavePlayerIdentity"
+            :is-known-identity="isKnownIdentity"
           />
         </div>
       </div>
     </div>
-    <div v-else-if="!isIdentityLoading && hasIdentity" class="p-10 text-center text-white/50 uppercase font-black tracking-widest">
+    <div
+      v-else-if="!isIdentityLoading && hasIdentity"
+      class="p-10 text-center text-white/50 uppercase font-black tracking-widest"
+    >
       Game not found in grid.
     </div>
   </div>

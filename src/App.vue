@@ -12,7 +12,10 @@ import { Toaster } from 'vue-sonner'
         <component :is="Component" />
       </transition>
     </router-view>
-    <Toaster position="top-center" richColors />
+    <Toaster
+      position="top-center"
+      rich-colors
+    />
   </div>
 </template>
 

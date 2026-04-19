@@ -19,7 +19,10 @@ const steps = [
 </script>
 
 <template>
-  <section id="how-it-works" class="section bg-background py-20">
+  <section
+    id="how-it-works"
+    class="section bg-background py-20"
+  >
     <div class="container mx-auto px-4">
       <div class="text-center mb-20">
         <h2 class="text-4xl md:text-5xl font-black mb-6 tracking-tight">
@@ -45,9 +48,15 @@ const steps = [
 
           <div :class="['flex flex-col', index % 2 === 1 ? 'md:col-start-2 md:items-start' : 'md:items-end md:text-right']">
             <div class="glass-dark p-10 rounded-3xl animate-fade-in border border-white/5 hover:border-primary/20 transition-all duration-500 w-full md:max-w-md">
-              <div class="text-primary font-black text-3xl mb-4 opacity-50 font-mono tracking-tighter">PHASE_{{ item.step }}</div>
-              <h3 class="text-2xl font-bold mb-4 text-white uppercase tracking-wide">{{ item.title }}</h3>
-              <p class="text-muted-foreground leading-relaxed font-light">{{ item.description }}</p>
+              <div class="text-primary font-black text-3xl mb-4 opacity-50 font-mono tracking-tighter">
+                PHASE_{{ item.step }}
+              </div>
+              <h3 class="text-2xl font-bold mb-4 text-white uppercase tracking-wide">
+                {{ item.title }}
+              </h3>
+              <p class="text-muted-foreground leading-relaxed font-light">
+                {{ item.description }}
+              </p>
             </div>
           </div>
         </div>

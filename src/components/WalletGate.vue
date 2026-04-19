@@ -57,9 +57,12 @@ const handleCreateIdentity = async () => {
 
 <template>
   <div v-if="isLoaded">
-    <slot v-if="identity"></slot>
+    <slot v-if="identity" />
 
-    <DialogRoot :open="isOpen" @update:open="(val) => !identity && (isOpen = val)">
+    <DialogRoot
+      :open="isOpen"
+      @update:open="(val) => !identity && (isOpen = val)"
+    >
       <DialogPortal>
         <DialogOverlay class="bg-black/80 fixed inset-0 z-[100] backdrop-blur-md" />
         <DialogContent class="sm:max-w-md fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[101] border border-white/10 bg-[#0a0c10] shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-[2rem] overflow-hidden p-8 outline-none">
@@ -86,9 +89,9 @@ const handleCreateIdentity = async () => {
                 Public Persona
               </div>
               <Input
-                placeholder="Enter your display name..."
                 v-model="name"
-                className="h-14 text-lg rounded-2xl bg-white/5 border-white/10 focus:border-primary/50 transition-all px-6 placeholder:text-slate-600 font-bold"
+                placeholder="Enter your display name..."
+                class-name="h-14 text-lg rounded-2xl bg-white/5 border-white/10 focus:border-primary/50 transition-all px-6 placeholder:text-slate-600 font-bold"
               />
             </div>
 
@@ -98,9 +101,9 @@ const handleCreateIdentity = async () => {
                 Subscription Token
               </div>
               <Input
-                placeholder="Paste your token here..."
                 v-model="subscriptionToken"
-                className="h-14 text-lg rounded-2xl bg-white/5 border-white/10 focus:border-primary/50 transition-all px-6 font-mono placeholder:text-slate-600"
+                placeholder="Paste your token here..."
+                class-name="h-14 text-lg rounded-2xl bg-white/5 border-white/10 focus:border-primary/50 transition-all px-6 font-mono placeholder:text-slate-600"
                 @keydown.enter="handleCreateIdentity"
               />
             </div>
@@ -119,8 +122,8 @@ const handleCreateIdentity = async () => {
 
             <button
               class="w-full h-16 text-lg font-black rounded-2xl shadow-2xl bg-primary hover:bg-emerald-400 text-primary-foreground hover:scale-[1.02] transition-all active:scale-95 uppercase tracking-widest disabled:opacity-50"
-              @click="handleCreateIdentity"
               :disabled="isCreating"
+              @click="handleCreateIdentity"
             >
               <template v-if="isCreating">
                 <div class="flex items-center justify-center gap-3">
@@ -128,7 +131,9 @@ const handleCreateIdentity = async () => {
                   SECURING...
                 </div>
               </template>
-              <template v-else>Claim Identity</template>
+              <template v-else>
+                Claim Identity
+              </template>
             </button>
           </div>
         </DialogContent>

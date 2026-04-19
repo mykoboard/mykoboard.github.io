@@ -299,23 +299,26 @@ watch(() => props.players, () => {
         </div>
 
         <!-- Topology Toggle (Host Only) -->
-        <div v-if="isInitiator" class="flex items-center bg-black/40 p-1 rounded-2xl border border-white/5 backdrop-blur-md">
+        <div
+          v-if="isInitiator"
+          class="flex items-center bg-black/40 p-1 rounded-2xl border border-white/5 backdrop-blur-md"
+        >
           <button 
-            @click="onSetTopologyMode?.('star')"
             :class="[
               'px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2',
               topologyMode === 'star' ? 'bg-primary text-primary-foreground shadow-neon' : 'text-white/40 hover:text-white/60'
             ]"
+            @click="onSetTopologyMode?.('star')"
           >
             <Share2 class="w-3 h-3" />
             Host-Centric
           </button>
           <button 
-            @click="onSetTopologyMode?.('mesh')"
             :class="[
               'px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2',
               topologyMode === 'mesh' ? 'bg-primary text-primary-foreground shadow-neon' : 'text-white/40 hover:text-white/60'
             ]"
+            @click="onSetTopologyMode?.('mesh')"
           >
             <Network class="w-3 h-3" />
             P2P Mesh
@@ -345,7 +348,10 @@ watch(() => props.players, () => {
             ]"
           >
             <!-- Turn Indicator Particle Effect -->
-            <div v-if="player.publicKey === currentTurnPlayerId" class="absolute inset-0 bg-primary/5 animate-pulse rounded-3xl pointer-events-none" />
+            <div
+              v-if="player.publicKey === currentTurnPlayerId"
+              class="absolute inset-0 bg-primary/5 animate-pulse rounded-3xl pointer-events-none"
+            />
 
             <!-- Player Avatar/Icon Area -->
             <div class="relative z-10">
@@ -381,13 +387,13 @@ watch(() => props.players, () => {
                   <span 
                     v-if="player.isConnected"
                     class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-40"
-                  ></span>
+                  />
                   <span 
                     :class="[
                       'relative inline-flex rounded-full h-4 w-4 border-2 border-[#0A0A0A]',
                       player.isConnected ? 'bg-primary' : 'bg-rose-500'
                     ]"
-                  ></span>
+                  />
                 </div>
               </div>
             </div>
@@ -402,11 +408,17 @@ watch(() => props.players, () => {
                 >
                   {{ player.name }} 
                 </span>
-                <span v-if="player.isLocal" class="px-2 py-0.5 bg-primary/20 text-primary border border-primary/30 rounded-lg text-[9px] font-black uppercase tracking-widest italic group-hover/item:shadow-neon-sm transition-shadow">
+                <span
+                  v-if="player.isLocal"
+                  class="px-2 py-0.5 bg-primary/20 text-primary border border-primary/30 rounded-lg text-[9px] font-black uppercase tracking-widest italic group-hover/item:shadow-neon-sm transition-shadow"
+                >
                   LOCAL
                 </span>
                 
-                <span v-if="player.isHost" class="px-2 py-0.5 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded-lg text-[9px] font-black uppercase tracking-widest">
+                <span
+                  v-if="player.isHost"
+                  class="px-2 py-0.5 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded-lg text-[9px] font-black uppercase tracking-widest"
+                >
                   HOST
                 </span>
 
@@ -422,13 +434,19 @@ watch(() => props.players, () => {
               
               <!-- Connection Detail / Subtext -->
               <div class="flex items-center gap-3 mt-1.5">
-                <div v-if="player.isConnected" class="flex items-center gap-1.5">
+                <div
+                  v-if="player.isConnected"
+                  class="flex items-center gap-1.5"
+                >
                   <Zap class="w-3 h-3 text-primary animate-pulse" />
                   <span class="text-[9px] text-primary/60 font-black uppercase tracking-[0.2em]">
                     {{ player.publicKey === currentTurnPlayerId ? 'NODE ACTIVE - ON TURN' : 'Node Synchronized' }}
                   </span>
                 </div>
-                <span v-else class="text-[9px] text-rose-500/60 font-black uppercase tracking-[0.2em]">Connection Lost</span>
+                <span
+                  v-else
+                  class="text-[9px] text-rose-500/60 font-black uppercase tracking-[0.2em]"
+                >Connection Lost</span>
                 
                 <!-- Auto-approve Toggle -->
                 <div 
@@ -436,11 +454,11 @@ watch(() => props.players, () => {
                   class="flex items-center gap-2 ml-auto"
                 >
                   <button
-                    @click="handleToggleSave(player)"
                     :class="[
                       'relative inline-flex h-4 w-8 items-center rounded-full transition-all duration-300 border',
                       saveIdentityFlags[player.publicKey] ? 'bg-primary border-primary shadow-neon-sm' : 'bg-white/5 border-white/10'
                     ]"
+                    @click="handleToggleSave(player)"
                   >
                     <span
                       :class="[
@@ -457,11 +475,14 @@ watch(() => props.players, () => {
             </div>
             
             <!-- Remove Action -->
-            <div v-if="!player.isLocal && onRemove" class="flex items-center z-10">
+            <div
+              v-if="!player.isLocal && onRemove"
+              class="flex items-center z-10"
+            >
               <button
                 class="w-10 h-10 flex items-center justify-center text-white/20 hover:text-rose-500 hover:bg-rose-500/10 transition-all border border-transparent hover:border-rose-500/30 rounded-2xl"
-                @click="onRemove(player.publicKey)"
                 title="Disconnect node"
+                @click="onRemove(player.publicKey)"
               >
                 <UserMinus class="w-5 h-5" />
               </button>

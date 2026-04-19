@@ -184,12 +184,17 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
     <div class="max-w-4xl mx-auto p-6 space-y-12">
       <Header />
 
-      <div v-if="identity" class="space-y-10 animate-fade-in-up">
+      <div
+        v-if="identity"
+        class="space-y-10 animate-fade-in-up"
+      >
         <div class="flex items-center gap-4">
           <div class="p-3 bg-primary/10 rounded-2xl border border-primary/20 shadow-neon">
             <User class="w-8 h-8 text-primary" />
           </div>
-          <h1 class="text-4xl font-black tracking-tight text-white uppercase">User <span class="text-gradient">Profile</span></h1>
+          <h1 class="text-4xl font-black tracking-tight text-white uppercase">
+            User <span class="text-gradient">Profile</span>
+          </h1>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -198,29 +203,47 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
             <div class="flex items-center gap-4">
               <div class="relative">
                 <div class="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shadow-neon">
-                  <img v-if="sanitizeAvatarUrl(avatar)" :src="sanitizeAvatarUrl(avatar)" alt="Avatar" class="w-full h-full object-cover" />
-                  <User v-else class="w-8 h-8 text-primary" />
+                  <img
+                    v-if="sanitizeAvatarUrl(avatar)"
+                    :src="sanitizeAvatarUrl(avatar)"
+                    alt="Avatar"
+                    class="w-full h-full object-cover"
+                  >
+                  <User
+                    v-else
+                    class="w-8 h-8 text-primary"
+                  />
                 </div>
                 <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-primary rounded-full border-2 border-[#0A0A0A] shadow-neon" />
               </div>
               <div class="space-y-1">
-                <h2 class="text-2xl font-bold text-white uppercase tracking-wide">Identity</h2>
-                <p class="text-[10px] text-primary font-black uppercase tracking-widest">Active Node</p>
+                <h2 class="text-2xl font-bold text-white uppercase tracking-wide">
+                  Identity
+                </h2>
+                <p class="text-[10px] text-primary font-black uppercase tracking-widest">
+                  Active Node
+                </p>
               </div>
             </div>
 
             <div class="space-y-6">
               <div class="space-y-2">
                 <label class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Display Keyname</label>
-                <Input v-model="name" placeholder="Enter identity name..." className="h-14 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-bold" />
+                <Input
+                  v-model="name"
+                  placeholder="Enter identity name..."
+                  class-name="h-14 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-bold"
+                />
               </div>
 
               <div class="space-y-2">
                 <label class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Avatar Vector (URL)</label>
-                <Input v-model="avatar" placeholder="https://images.unsplash.com/..." className="h-14 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-mono text-sm" />
+                <Input
+                  v-model="avatar"
+                  placeholder="https://images.unsplash.com/..."
+                  class-name="h-14 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-mono text-sm"
+                />
               </div>
-
-
             </div>
           </div>
 
@@ -228,7 +251,9 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
           <div class="glass-dark p-8 rounded-3xl space-y-8 border border-white/5 shadow-glass-dark group hover:border-primary/20 transition-all duration-500">
             <div class="flex items-center gap-3">
               <Sparkles class="w-6 h-6 text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.4)]" />
-              <h2 class="text-2xl font-bold text-white uppercase tracking-wide">System Auth</h2>
+              <h2 class="text-2xl font-bold text-white uppercase tracking-wide">
+                System Auth
+              </h2>
             </div>
 
             <div class="space-y-6">
@@ -242,7 +267,11 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
 
               <div class="space-y-3">
                 <label class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Access Token</label>
-                <Input v-model="token" placeholder="Paste your node token..." className="h-14 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-mono" />
+                <Input
+                  v-model="token"
+                  placeholder="Paste your node token..."
+                  class-name="h-14 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-mono"
+                />
               </div>
             </div>
           </div>
@@ -250,9 +279,9 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
 
         <div class="pt-8">
           <button
-            @click="handleUpdateProfile"
             :disabled="isSaving || !hasChanges"
             class="w-full h-16 text-sm font-black uppercase tracking-[0.4em] rounded-2xl bg-primary text-primary-foreground shadow-[0_0_30px_rgba(16,185,129,0.2)] hover:shadow-[0_0_50px_rgba(16,185,129,0.4)] transition-all duration-500 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            @click="handleUpdateProfile"
           >
             <template v-if="isSaving">
               <div class="flex items-center justify-center gap-3">
@@ -260,20 +289,30 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
                 Encrypting Profile Data...
               </div>
             </template>
-            <template v-else>COMMIT NEURAL CONFIGURATION</template>
+            <template v-else>
+              COMMIT NEURAL CONFIGURATION
+            </template>
           </button>
         </div>
 
         <!-- Game History -->
-        <div v-if="activeSessions.length > 0" class="space-y-8 pt-8">
+        <div
+          v-if="activeSessions.length > 0"
+          class="space-y-8 pt-8"
+        >
           <div class="flex items-center gap-4">
             <div class="p-3 bg-primary/10 rounded-2xl border border-primary/20 shadow-neon">
               <History class="w-6 h-6 text-primary" />
             </div>
-            <h2 class="text-3xl font-black tracking-tight text-white uppercase">Game <span class="text-gradient">History</span></h2>
+            <h2 class="text-3xl font-black tracking-tight text-white uppercase">
+              Game <span class="text-gradient">History</span>
+            </h2>
           </div>
           <div class="max-w-3xl">
-            <PastMatches :active-sessions="activeSessions" @delete-session="onDeleteSession" />
+            <PastMatches
+              :active-sessions="activeSessions"
+              @delete-session="onDeleteSession"
+            />
           </div>
         </div>
 
@@ -290,14 +329,16 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
 
           <!-- Add New Identity Form -->
           <div class="glass-dark p-6 rounded-3xl border border-white/5 space-y-6">
-            <h3 class="text-lg font-bold text-white uppercase tracking-tight">Add New Identity</h3>
+            <h3 class="text-lg font-bold text-white uppercase tracking-tight">
+              Add New Identity
+            </h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="space-y-2">
                 <label class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Display Name</label>
                 <Input 
                   v-model="newIdentityName" 
                   placeholder="Enter player name..." 
-                  className="h-12 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-bold" 
+                  class-name="h-12 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-bold" 
                 />
               </div>
               <div class="space-y-2">
@@ -305,24 +346,27 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
                 <Input 
                   v-model="newIdentityPublicKey" 
                   placeholder="04..." 
-                  className="h-12 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-mono text-sm" 
+                  class-name="h-12 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-mono text-sm" 
                 />
               </div>
             </div>
             <button
-              @click="handleAddKnownIdentity"
               :disabled="isAddingIdentity || !newIdentityName.trim() || !newIdentityPublicKey.trim()"
               class="w-full h-12 text-xs font-black uppercase tracking-[0.2em] rounded-xl bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              @click="handleAddKnownIdentity"
             >
               {{ isAddingIdentity ? 'ADDING...' : 'ADD IDENTITY' }}
             </button>
           </div>
 
           <!-- List of Known Identities -->
-          <div v-if="knownIdentities.length > 0" class="space-y-4">
+          <div
+            v-if="knownIdentities.length > 0"
+            class="space-y-4"
+          >
             <div 
-              v-for="identity in knownIdentities" 
-              :key="identity.id"
+              v-for="knownId in knownIdentities" 
+              :key="knownId.id"
               class="glass-dark p-6 rounded-3xl border border-white/5 hover:border-primary/20 transition-all duration-300"
             >
               <div class="flex items-start justify-between gap-4">
@@ -332,44 +376,62 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
                       <User class="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <h4 class="text-lg font-bold text-white">{{ identity.name }}</h4>
-                      <p class="text-[10px] text-white/40 uppercase tracking-wider">Added {{ new Date(identity.addedAt).toLocaleDateString() }}</p>
+                      <h4 class="text-lg font-bold text-white">
+                        {{ knownId.name }}
+                      </h4>
+                      <p class="text-[10px] text-white/40 uppercase tracking-wider">
+                        Added {{ new Date(knownId.addedAt).toLocaleDateString() }}
+                      </p>
                     </div>
                   </div>
                   <div class="flex items-start gap-2 bg-white/5 p-3 rounded-xl border border-white/10">
                     <Key class="w-4 h-4 text-primary/60 shrink-0 mt-0.5" />
-                    <code class="text-[11px] text-white/50 break-all select-all font-mono">{{ identity.publicKey }}</code>
+                    <code class="text-[11px] text-white/50 break-all select-all font-mono">{{ knownId.publicKey }}</code>
                   </div>
                 </div>
                 <button
-                  @click="handleRemoveKnownIdentity(identity.id, identity.name)"
                   class="p-3 rounded-xl border border-white/10 text-white/60 hover:text-rose-500 hover:bg-rose-500/10 hover:border-rose-500/30 transition-all"
                   title="Remove identity"
+                  @click="handleRemoveKnownIdentity(knownId.id, knownId.name)"
                 >
                   <Trash2 class="w-5 h-5" />
                 </button>
               </div>
             </div>
           </div>
-          <div v-else class="glass-dark p-8 rounded-3xl border border-white/5 text-center">
+          <div
+            v-else
+            class="glass-dark p-8 rounded-3xl border border-white/5 text-center"
+          >
             <Users class="w-12 h-12 text-white/20 mx-auto mb-3" />
-            <p class="text-white/40 font-medium">No known identities yet</p>
-            <p class="text-white/30 text-sm mt-1">Add players you've played with to quickly identify them in future games</p>
+            <p class="text-white/40 font-medium">
+              No known identities yet
+            </p>
+            <p class="text-white/30 text-sm mt-1">
+              Add players you've played with to quickly identify them in future games
+            </p>
           </div>
         </div>
 
         <!-- Danger Zone -->
-        <div class="pt-12 mt-12 border-t border-destructive/20 space-y-8 animate-fade-in-up" style="animation-delay: 0.2s">
+        <div
+          class="pt-12 mt-12 border-t border-destructive/20 space-y-8 animate-fade-in-up"
+          style="animation-delay: 0.2s"
+        >
           <div class="flex items-center gap-4">
             <div class="p-3 bg-destructive/10 rounded-2xl border border-destructive/20 shadow-[0_0_20px_rgba(239,68,68,0.1)]">
               <AlertTriangle class="w-6 h-6 text-destructive" />
             </div>
-            <h2 class="text-3xl font-black tracking-tight text-white uppercase italic">Danger <span class="text-destructive">Zone</span></h2>
+            <h2 class="text-3xl font-black tracking-tight text-white uppercase italic">
+              Danger <span class="text-destructive">Zone</span>
+            </h2>
           </div>
 
           <div class="glass-dark p-8 rounded-3xl border border-destructive/10 shadow-glass-dark space-y-6">
             <div class="space-y-2">
-              <h3 class="text-xl font-bold text-white uppercase tracking-tight">Purge All Neural Records</h3>
+              <h3 class="text-xl font-bold text-white uppercase tracking-tight">
+                Purge All Neural Records
+              </h3>
               <p class="text-sm text-slate-400 font-medium leading-relaxed">
                 This action will permanently delete your <span class="text-destructive font-bold">decentralized identity</span>,
                 private keys, and <span class="text-destructive font-bold">all match history</span> from this device.
@@ -378,7 +440,7 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
             </div>
 
             <AlertDialogRoot>
-              <AlertDialogTrigger asChild>
+              <AlertDialogTrigger as-child>
                 <button
                   :disabled="isClearing"
                   class="h-14 px-8 text-xs font-black uppercase tracking-[0.2em] rounded-xl border border-destructive/30 text-destructive hover:bg-destructive hover:text-white transition-all duration-300 disabled:opacity-50"
@@ -406,8 +468,8 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
                       ABORT
                     </AlertDialogCancel>
                     <AlertDialogAction
-                      @click="handleClearAllData"
                       class="h-14 px-6 rounded-xl bg-destructive text-white font-black uppercase tracking-widest shadow-[0_0_20px_rgba(239,68,68,0.3)] hover:bg-destructive/90 text-xs"
+                      @click="handleClearAllData"
                     >
                       WIPE DATA
                     </AlertDialogAction>
@@ -420,12 +482,17 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
       </div>
 
       <!-- No Identity State -->
-      <div v-else class="space-y-10 animate-fade-in-up">
+      <div
+        v-else
+        class="space-y-10 animate-fade-in-up"
+      >
         <div class="flex items-center gap-4">
           <div class="p-3 bg-primary/10 rounded-2xl border border-primary/20 shadow-neon">
             <Shield class="w-8 h-8 text-primary" />
           </div>
-          <h1 class="text-4xl font-black tracking-tight text-white uppercase">Establish <span class="text-gradient">Identity</span></h1>
+          <h1 class="text-4xl font-black tracking-tight text-white uppercase">
+            Establish <span class="text-gradient">Identity</span>
+          </h1>
         </div>
 
         <div class="glass-dark p-10 rounded-[2.5rem] border border-white/5 shadow-glass-dark max-w-2xl mx-auto space-y-10">
@@ -433,7 +500,9 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
             <div class="mx-auto w-20 h-20 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-neon mb-6">
               <Fingerprint class="w-10 h-10 text-primary" />
             </div>
-            <h2 class="text-3xl font-black text-white uppercase tracking-tight">Generate Neural Node</h2>
+            <h2 class="text-3xl font-black text-white uppercase tracking-tight">
+              Generate Neural Node
+            </h2>
             <p class="text-slate-400 font-medium max-w-md mx-auto leading-relaxed">
               To participate in the decentralized ledger, you must first establish a local identity. 
               Your keys will be generated and stored <span class="text-primary font-bold italic">exclusively</span> on this device.
@@ -446,7 +515,7 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
               <Input 
                 v-model="name" 
                 placeholder="How shall the network know you?" 
-                className="h-16 bg-white/5 border-white/10 rounded-2xl focus:ring-primary text-white font-bold text-lg px-6" 
+                class-name="h-16 bg-white/5 border-white/10 rounded-2xl focus:ring-primary text-white font-bold text-lg px-6" 
               />
             </div>
 
@@ -455,21 +524,27 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
               <Input 
                 v-model="token" 
                 placeholder="Paste access token if available..." 
-                className="h-16 bg-white/5 border-white/10 rounded-2xl focus:ring-primary text-white font-mono px-6" 
+                class-name="h-16 bg-white/5 border-white/10 rounded-2xl focus:ring-primary text-white font-mono px-6" 
               />
             </div>
 
             <div class="pt-4">
               <button
-                @click="handleCreateIdentity"
                 :disabled="isCreating || !name.trim()"
                 class="w-full h-20 text-sm font-black uppercase tracking-[0.5em] rounded-2xl bg-primary text-primary-foreground shadow-[0_0_40px_rgba(16,185,129,0.2)] hover:shadow-[0_0_60px_rgba(16,185,129,0.4)] transition-all duration-500 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
+                @click="handleCreateIdentity"
               >
-                <div v-if="isCreating" class="flex items-center justify-center gap-4">
+                <div
+                  v-if="isCreating"
+                  class="flex items-center justify-center gap-4"
+                >
                   <div class="h-6 w-6 animate-spin rounded-full border-3 border-white border-b-transparent" />
                   GENERATING SECURE NODE...
                 </div>
-                <div v-else class="flex items-center justify-center gap-3">
+                <div
+                  v-else
+                  class="flex items-center justify-center gap-3"
+                >
                   INITIALIZE DECENTRALIZED IDENTITY
                   <Sparkles class="w-5 h-5" />
                 </div>

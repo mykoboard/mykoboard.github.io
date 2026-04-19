@@ -7,7 +7,7 @@ export class AwsSignalingAdapter implements ISignalingPort {
     private pingInterval: any = null;
 
     async connect(token: string, publicKey?: string, signature?: string) {
-        let url = import.meta.env.VITE_SIGNALING_SERVER_URL || 'wss://pebsg4v5yk.execute-api.eu-central-1.amazonaws.com/production';
+        const url = import.meta.env.VITE_SIGNALING_SERVER_URL || 'wss://pebsg4v5yk.execute-api.eu-central-1.amazonaws.com/production';
 
         const params = new URLSearchParams();
         params.append('x-api-key', token);

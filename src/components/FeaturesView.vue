@@ -21,7 +21,10 @@ const features = [
 </script>
 
 <template>
-  <section id="features" class="section bg-background relative py-20">
+  <section
+    id="features"
+    class="section bg-background relative py-20"
+  >
     <!-- Subtle background glow -->
     <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-primary/5 blur-[120px] rounded-full pointer-events-none" />
 
@@ -44,10 +47,17 @@ const features = [
           :style="{ animationDelay: `${index * 200}ms` }"
         >
           <div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-8 bg-primary/10 group-hover:bg-primary/20 transition-colors duration-500 shadow-[0_0_15px_rgba(16,185,129,0.1)] group-hover:shadow-[0_0_25px_rgba(16,185,129,0.3)]">
-            <component :is="feature.icon" class="w-8 h-8 text-primary" />
+            <component
+              :is="feature.icon"
+              class="w-8 h-8 text-primary"
+            />
           </div>
-          <h3 class="text-2xl font-bold mb-4 text-white group-hover:text-primary transition-colors duration-300">{{ feature.title }}</h3>
-          <p class="text-muted-foreground leading-relaxed font-light">{{ feature.description }}</p>
+          <h3 class="text-2xl font-bold mb-4 text-white group-hover:text-primary transition-colors duration-300">
+            {{ feature.title }}
+          </h3>
+          <p class="text-muted-foreground leading-relaxed font-light">
+            {{ feature.description }}
+          </p>
         </div>
       </div>
     </div>

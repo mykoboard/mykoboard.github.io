@@ -13,7 +13,10 @@ const scrollToFeatures = () => {
   <section class="min-h-screen flex items-center justify-center section bg-background overflow-hidden relative">
     <!-- Background Decorative Elements -->
     <div class="absolute top-1/4 -left-20 w-80 h-80 bg-emerald-500/10 rounded-full blur-[120px] animate-pulse" />
-    <div class="absolute bottom-1/4 -right-20 w-96 h-96 bg-primary/5 rounded-full blur-[150px] animate-pulse" style="animation-delay: 2s" />
+    <div
+      class="absolute bottom-1/4 -right-20 w-96 h-96 bg-primary/5 rounded-full blur-[150px] animate-pulse"
+      style="animation-delay: 2s"
+    />
 
     <div class="container relative z-10">
       <div class="text-center space-y-10 animate-fade-in">
@@ -23,7 +26,7 @@ const scrollToFeatures = () => {
         </div>
 
         <h1 class="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[1.1]">
-          The Future of <br />
+          The Future of <br>
           <span class="text-gradient">Board Gaming</span>
         </h1>
 

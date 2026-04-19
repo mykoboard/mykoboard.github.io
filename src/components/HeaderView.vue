@@ -59,8 +59,11 @@ const goProfile = () => router.push('/profile')
           :src="sanitizeAvatarUrl(identity?.avatar)" 
           alt="Avatar" 
           class="w-full h-full object-cover" 
+        >
+        <User
+          v-else
+          class="w-5 h-5 text-primary"
         />
-        <User v-else class="w-5 h-5 text-primary" />
       </div>
       <span class="text-sm font-bold text-white/90 tracking-wide uppercase">
         {{ identity?.name || "Guest" }}

@@ -5,7 +5,7 @@ import type { IPeerConnectionPort } from '../../application/ports/IPeerConnectio
 import type { PlayerInfo } from '@mykoboard/integration'
 
 const props = defineProps<{
-    GameComponent: any;
+    gameComponent: any;
     connectedPeers: IPeerConnectionPort[];
     playerInfos: PlayerInfo[];
     isInitiator: boolean;
@@ -16,7 +16,7 @@ const props = defineProps<{
 }>()
 
 const resolvedComponent = shallowRef<any>(null)
-watch(() => props.GameComponent, async (newComp) => {
+watch(() => props.gameComponent, async (newComp) => {
     resolvedComponent.value = null
     if (newComp) {
         if (props.framework === 'vue') {
@@ -42,12 +42,16 @@ const componentProps = computed(() => ({
 <template>
   <div class="animate-zoom-in">
     <template v-if="framework === 'vue'">
-        <component :is="resolvedComponent" v-bind="componentProps" v-if="resolvedComponent" />
+      <component
+        :is="resolvedComponent"
+        v-bind="componentProps"
+        v-if="resolvedComponent"
+      />
     </template>
     <ReactComponentWrapper 
       v-else
-      :component="GameComponent" 
-      :componentProps="componentProps" 
+      :component="gameComponent" 
+      :component-props="componentProps" 
     />
   </div>
 </template>

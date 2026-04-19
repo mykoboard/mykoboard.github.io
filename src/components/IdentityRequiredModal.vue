@@ -50,7 +50,6 @@ const handleCreateIdentity = async () => {
   >
     <!-- Modal panel -->
     <div class="w-full max-w-md mx-4 glass-dark rounded-[2.5rem] border border-primary/20 shadow-[0_0_80px_rgba(16,185,129,0.15)] p-10 space-y-8 animate-fade-in-up">
-
       <!-- Icon + heading -->
       <div class="space-y-4 text-center">
         <div class="mx-auto w-20 h-20 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.2)]">
@@ -113,11 +112,17 @@ const handleCreateIdentity = async () => {
           class="w-full h-16 text-sm font-black uppercase tracking-[0.4em] rounded-2xl bg-primary text-primary-foreground shadow-[0_0_40px_rgba(16,185,129,0.2)] hover:shadow-[0_0_60px_rgba(16,185,129,0.4)] transition-all duration-500 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
           @click="handleCreateIdentity"
         >
-          <div v-if="isCreating" class="flex items-center justify-center gap-3">
+          <div
+            v-if="isCreating"
+            class="flex items-center justify-center gap-3"
+          >
             <div class="h-5 w-5 animate-spin rounded-full border-2 border-white border-b-transparent" />
             Generating Secure Node...
           </div>
-          <div v-else class="flex items-center justify-center gap-3">
+          <div
+            v-else
+            class="flex items-center justify-center gap-3"
+          >
             Initialize Identity
             <Sparkles class="w-5 h-5" />
           </div>

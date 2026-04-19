@@ -54,7 +54,10 @@ const offerUrlBase = computed(() => {
 <template>
   <div class="space-y-8">
     <!-- Session Connection States -->
-    <div v-if="isHosting || isJoining || isPreparation" class="glass-dark p-10 text-center space-y-8 border border-white/5 shadow-glass-dark rounded-[3rem] animate-zoom-in">
+    <div
+      v-if="isHosting || isJoining || isPreparation"
+      class="glass-dark p-10 text-center space-y-8 border border-white/5 shadow-glass-dark rounded-[3rem] animate-zoom-in"
+    >
       <div class="space-y-4">
         <div class="inline-flex items-center gap-2 px-4 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-neon transform -translate-y-2">
           {{ isHosting ? "Broadcasting Session" : isJoining ? "Bridging Node" : "Mesh Linked" }}
@@ -66,21 +69,26 @@ const offerUrlBase = computed(() => {
           <template v-if="isPreparation">
             {{ isInitiator ? `Launch protocol when ready (${playerCount}/${maxPlayers}).` : "Waiting for initiator to launch protocol." }}
           </template>
-          <template v-else>Exchanging direct P2P connection vectors manually.</template>
+          <template v-else>
+            Exchanging direct P2P connection vectors manually.
+          </template>
         </p>
       </div>
 
-      <div v-if="isInitiator" class="flex flex-col items-center gap-6">
+      <div
+        v-if="isInitiator"
+        class="flex flex-col items-center gap-6"
+      >
         <button
           v-if="isPreparation"
-          @click="onStartGame"
           class="w-full max-w-sm h-16 text-sm font-black uppercase tracking-[0.5em] rounded-2xl bg-primary text-primary-foreground shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] transition-all active:scale-[0.98]"
+          @click="onStartGame"
         >
           Launch Protocol
         </button>
 
         <AlertDialogRoot>
-          <AlertDialogTrigger asChild>
+          <AlertDialogTrigger as-child>
             <button class="px-4 h-12 rounded-xl text-white/20 hover:text-rose-500 font-black uppercase tracking-widest text-[10px] transition-colors">
               Terminate Session
             </button>
@@ -104,8 +112,8 @@ const offerUrlBase = computed(() => {
                   Abort
                 </AlertDialogCancel>
                 <AlertDialogAction
-                  @click="onCloseSession"
                   class="h-12 rounded-xl bg-rose-500 text-white font-black uppercase tracking-widest text-[10px] hover:bg-rose-600 shadow-neon-sm"
+                  @click="onCloseSession"
                 >
                   Confirm
                 </AlertDialogAction>
@@ -123,30 +131,39 @@ const offerUrlBase = computed(() => {
                   <Link class="w-5 h-5 text-primary" />
                 </div>
                 <div class="text-left">
-                  <h3 class="text-sm font-black text-white uppercase tracking-wider">Manual Mesh Link</h3>
-                  <p class="text-[10px] text-white/30 uppercase tracking-widest font-medium">Generate an offline/manual WebRTC vector</p>
+                  <h3 class="text-sm font-black text-white uppercase tracking-wider">
+                    Manual Mesh Link
+                  </h3>
+                  <p class="text-[10px] text-white/30 uppercase tracking-widest font-medium">
+                    Generate an offline/manual WebRTC vector
+                  </p>
                 </div>
               </div>
               <button
                 v-if="onAddManualConnection"
-                @click="onAddManualConnection"
                 class="px-4 py-2 bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-primary-foreground font-black uppercase tracking-widest text-[10px] rounded-xl transition-all"
+                @click="onAddManualConnection"
               >
                 Generate Link
               </button>
             </div>
             
-            <div v-if="pendingSignaling.length > 0" class="space-y-4 pt-4 border-t border-white/5">
-              <h3 class="text-[11px] font-black text-white/20 uppercase tracking-[0.3em] px-1">Active Vectors</h3>
+            <div
+              v-if="pendingSignaling.length > 0"
+              class="space-y-4 pt-4 border-t border-white/5"
+            >
+              <h3 class="text-[11px] font-black text-white/20 uppercase tracking-[0.3em] px-1">
+                Active Vectors
+              </h3>
               <div class="grid grid-cols-1 gap-6 text-left">
                 <SignalingStep
                   v-for="conn in pendingSignaling"
                   :key="conn.id"
                   :connection="conn"
-                  :offerUrlBase="offerUrlBase"
-                  :onOfferChange="onUpdateOffer"
-                  :onAnswerChange="onUpdateAnswer"
-                  :onCancel="onCancelSignaling"
+                  :offer-url-base="offerUrlBase"
+                  :on-offer-change="onUpdateOffer"
+                  :on-answer-change="onUpdateAnswer"
+                  :on-cancel="onCancelSignaling"
                 />
               </div>
             </div>
@@ -154,45 +171,66 @@ const offerUrlBase = computed(() => {
         </div>
       </div>
 
-      <div v-else class="space-y-8">
-        <div v-if="pendingSignaling.length > 0" class="text-left w-full max-w-2xl mx-auto animate-fade-in space-y-4">
+      <div
+        v-else
+        class="space-y-8"
+      >
+        <div
+          v-if="pendingSignaling.length > 0"
+          class="text-left w-full max-w-2xl mx-auto animate-fade-in space-y-4"
+        >
           <!-- Processing Automated Offer -->
-          <div v-if="isProcessingOffer" class="glass-dark p-10 rounded-[2rem] border border-primary/20 bg-primary/5 flex flex-col items-center gap-6 animate-pulse">
-             <div class="h-12 w-12 bg-primary/20 rounded-full flex items-center justify-center">
-               <div class="h-4 w-4 bg-primary rounded-full animate-ping"></div>
-             </div>
-             <div class="space-y-2 text-center">
-               <h3 class="text-sm font-black text-primary uppercase tracking-widest">Processing Node Vector</h3>
-               <p class="text-[10px] text-white/30 uppercase tracking-[0.2em] font-medium font-mono">Synthesizing handshake payload...</p>
-             </div>
+          <div
+            v-if="isProcessingOffer"
+            class="glass-dark p-10 rounded-[2rem] border border-primary/20 bg-primary/5 flex flex-col items-center gap-6 animate-pulse"
+          >
+            <div class="h-12 w-12 bg-primary/20 rounded-full flex items-center justify-center">
+              <div class="h-4 w-4 bg-primary rounded-full animate-ping" />
+            </div>
+            <div class="space-y-2 text-center">
+              <h3 class="text-sm font-black text-primary uppercase tracking-widest">
+                Processing Node Vector
+              </h3>
+              <p class="text-[10px] text-white/30 uppercase tracking-[0.2em] font-medium font-mono">
+                Synthesizing handshake payload...
+              </p>
+            </div>
           </div>
 
           <!-- Missing Offer Warning -->
-          <div v-else-if="isManualGuestWithoutOffer && (pendingSignaling[0] as any).status === 'readyToAccept'" class="glass-dark p-8 rounded-[2rem] border border-rose-500/20 bg-rose-500/5 space-y-4 animate-zoom-in">
-             <div class="flex items-center gap-3 text-rose-500">
-               <AlertTriangle class="w-6 h-6" />
-               <h3 class="text-sm font-black uppercase tracking-wider">Invalid Join Vector</h3>
-             </div>
-             <p class="text-[11px] text-white/50 uppercase tracking-widest leading-relaxed font-medium">
-               The manual connection payload is missing from the URL. Please ensure you are using the full link provided by the host.
-             </p>
+          <div
+            v-else-if="isManualGuestWithoutOffer && (pendingSignaling[0] as any).status === 'readyToAccept'"
+            class="glass-dark p-8 rounded-[2rem] border border-rose-500/20 bg-rose-500/5 space-y-4 animate-zoom-in"
+          >
+            <div class="flex items-center gap-3 text-rose-500">
+              <AlertTriangle class="w-6 h-6" />
+              <h3 class="text-sm font-black uppercase tracking-wider">
+                Invalid Join Vector
+              </h3>
+            </div>
+            <p class="text-[11px] text-white/50 uppercase tracking-widest leading-relaxed font-medium">
+              The manual connection payload is missing from the URL. Please ensure you are using the full link provided by the host.
+            </p>
           </div>
 
           <SignalingStep
             v-else
             :connection="pendingSignaling[0]"
-            :offerUrlBase="offerUrlBase"
-            :onOfferChange="onUpdateOffer"
-            :onAnswerChange="onUpdateAnswer"
-            :onCancel="onCancelSignaling"
+            :offer-url-base="offerUrlBase"
+            :on-offer-change="onUpdateOffer"
+            :on-answer-change="onUpdateAnswer"
+            :on-cancel="onCancelSignaling"
           />
         </div>
 
         <div class="flex flex-col items-center gap-8 py-6">
-          <div v-if="!isPreparation" class="relative">
-            <div class="animate-spin rounded-full h-20 w-20 border-4 border-primary/5 border-t-primary shadow-neon"></div>
+          <div
+            v-if="!isPreparation"
+            class="relative"
+          >
+            <div class="animate-spin rounded-full h-20 w-20 border-4 border-primary/5 border-t-primary shadow-neon" />
             <div class="absolute inset-0 flex items-center justify-center">
-              <div class="h-3 w-3 bg-primary rounded-full animate-pulse shadow-neon"></div>
+              <div class="h-3 w-3 bg-primary rounded-full animate-pulse shadow-neon" />
             </div>
           </div>
           <div class="space-y-3">
@@ -205,7 +243,7 @@ const offerUrlBase = computed(() => {
           </div>
           
           <AlertDialogRoot>
-            <AlertDialogTrigger asChild>
+            <AlertDialogTrigger as-child>
               <button class="h-10 text-white/20 hover:text-rose-500 font-black uppercase tracking-widest text-[10px] transition-colors">
                 Sever Connection
               </button>
@@ -229,8 +267,8 @@ const offerUrlBase = computed(() => {
                     Abort
                   </AlertDialogCancel>
                   <AlertDialogAction
-                    @click="onBackToLobby"
                     class="h-12 rounded-xl bg-rose-500 text-white font-black uppercase tracking-widest text-[10px] hover:bg-rose-600 shadow-neon-sm"
+                    @click="onBackToLobby"
                   >
                     Confirm
                   </AlertDialogAction>

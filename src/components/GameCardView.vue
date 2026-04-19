@@ -31,7 +31,11 @@ const viewGameInfo = async () => {
     <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-2xl -z-10" />
 
     <div class="w-full relative aspect-square rounded-2xl overflow-hidden mb-6 bg-white/5 shadow-inner shrink-0">
-      <img :src="game.image" :alt="game.name" class="absolute inset-0 w-full h-full object-cover max-w-full max-h-full transform group-hover:scale-110 transition-transform duration-700" />
+      <img
+        :src="game.image"
+        :alt="game.name"
+        class="absolute inset-0 w-full h-full object-cover max-w-full max-h-full transform group-hover:scale-110 transition-transform duration-700"
+      >
       <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
     </div>
 

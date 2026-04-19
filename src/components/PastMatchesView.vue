@@ -32,7 +32,10 @@ const navigateToSession = (session: GameSession) => {
 </script>
 
 <template>
-  <div v-if="finishedSessions.length > 0" class="space-y-4 mb-10 animate-fade-in-down">
+  <div
+    v-if="finishedSessions.length > 0"
+    class="space-y-4 mb-10 animate-fade-in-down"
+  >
     <div class="grid gap-4">
       <div
         v-for="session in finishedSessions"
@@ -46,7 +49,9 @@ const navigateToSession = (session: GameSession) => {
           </div>
           <div class="space-y-2">
             <div class="flex items-center gap-3">
-              <p class="font-bold text-lg text-white tracking-tight uppercase">{{ session.gameName }}</p>
+              <p class="font-bold text-lg text-white tracking-tight uppercase">
+                {{ session.gameName }}
+              </p>
               <span class="text-[9px] bg-primary/10 text-primary px-2 py-0.5 rounded-full border border-primary/30 uppercase font-black tracking-tighter shadow-neon">Verified</span>
             </div>
             <div class="flex flex-wrap gap-2 mt-1">

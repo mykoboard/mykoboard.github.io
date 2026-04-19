@@ -42,16 +42,21 @@ const otherGames = computed(() => filteredGames.value.filter((game) => !favorite
       <div class="relative max-w-2xl mx-auto group">
         <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors z-20" />
         <Input
-          placeholder="Search for a game or genre..."
           v-model="search"
-          className="pl-12 h-14 bg-white/5 backdrop-blur-xl border-white/10 rounded-2xl focus-visible:ring-primary text-white placeholder:text-muted-foreground shadow-glass-dark neon-border"
+          placeholder="Search for a game or genre..."
+          class-name="pl-12 h-14 bg-white/5 backdrop-blur-xl border-white/10 rounded-2xl focus-visible:ring-primary text-white placeholder:text-muted-foreground shadow-glass-dark neon-border"
         />
       </div>
 
-      <section v-if="favoriteGames.length > 0" class="space-y-6 animate-fade-in-left">
+      <section
+        v-if="favoriteGames.length > 0"
+        class="space-y-6 animate-fade-in-left"
+      >
         <div class="flex items-center gap-3">
           <Sparkles class="w-6 h-6 text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.4)]" />
-          <h2 class="text-3xl font-black tracking-tight text-white uppercase">Your <span class="text-gradient">Favorites</span></h2>
+          <h2 class="text-3xl font-black tracking-tight text-white uppercase">
+            Your <span class="text-gradient">Favorites</span>
+          </h2>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
           <GameCard 
@@ -59,7 +64,7 @@ const otherGames = computed(() => filteredGames.value.filter((game) => !favorite
             :key="game.id" 
             :game="game" 
             :favorites="favorites" 
-            @toggleFavorite="toggleFavorite" 
+            @toggle-favorite="toggleFavorite" 
           />
         </div>
       </section>
@@ -79,11 +84,16 @@ const otherGames = computed(() => filteredGames.value.filter((game) => !favorite
             :key="game.id" 
             :game="game" 
             :favorites="favorites" 
-            @toggleFavorite="toggleFavorite" 
+            @toggle-favorite="toggleFavorite" 
           />
         </div>
-        <div v-if="filteredGames.length === 0" class="text-center py-20 glass-dark rounded-3xl border border-dashed border-white/10 shadow-glass-dark">
-          <p class="text-muted-foreground text-xl font-light">No games match your frequency.</p>
+        <div
+          v-if="filteredGames.length === 0"
+          class="text-center py-20 glass-dark rounded-3xl border border-dashed border-white/10 shadow-glass-dark"
+        >
+          <p class="text-muted-foreground text-xl font-light">
+            No games match your frequency.
+          </p>
         </div>
       </section>
     </div>

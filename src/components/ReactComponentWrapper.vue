@@ -41,7 +41,10 @@ onUnmounted(() => {
       v-bind="componentProps" 
       v-if="WrappedComponent" 
     />
-    <div v-else class="p-20 text-center text-white/10 uppercase font-black tracking-[0.5em] animate-pulse">
+    <div
+      v-else
+      class="p-20 text-center text-white/10 uppercase font-black tracking-[0.5em] animate-pulse"
+    >
       Initialising Game...
     </div>
   </div>

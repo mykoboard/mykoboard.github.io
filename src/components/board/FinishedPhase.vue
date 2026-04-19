@@ -6,7 +6,7 @@ import type { IPeerConnectionPort } from '../../application/ports/IPeerConnectio
 import type { PlayerInfo } from '@mykoboard/integration'
 
 const props = defineProps<{
-    GameComponent: any;
+    gameComponent: any;
     connectedPeers: IPeerConnectionPort[];
     playerInfos: PlayerInfo[];
     isInitiator: boolean;
@@ -16,7 +16,7 @@ const props = defineProps<{
 }>()
 
 const resolvedComponent = shallowRef<any>(null)
-watch(() => props.GameComponent, async (newComp) => {
+watch(() => props.gameComponent, async (newComp) => {
     resolvedComponent.value = null
     if (newComp) {
         if (props.framework === 'vue') {
@@ -43,12 +43,16 @@ const componentProps = computed(() => ({
   <div class="space-y-6">
     <div class="opacity-80 pointer-events-none grayscale-[0.2]">
       <template v-if="framework === 'vue'">
-        <component :is="resolvedComponent" v-bind="componentProps" v-if="resolvedComponent" />
+        <component
+          :is="resolvedComponent"
+          v-bind="componentProps"
+          v-if="resolvedComponent"
+        />
       </template>
       <ReactComponentWrapper 
         v-else
-        :component="GameComponent" 
-        :componentProps="componentProps" 
+        :component="gameComponent" 
+        :component-props="componentProps" 
       />
     </div>
 
@@ -59,14 +63,18 @@ const componentProps = computed(() => ({
             <CheckCircle2 class="w-8 h-8 text-primary" />
           </div>
           <div class="space-y-1">
-            <h3 class="text-xl font-black text-white uppercase tracking-tight">Match Finalized</h3>
-            <p class="text-[10px] text-white/30 uppercase tracking-widest font-black">All cycles complete. Handshake terminated.</p>
+            <h3 class="text-xl font-black text-white uppercase tracking-tight">
+              Match Finalized
+            </h3>
+            <p class="text-[10px] text-white/30 uppercase tracking-widest font-black">
+              All cycles complete. Handshake terminated.
+            </p>
           </div>
         </div>
         <div class="flex gap-4 w-full md:w-auto">
           <button
-            @click="onBackToLobby"
             class="w-full md:w-56 h-14 rounded-2xl bg-primary text-primary-foreground shadow-neon hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] font-black uppercase tracking-[0.3em] text-xs transition-all"
+            @click="onBackToLobby"
           >
             Return to Discovery
           </button>

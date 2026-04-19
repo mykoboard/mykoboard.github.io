@@ -74,7 +74,7 @@ export const planningPokerMachine = createMachine({
 });
 
 export function applyLedgerToPokerState(_players: any[], ledger: any[]): PokerContext {
-    let context: PokerContext = {
+    const context: PokerContext = {
         votes: {},
         votedPlayers: new Set<string>(),
         isRevealed: false,
