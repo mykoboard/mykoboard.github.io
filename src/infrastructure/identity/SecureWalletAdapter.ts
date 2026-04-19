@@ -1,4 +1,3 @@
-import { nanoid } from 'nanoid';
 import { PlayerIdentity } from '../../domain/identity/PlayerIdentity';
 import { IIdentityRepository } from '../../application/ports/IIdentityRepository';
 import { ref, Ref } from 'vue';
@@ -70,7 +69,6 @@ export class SecureWalletAdapter implements IIdentityRepository {
         const publicKeyHex = this.bufToHex(new Uint8Array(exportedPublic));
 
         const identity: PlayerIdentity = {
-            id: nanoid(),
             name,
             publicKey: publicKeyHex,
             subscriptionToken

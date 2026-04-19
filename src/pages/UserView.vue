@@ -220,13 +220,7 @@ const handleRemoveKnownIdentity = async (id: string, name: string) => {
                 <Input v-model="avatar" placeholder="https://images.unsplash.com/..." className="h-14 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white font-mono text-sm" />
               </div>
 
-              <div class="space-y-2">
-                <label class="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Node Identifier</label>
-                <div class="flex items-center gap-3 bg-white/5 p-3 rounded-xl border border-white/10 group-hover:neon-border transition-all duration-500">
-                  <Fingerprint class="w-5 h-5 text-primary/60 shrink-0" />
-                  <code class="text-sm text-white/70 break-all select-all font-mono">{{ identity.id }}</code>
-                </div>
-              </div>
+
             </div>
           </div>
 
