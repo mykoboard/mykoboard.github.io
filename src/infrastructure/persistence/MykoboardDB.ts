@@ -5,6 +5,7 @@
  * Individual repos call `getSharedDB()` instead of opening IndexedDB themselves,
  * which guarantees every store exists before any transaction is attempted.
  */
+import { logger } from '../../lib/logger';
 
 const DB_NAME = 'MykoboardDB';
 export const DB_VERSION = 6; // bump whenever a new store or index is added
@@ -38,7 +39,7 @@ export function getSharedDB(): Promise<IDBDatabase> {
             reject((event.target as IDBOpenDBRequest).error);
         };
         request.onblocked = () => {
-            console.warn('[MykoboardDB] upgrade blocked — close other tabs');
+            logger.warn('[MykoboardDB] upgrade blocked — close other tabs');
         };
     });
 

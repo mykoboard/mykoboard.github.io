@@ -5,6 +5,7 @@ import { useP2PNegotiation } from './useP2PNegotiation';
 import { useSessionActions } from './useSessionActions';
 import { compositionRoot } from '../application/CompositionRoot';
 import { ISignalingPort } from '../application/ports/ISignalingPort';
+import { logger } from '../lib/logger';
 
 const { identity, isLoading } = compositionRoot.identityRepo;
 const { activeSessions } = compositionRoot.sessionRepo;
@@ -132,7 +133,7 @@ export function useGameSession() {
                     await conn.acceptAnswer(msg.answer);
                     pendingConnections.delete(msg.from!);
                 }
-                catch (err) { console.error('Failed to accept answer:', err); }
+                catch (err) { logger.error('Failed to accept answer:', err); }
             }
         };
 

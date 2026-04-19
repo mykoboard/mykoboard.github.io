@@ -12,6 +12,7 @@ import {
   AlertDialogCancel, 
   AlertDialogAction 
 } from 'radix-vue'
+import { logger } from '../../lib/logger'
 import { IPeerConnectionPort } from '../../application/ports/IPeerConnectionPort'
 
 interface PendingJoinRequest {
@@ -85,7 +86,7 @@ const handleCopyLink = async () => {
             isCopied.value = false
         }, 2000)
     } catch (err) {
-        console.error('Failed to copy link:', err)
+        logger.error('Failed to copy link:', err)
     }
 }
 

@@ -1,6 +1,7 @@
 import { reactive } from 'vue';
 import { IPeerConnectionPort, PeerConnectionStatus, IceGatheringState } from '../../application/ports/IPeerConnectionPort';
 import { Connection, ConnectionStatus } from '../../lib/webrtc';
+import { logger } from '../../lib/logger';
 
 /**
  * Adapter for WebRTC connections.
@@ -58,7 +59,7 @@ export class WebRtcConnectionAdapter implements IPeerConnectionPort {
         if (typeof data === 'string') {
             this.connection.send(data);
         } else {
-            console.warn('[WebRtcAdapter] Attempted to send non-string data, current implementation only supports strings.');
+            logger.warn('[WebRtcAdapter] Attempted to send non-string data, current implementation only supports strings.');
         }
     }
 

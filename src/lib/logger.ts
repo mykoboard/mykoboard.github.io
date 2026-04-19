@@ -113,5 +113,9 @@ export const logger = {
     error: (...args: any[]) => {
         if (!logger.shouldLog('error')) return;
         console.error('%c[ERROR]', 'color: #ef4444; font-weight: bold;', ...args);
+    },
+
+    warn: (...args: any[]) => {
+        console.warn('%c[WARN]', 'color: #f59e0b; font-weight: bold;', ...args);
     }
 };

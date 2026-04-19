@@ -2,6 +2,7 @@
 import { ref, onMounted, watch, nextTick, onUnmounted } from 'vue'
 import { UserPlus, UserMinus, ShieldCheck, Zap, Sword, Network, Share2, Globe } from 'lucide-vue-next'
 import type { PlayerInfo } from '@mykoboard/integration'
+import { logger } from '../../lib/logger'
 
 const props = defineProps<{
   players: PlayerInfo[]
@@ -59,7 +60,7 @@ const handleSaveIdentity = async (player: PlayerInfo) => {
     await props.onSaveIdentity(player)
     knownIdentityStatus.value[player.publicKey] = true
   } catch (error) {
-    console.error('[LobbyPlayerList] Error saving identity:', error)
+    logger.error('[LobbyPlayerList] Error saving identity:', error)
     saveIdentityFlags.value[player.publicKey] = false
   }
 }

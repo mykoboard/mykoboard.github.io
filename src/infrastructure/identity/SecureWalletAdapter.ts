@@ -1,6 +1,7 @@
 import { PlayerIdentity } from '../../domain/identity/PlayerIdentity';
 import { IIdentityRepository } from '../../application/ports/IIdentityRepository';
 import { ref, Ref } from 'vue';
+import { logger } from '../../lib/logger';
 
 const DB_NAME = 'mykoboard_wallet';
 const STORE_NAME = 'identity';
@@ -139,7 +140,7 @@ export class SecureWalletAdapter implements IIdentityRepository {
                 msgUint8.buffer as ArrayBuffer
             );
         } catch (e) {
-            console.error("Signature verification failed", e);
+            logger.error("Signature verification failed", e);
             return false;
         }
     }

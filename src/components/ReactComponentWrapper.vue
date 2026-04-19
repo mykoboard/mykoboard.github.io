@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { applyReactInVue } from 'veaury'
 import { watch, shallowRef, toRaw, onUnmounted } from 'vue'
+import { logger } from '../lib/logger'
 
 const props = defineProps<{
   component: any
@@ -20,7 +21,7 @@ watch(() => props.component, (newComp) => {
       // applyReactInVue creates a Vue component that can render the React component
       WrappedComponent.value = applyReactInVue(rawComponent)
     } catch (err) {
-      console.error('[ReactComponentWrapper] Failed to apply React in Vue:', err)
+      logger.error('[ReactComponentWrapper] Failed to apply React in Vue:', err)
       WrappedComponent.value = null
     }
   } else {

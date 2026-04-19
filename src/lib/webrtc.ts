@@ -141,7 +141,7 @@ export class Connection {
   }
 
   async prepareOfferSignal(playerName: string, publicKey: string) {
-    console.log('[WebRTC] prepareOfferSignal - playerName:', playerName);
+    logger.webrtc('prepareOfferSignal - playerName: ' + playerName);
     this.localPlayerName = playerName;
 
     this.status = ConnectionStatus.new;
@@ -176,7 +176,7 @@ export class Connection {
 
   async acceptOffer(offerSignal: string | Signal, acceptingPlayerName: string, acceptingPublicKey: string) {
     const signal = typeof offerSignal === 'string' ? await Signal.decompress(offerSignal) : offerSignal;
-    console.log('[WebRTC] acceptOffer - acceptingPlayerName:', acceptingPlayerName);
+    logger.webrtc('acceptOffer - acceptingPlayerName: ' + acceptingPlayerName);
 
     // Store Host's name (public key will come from signaling server)
     this.remotePublicKey = signal.publicKey;
@@ -207,7 +207,7 @@ export class Connection {
   async acceptAnswer(answerSignal: string | Signal) {
     const connectionSignal = typeof answerSignal === 'string' ? await Signal.decompress(answerSignal) : answerSignal;
     logger.webrtc(this.id + ': Accepting answer signal');
-    console.log('[WebRTC] acceptAnswer');
+    logger.webrtc('acceptAnswer');
 
     try {
       await this.peerConnection.setRemoteDescription(connectionSignal.session);
