@@ -9,7 +9,7 @@ import PastMatches from '../components/PastMatchesView.vue'
 import { sanitizeAvatarUrl } from '../lib/utils'
 import * as Keys from '../application/InjectionKeys'
 import type { PlayerIdentity } from '../domain/identity/PlayerIdentity'
-import type { KnownIdentity } from '../domain/identity/IKnownIdentityRepository'
+import type { KnownIdentity } from '../application/ports/IKnownIdentityRepository'
 
 import { 
   AlertDialogRoot, 
