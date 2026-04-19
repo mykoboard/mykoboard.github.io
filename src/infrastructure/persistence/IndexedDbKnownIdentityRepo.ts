@@ -48,4 +48,3 @@ export class IndexedDbKnownIdentityRepo implements IKnownIdentityRepository {
     }
 }
 
-export const knownIdentityDb = new IndexedDbKnownIdentityRepo();

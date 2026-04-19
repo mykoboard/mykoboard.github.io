@@ -216,4 +216,3 @@ export class SecureWalletAdapter implements IIdentityRepository {
     }
 }
 
-export const wallet = SecureWalletAdapter.getInstance();

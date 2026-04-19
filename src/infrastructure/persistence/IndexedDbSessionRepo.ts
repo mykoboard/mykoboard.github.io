@@ -138,4 +138,3 @@ export class IndexedDbSessionRepo implements ISessionRepository {
     }
 }
 
-export const db = new IndexedDbSessionRepo();
