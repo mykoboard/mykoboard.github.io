@@ -1,9 +1,10 @@
 import type { RouteLocationNormalized, NavigationGuardNext } from 'vue-router';
-import type { Ref } from 'vue';
+import { watch, type Ref } from 'vue';
 import type { PlayerIdentity } from '@/domain/identity/PlayerIdentity';
 
 interface IdentityGuardDeps {
     identity: Ref<PlayerIdentity | null>;
+    isLoading: Ref<boolean>;
 }
 
 /**
@@ -20,6 +21,18 @@ export function createIdentityGuard(deps: IdentityGuardDeps) {
     ) => {
         if (!to.meta.requiresAuth) {
             return next();
+        }
+
+        // Wait if identity is currently loading from IndexedDB
+        if (deps.isLoading.value && !deps.identity.value) {
+            await new Promise<void>((resolve) => {
+                const stopWatch = watch(deps.isLoading, (loading) => {
+                    if (!loading) {
+                        stopWatch();
+                        resolve();
+                    }
+                }, { immediate: true });
+            });
         }
 
         if (deps.identity.value?.publicKey) {

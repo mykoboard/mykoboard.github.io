@@ -43,6 +43,9 @@ const router = createRouter({
     ]
 })
 
-router.beforeEach(createIdentityGuard({ identity: compositionRoot.identityRepo.identity }))
+router.beforeEach(createIdentityGuard({ 
+    identity: compositionRoot.identityRepo.identity,
+    isLoading: compositionRoot.identityRepo.isLoading
+}))
 
 export default router
