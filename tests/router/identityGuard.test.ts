@@ -32,12 +32,12 @@ describe('identityGuard', () => {
 
     const boardRoute: RouteLocation = {
         name: 'board',
-        meta: { requiresSession: true },
+        meta: { requiresAuth: true },
     };
 
     const offerRoute: RouteLocation = {
         name: 'board',
-        meta: { requiresSession: true },
+        meta: { requiresAuth: true },
         query: { offer: 'some-encoded-offer-string' },
     };
 
@@ -45,6 +45,21 @@ describe('identityGuard', () => {
         name: 'index',
         meta: {},
     };
+
+    const authRoute: RouteLocation = {
+        name: 'games',
+        meta: { requiresAuth: true },
+    };
+
+    it('redirects anonymous user away from requiresAuth route', async () => {
+        const guard = createIdentityGuard({ identity: mockIdentityRef });
+
+        await guard(authRoute as any, {} as any, makeNext() as any);
+
+        expect(nextCalls[0]).not.toBeUndefined();
+        const redirect = nextCalls[0] as any;
+        expect(typeof redirect === 'object').toBe(true);
+    });
 
     it('redirects anonymous user away from board route (fresh session)', async () => {
         const guard = createIdentityGuard({ identity: mockIdentityRef });

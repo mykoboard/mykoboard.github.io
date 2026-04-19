@@ -8,7 +8,7 @@ interface IdentityGuardDeps {
 
 /**
  * Factory that returns a Vue Router navigation guard.
- * Any route with `meta.requiresSession` is blocked for users without an identity.
+ * Any route with `meta.requiresAuth` is blocked for users without an identity.
  * The guard redirects to the home page and passes the original path as a `redirect`
  * query param so the user can be sent back after identity creation.
  */
@@ -18,7 +18,7 @@ export function createIdentityGuard(deps: IdentityGuardDeps) {
         _from: RouteLocationNormalized,
         next: NavigationGuardNext
     ) => {
-        if (!to.meta.requiresSession) {
+        if (!to.meta.requiresAuth) {
             return next();
         }
 

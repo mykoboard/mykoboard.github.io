@@ -33,7 +33,7 @@ const router = createRouter({
             path: '/games/:gameId/:boardId',
             name: 'board',
             component: () => import('../pages/BoardView.vue'),
-            meta: { requiresAuth: true, requiresSession: true }
+            meta: { requiresAuth: true }
         },
         {
             path: '/:pathMatch(.*)*',
