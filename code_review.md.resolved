@@ -1,0 +1,269 @@
+# Code Review — `src/`
+
+## 1. Inconsistencies
+
+### 1.1 Duplicate Type Definitions
+
+The domain types `GameSession`, `GameParticipant`, `HostedSession`, and `KnownIdentity` are defined in **two** places:
+
+| Type | Canonical (Hexagonal) | Legacy Duplicate |
+|---|---|---|
+| `GameSession` / `GameParticipant` / `HostedSession` | [GameSession.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/domain/game-session/GameSession.ts) | [db.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/db.ts) (lines 3-35) |
+| `KnownIdentity` | [IKnownIdentityRepository.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/application/ports/IKnownIdentityRepository.ts) (lines 1-6) | [db.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/db.ts) (lines 23-28) |
+| `PlayerIdentity` | [PlayerIdentity.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/domain/identity/PlayerIdentity.ts) | [wallet.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/wallet.ts) (lines 7-12) |
+
+> [!WARNING]
+> The domain `PlayerIdentity` has an `id` field in the adapter ([SecureWalletAdapter.ts:73](file:///home/dparadiz/Projects/mykoboard.github.io/src/infrastructure/identity/SecureWalletAdapter.ts#L73)) but **not** in the domain type. The template in [UserView.vue:227](file:///home/dparadiz/Projects/mykoboard.github.io/src/pages/UserView.vue#L227) renders `{{ identity.id }}` — this only works because the adapter sneaks in an extra field not declared on the type. This is a type-safety gap.
+
+---
+
+### 1.2 Wrong Import Path for `KnownIdentity`
+
+[UserView.vue:12](file:///home/dparadiz/Projects/mykoboard.github.io/src/pages/UserView.vue#L12):
+```typescript
+import type { KnownIdentity } from '../domain/identity/IKnownIdentityRepository'
+```
+There is no file at `domain/identity/IKnownIdentityRepository`. The actual file is at `application/ports/IKnownIdentityRepository.ts`. This either relies on path aliasing or will fail at compile time.
+
+---
+
+### 1.3 Router Guard Checks `requiresSession` but Routes Use `requiresAuth`
+
+[identityGuard.ts:21](file:///home/dparadiz/Projects/mykoboard.github.io/src/router/guards/identityGuard.ts#L21) checks for `to.meta.requiresSession`:
+```typescript
+if (!to.meta.requiresSession) {
+    return next();
+}
+```
+But most routes in [router/index.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/router/index.ts#L18) only set `requiresAuth: true`. Only the `board` route (line 36) sets `requiresSession: true`. This means the guard **does nothing** for `/games`, `/profile`, and `/games/:gameId` — they have no session-gating despite being behind `requiresAuth`.
+
+> [!IMPORTANT]
+> Either the guard should check `requiresAuth`, or the meta keys should be unified. Currently users without an identity can navigate to `/games` and `/profile` freely.
+
+---
+
+### 1.4 `inject()` Called Inside `onMounted` (Invalid Lifecycle)
+
+[IndexView.vue:12](file:///home/dparadiz/Projects/mykoboard.github.io/src/pages/IndexView.vue#L12):
+```typescript
+onMounted(async () => {
+    const identityRepo = inject(Keys.IdentityRepoKey)!  // ← BAD
+    const id = await identityRepo.getIdentity()
+    if (id) { router.replace('/games') }
+})
+```
+Vue's `inject()` **must** be called synchronously during `setup()`, not inside lifecycle hooks. This will silently return `undefined` and the non-null assertion will throw at runtime.
+
+---
+
+### 1.5 Inconsistent Logging: `console.log/error/warn` vs `logger`
+
+The codebase has a well-structured `logger` module, but several files bypass it:
+
+| File | Line | Raw call |
+|---|---|---|
+| [webrtc.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/webrtc.ts) | 144, 179, 210 | `console.log('[WebRTC] …')` |
+| [SecureWalletAdapter.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/infrastructure/identity/SecureWalletAdapter.ts) | 144 | `console.error("Signature verification failed")` |
+| [wallet.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/wallet.ts) | 168 | `console.error("Signature verification failed")` |
+| [tokens.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/tokens.ts) | 25 | `console.warn("Claim expired")` |
+| [useGameSession.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useGameSession.ts) | 135 | `console.error('Failed to accept answer')` |
+
+---
+
+### 1.6 `ISignalingPort` vs Legacy `SignalingService` API Mismatch
+
+The `ISignalingPort` interface has no `updateBoardId()` method, but the legacy `SignalingService` class does. The `AwsSignalingAdapter` also does not expose `peerName` on `hostOffer`/`boardId` on `guestAnswer` — while the legacy `SignalingService` does. If any MFE code references the legacy service, there'll be behavioral drift.
+
+---
+
+### 1.7 `isKnownIdentity` Duplicated Across Composables
+
+The exact same function exists in both:
+- [useSessionActions.ts:45-48](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useSessionActions.ts#L45-L48)
+- [useSignaling.ts:52-55](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useSignaling.ts#L52-L55)
+
+Both are identical: query all known identities and `.some(…)` match. `useGameSession.ts` returns the one from `useSessionActions`, and the `useSignaling` one is separately wired through the return value. Consolidate into one.
+
+---
+
+## 2. Unused / Dead Code
+
+### 2.1 Entirely Dead Legacy Modules
+
+These files are **not imported by any active code** post-hexagonal migration:
+
+| File | Status |
+|---|---|
+| [lib/db.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/db.ts) | Only imported by `lib/sessions.ts` |
+| [lib/sessions.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/sessions.ts) | Imported by nothing |
+| [lib/signaling.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/signaling.ts) | Imported by nothing |
+| [lib/wallet.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/wallet.ts) | Only imported by `lib/tokens.ts` |
+| [lib/tokens.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/tokens.ts) | Imported by nothing |
+
+These are all superseded by the `infrastructure/` adapters and `application/ports/` interfaces. Safe to delete.
+
+---
+
+### 2.2 Unused Composable: `useBoardContext`
+
+[useBoardContext.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useBoardContext.ts) is **never imported** by any `.vue` or `.ts` file. Its functionality has been absorbed into `useBoardState`. Both `useBoardContext()` and `waitForIdentity()` are dead code.
+
+---
+
+### 2.3 Unused Variables & Returns
+
+| File | Variable | Notes |
+|---|---|---|
+| [useBoardState.ts:34](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useBoardState.ts#L34) | `view` | Computed in state, returned, but never consumed by any caller. Also duplicated in `useConnectionManager.ts:33`. |
+| [useBoardState.ts:37](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useBoardState.ts#L37) | `connectionList` | Returned but never used by any consumer. |
+| [useBoardState.ts:16](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useBoardState.ts#L16) | `activeSessions` | Returned by composable but `useGameSession` imports it directly from `compositionRoot.sessionRepo`. |
+| [useBoardState.ts:14](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useBoardState.ts#L14) | `isLoading` | Same — returned but `useGameSession` imports directly. |
+| [useP2PNegotiation.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useP2PNegotiation.ts) | `playerInfos` param in interface | Accepted by the dependency interface at line 7 but never used in the composable body (removed from destructuring). However, `useGameSession.ts:108` still passes it. |
+| [logger.ts:1](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/logger.ts#L1) | `DEBUG_KEY` | Declared but never referenced anywhere. |
+| [useGameSession.ts:10](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useGameSession.ts#L10) | `activeSessions` | Destructured from `compositionRoot.sessionRepo`, then returned but already available via injection. |
+| [BoardView.vue:39](file:///home/dparadiz/Projects/mykoboard.github.io/src/pages/BoardView.vue#L39) | `pendingSignaling` | Imported from composable but only forwarded to child components — this is fine, but `pendingJoinRequests` at line 40 may be redundant if `PreparationPhaseServer` gets them independently. |
+
+---
+
+### 2.4 Unused Exported Singletons
+
+| File | Export |
+|---|---|
+| [IndexedDbSessionRepo.ts:141](file:///home/dparadiz/Projects/mykoboard.github.io/src/infrastructure/persistence/IndexedDbSessionRepo.ts#L141) | `export const db = new IndexedDbSessionRepo()` — never imported |
+| [IndexedDbKnownIdentityRepo.ts:51](file:///home/dparadiz/Projects/mykoboard.github.io/src/infrastructure/persistence/IndexedDbKnownIdentityRepo.ts#L51) | `export const knownIdentityDb = new IndexedDbKnownIdentityRepo()` — never imported |
+| [SecureWalletAdapter.ts:221](file:///home/dparadiz/Projects/mykoboard.github.io/src/infrastructure/identity/SecureWalletAdapter.ts#L221) | `export const wallet = SecureWalletAdapter.getInstance()` — never imported (the composition root creates its own) |
+| [lib/db.ts:234](file:///home/dparadiz/Projects/mykoboard.github.io/src/lib/db.ts#L234) | `export const db = new MykoboardDB()` — only imported by dead `sessions.ts` |
+
+---
+
+### 2.5 Empty Directory
+
+[src/ui/game-registry/](file:///home/dparadiz/Projects/mykoboard.github.io/src/ui/game-registry/) — empty directory, serves no purpose.
+
+---
+
+### 2.6 `remotePlayerId` — Ghost Property
+
+[useP2PNegotiation.ts:31,64](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useP2PNegotiation.ts#L31):
+```typescript
+connection.remotePlayerId = connection.id;
+```
+`remotePlayerId` does not exist on the `IPeerConnectionPort` interface. This is being assigned to a non-existent property — effectively a no-op.
+
+---
+
+## 3. Vue Best Practices
+
+### 3.1 `UserView.vue` Is a Mega-Component (494 lines)
+
+[UserView.vue](file:///home/dparadiz/Projects/mykoboard.github.io/src/pages/UserView.vue) owns at least **5 distinct UI sections**: identity card, system auth card, game history, known identities (with add form + list), and danger zone. It has 12 refs, 8 handler functions, and ~310 lines of template.
+
+**Recommendation**: Split into:
+- `IdentityCard.vue` — name/avatar/node-id
+- `SystemAuthCard.vue` — public key / token  
+- `KnownIdentitiesSection.vue` — add form + list
+- `DangerZone.vue` — clear data dialog
+
+---
+
+### 3.2 Props-Down Pattern Violated — Callbacks Passed as Props
+
+Throughout `BoardView.vue`, functions like `onStartGame`, `onCloseSession`, `onBackToLobby`, etc. are passed as **props** to child components rather than using **emits**.
+
+```html
+<PreparationPhaseServer
+    :onStartGame="startGame"
+    :onCloseSession="onBackToGames"
+    ...
+/>
+```
+
+In Vue, the idiomatic pattern is `defineEmits` + `@event-name` for parent→child→parent communication. Passing callbacks as props is a React pattern. This makes the component contracts implicit and breaks Vue DevTools event tracking.
+
+---
+
+### 3.3 `as any` Proliferation in Composables
+
+The composables contain **~25 uses of `as any`**, violating the `No any` rule. Key offenders:
+
+| File | Count | Example |
+|---|---|---|
+| `useBoardState.ts` | 6 | `(boardSnapshot.value as any)?.context` |
+| `useConnectionManager.ts` | 5 | `(connection as any)._hasMessageListener` |
+| `useSessionActions.ts` | 2 | `(boardSnapshot.value as any)?.context?.pendingGuest` |
+| `useSignaling.ts` | 4 | `getBoardActor` returns `any`, `msg: any` |
+| `useGameSession.ts` | 3 | `boardActors: Map<string, any>`, `send: (ev: any)` |
+| `InjectionKeys.ts` | 2 | `BoardActorFactoryKey<…any>`, `PeerConnectionFactoryKey` return type |
+
+The XState actor type should be extracted into a proper typed alias and used everywhere instead of `any`.
+
+---
+
+### 3.4 Composables Call `inject()` — Breaks Testability
+
+`useConnectionManager`, `useSessionActions`, `useSignaling`, and `useP2PNegotiation` all call `inject()` internally. This makes them impossible to unit test without a Vue app context. The established pattern (visible in these same composables) is to accept dependencies via a `Dependencies` interface parameter. The injected ports should be added to those dependency interfaces for consistency.
+
+---
+
+### 3.5 `useGameSession` Signalingclient Ref Hack
+
+[useGameSession.ts:49-51](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useGameSession.ts#L49-L51):
+```typescript
+const signalingClientRef = { value: null as ISignalingPort | null };
+// ...later...
+Object.assign(signalingClientRef, { value: signalingClient });
+```
+
+This `Object.assign` hack to wire a cross-composable dependency is fragile. It creates a plain object masquerading as a `Ref` but without reactivity. If `useSessionActions` ever watches this ref, it will silently fail.
+
+---
+
+### 3.6 Event Listener Leak — No Cleanup for `signaling:answer`
+
+[useGameSession.ts:123-141](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useGameSession.ts#L123-L141): adds a `window` event listener for `signaling:answer` but never removes it on component unmount. Each time `useGameSession` is called (e.g., navigating to a board and back), a new listener stacks up.
+
+---
+
+### 3.7 Missing `id` on Domain `PlayerIdentity`
+
+The domain type [PlayerIdentity.ts](file:///home/dparadiz/Projects/mykoboard.github.io/src/domain/identity/PlayerIdentity.ts) doesn't declare an `id` field, but [SecureWalletAdapter.ts:73](file:///home/dparadiz/Projects/mykoboard.github.io/src/infrastructure/identity/SecureWalletAdapter.ts#L73) creates one with `nanoid()`, and [UserView.vue:227](file:///home/dparadiz/Projects/mykoboard.github.io/src/pages/UserView.vue#L227) renders `{{ identity.id }}`. This works at runtime but violates type safety — the template is accessing a property not on the type.
+
+---
+
+### 3.8 Inconsistent Reactivity — `shallowReactive(new Map())` Footgun
+
+[useConnectionManager.ts:28](file:///home/dparadiz/Projects/mykoboard.github.io/src/composables/useConnectionManager.ts#L28):
+```typescript
+const pendingConnections = shallowReactive<Map<string, IPeerConnectionPort>>(new Map());
+```
+
+Then on line 270, individual connections are wrapped in `reactive()`:
+```typescript
+pendingConnections.set(connection.id, reactive(connection));
+```
+
+`shallowReactive` on a `Map` only tracks `.set()` and `.delete()` — it does **not** deeply track property changes on stored values. But then wrapping individual values in `reactive()` creates a confusing mix where some mutation paths are tracked and others aren't. This is likely the source of UI staleness bugs.
+
+---
+
+## Summary — Priority Matrix
+
+| Priority | Issue | Category |
+|---|---|---|
+| 🔴 Critical | `inject()` inside `onMounted` in `IndexView.vue` | Bug |
+| 🔴 Critical | Guard checks `requiresSession` but routes use `requiresAuth` | Security |
+| 🔴 Critical | `remotePlayerId` assignment to non-existent property | Bug |
+| 🟠 High | Domain `PlayerIdentity` missing `id` field | Type safety |
+| 🟠 High | Wrong import path `domain/identity/IKnownIdentityRepository` | Compile error risk |
+| 🟠 High | Event listener leak `signaling:answer` | Memory leak |
+| 🟡 Medium | 5 dead legacy modules in `lib/` | Dead code |
+| 🟡 Medium | `useBoardContext.ts` entirely unused | Dead code |
+| 🟡 Medium | Unused singleton exports in adapters | Dead code |
+| 🟡 Medium | `UserView.vue` mega-component (494 lines) | Vue best practice |
+| 🟡 Medium | Callbacks as props instead of emits | Vue best practice |
+| 🟡 Medium | ~25 `as any` casts in composables | TypeScript strictness |
+| 🟡 Medium | `isKnownIdentity` duplicated across composables | DRY |
+| 🟢 Low | `console.log` bypassing `logger` in `webrtc.ts` | Consistency |
+| 🟢 Low | Unused variable `DEBUG_KEY` in `logger.ts` | Dead code |
+| 🟢 Low | Empty `src/ui/game-registry/` directory | Cleanup |
+| 🟢 Low | `signalingClientRef` Object.assign hack | Fragility |
