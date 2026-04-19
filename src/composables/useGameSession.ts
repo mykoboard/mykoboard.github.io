@@ -1,3 +1,4 @@
+import { onMounted, onUnmounted } from 'vue';
 import { useBoardState } from './useBoardState';
 import { useConnectionManager } from './useConnectionManager';
 import { useSignaling } from './useSignaling';
@@ -121,25 +122,32 @@ export function useGameSession() {
     } = p2pNegotiation;
 
     // --- Wire signaling answer event into pendingConnections ---
-    if (typeof window !== 'undefined') {
-        const handleSignalingAnswer = async (e: Event) => {
-            const msg = (e as CustomEvent).detail;
-            const conn = pendingConnections.get(msg.from!);
-            if (conn && msg.answer) {
-                if (msg.publicKey) conn.remotePublicKey = msg.publicKey;
-                if (msg.peerName) conn.remotePlayerName = msg.peerName;
+    const handleSignalingAnswer = async (e: Event) => {
+        const msg = (e as CustomEvent).detail;
+        const conn = pendingConnections.get(msg.from!);
+        if (conn && msg.answer) {
+            if (msg.publicKey) conn.remotePublicKey = msg.publicKey;
+            if (msg.peerName) conn.remotePlayerName = msg.peerName;
 
-                try {
-                    await conn.acceptAnswer(msg.answer);
-                    pendingConnections.delete(msg.from!);
-                }
-                catch (err) { logger.error('Failed to accept answer:', err); }
+            try {
+                await conn.acceptAnswer(msg.answer);
+                pendingConnections.delete(msg.from!);
             }
-        };
+            catch (err) { logger.error('Failed to accept answer:', err); }
+        }
+    };
 
-        window.removeEventListener('signaling:answer', handleSignalingAnswer);
-        window.addEventListener('signaling:answer', handleSignalingAnswer);
-    }
+    onMounted(() => {
+        if (typeof window !== 'undefined') {
+            window.addEventListener('signaling:answer', handleSignalingAnswer);
+        }
+    });
+
+    onUnmounted(() => {
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('signaling:answer', handleSignalingAnswer);
+        }
+    });
 
     return {
         identity,
