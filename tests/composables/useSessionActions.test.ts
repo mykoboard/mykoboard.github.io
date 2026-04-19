@@ -10,6 +10,7 @@ import * as Keys from '@/application/InjectionKeys';
 import { createActor } from 'xstate';
 import { boardMachine } from '@/machines/boardMachine';
 import { ref, shallowReactive } from 'vue';
+import { logger } from '@/lib/logger';
 
 describe('useSessionActions', () => {
     let mockIdentityRepo: MockIdentityRepo;
@@ -25,6 +26,7 @@ describe('useSessionActions', () => {
         boardActor = createActor(boardMachine, { input: { playerName: 'Test' } }).start();
         mockRouter = { push: () => {} };
         spyOn(mockRouter, 'push');
+        spyOn(logger, 'error').mockImplementation(() => {});
     });
 
     const setup = (signalingOverride?: MockSignalingPort) => {
