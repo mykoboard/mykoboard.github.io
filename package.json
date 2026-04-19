@@ -28,7 +28,7 @@
     "@radix-ui/react-slot": "^1.1.2",
     "@xstate/react": "^6.1.0",
     "@xstate/vue": "^5.0.0",
-    "brace-expansion": "^4.0.1",
+    "brace-expansion": "^5.0.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -75,5 +75,8 @@
     "typescript-eslint": "^8.58.1",
     "vite": "^7.3.2",
     "vue-eslint-parser": "^10.4.0"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.5"
   }
 }
