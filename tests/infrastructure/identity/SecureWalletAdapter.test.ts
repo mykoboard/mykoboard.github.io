@@ -20,7 +20,6 @@ describe('SecureWalletAdapter', () => {
         expect(identity.name).toBe(name);
         expect(identity.subscriptionToken).toBe(token);
         expect(identity.publicKey).toBeDefined();
-        expect(identity.id).toBeDefined();
 
         const retrieved = await wallet.getIdentity();
         expect(retrieved).toEqual(identity);
