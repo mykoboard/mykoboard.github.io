@@ -7,7 +7,7 @@ import { ref } from 'vue';
 type RouteLocation = { name: string; meta: Record<string, unknown>; query?: Record<string, string> };
 type NavigationGuardNext = (to?: RouteLocation | false | { name: string; query?: Record<string, string> }) => void;
 
-let mockIdentityRef = ref<{ publicKey: string; name: string } | null>(null);
+const mockIdentityRef = ref<{ publicKey: string; name: string } | null>(null);
 
 mock.module('@/application/InjectionKeys', () => ({
     IdentityRepoKey: Symbol('IdentityRepo')

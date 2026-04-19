@@ -6,6 +6,7 @@ import * as Keys from '@/application/InjectionKeys';
 import { createActor } from 'xstate';
 import { boardMachine } from '@/machines/boardMachine';
 import { ref, computed, shallowReactive } from 'vue';
+import { Signal } from '@/lib/webrtc';
 
 describe('useP2PNegotiation', () => {
     let boardActor: any;
@@ -62,8 +63,7 @@ describe('useP2PNegotiation', () => {
         const { composable, mockPeer, handlers } = setup();
         
         // Mock Signal.decompress
-        const lib = require('@/lib/webrtc');
-        const decompressSpy = spyOn(lib.Signal, 'decompress').mockImplementation(async () => ({
+        const decompressSpy = spyOn(Signal, 'decompress').mockImplementation(async () => ({
             publicKey: 'pk-remote',
             session: { type: 'answer', sdp: 'sdp' }
         }));
