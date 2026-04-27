@@ -20,8 +20,7 @@ const router = createRouter({
         {
             path: '/profile',
             name: 'profile',
-            component: () => import('../pages/UserView.vue'),
-            meta: { requiresAuth: true }
+            component: () => import('../pages/UserView.vue')
         },
         {
             path: '/games/:gameId',

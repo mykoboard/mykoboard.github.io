@@ -3,7 +3,7 @@ import { Sparkles } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-const navigateToGames = () => router.push('/games')
+const navigateToProfile = () => router.push('/profile')
 const scrollToFeatures = () => {
     document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })
 }
@@ -38,7 +38,7 @@ const scrollToFeatures = () => {
         <div class="flex flex-col sm:flex-row gap-6 justify-center mt-12">
           <button
             class="px-10 py-5 bg-primary text-primary-foreground rounded-xl hover:bg-emerald-400 transition-all duration-300 font-bold text-lg shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] transform hover:-translate-y-1 active:scale-95"
-            @click="navigateToGames"
+            @click="navigateToProfile"
           >
             Initialize Console
           </button>

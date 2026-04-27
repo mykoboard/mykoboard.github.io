@@ -13,6 +13,8 @@ mock.module('@/application/InjectionKeys', () => ({
     IdentityRepoKey: Symbol('IdentityRepo')
 }));
 
+const mockIsLoadingRef = ref(false);
+
 // -----------------------------------------------------------------------
 // Import the guard under test AFTER mocks are set up
 // -----------------------------------------------------------------------
@@ -28,6 +30,7 @@ describe('identityGuard', () => {
     beforeEach(() => {
         nextCalls = [];
         mockIdentityRef.value = null;
+        mockIsLoadingRef.value = false;
     });
 
     const boardRoute: RouteLocation = {
@@ -46,13 +49,18 @@ describe('identityGuard', () => {
         meta: {},
     };
 
+    const profileRoute: RouteLocation = {
+        name: 'profile',
+        meta: {},
+    };
+
     const authRoute: RouteLocation = {
         name: 'games',
         meta: { requiresAuth: true },
     };
 
     it('redirects anonymous user away from requiresAuth route', async () => {
-        const guard = createIdentityGuard({ identity: mockIdentityRef });
+        const guard = createIdentityGuard({ identity: mockIdentityRef, isLoading: mockIsLoadingRef });
 
         await guard(authRoute as any, {} as any, makeNext() as any);
 
@@ -62,7 +70,7 @@ describe('identityGuard', () => {
     });
 
     it('redirects anonymous user away from board route (fresh session)', async () => {
-        const guard = createIdentityGuard({ identity: mockIdentityRef });
+        const guard = createIdentityGuard({ identity: mockIdentityRef, isLoading: mockIsLoadingRef });
 
         await guard(boardRoute as any, {} as any, makeNext() as any);
 
@@ -75,7 +83,7 @@ describe('identityGuard', () => {
     });
 
     it('redirects anonymous user following a deep-link offer', async () => {
-        const guard = createIdentityGuard({ identity: mockIdentityRef });
+        const guard = createIdentityGuard({ identity: mockIdentityRef, isLoading: mockIsLoadingRef });
 
         await guard(offerRoute as any, {} as any, makeNext() as any);
 
@@ -87,7 +95,7 @@ describe('identityGuard', () => {
 
     it('allows authenticated user through to board route', async () => {
         mockIdentityRef.value = { publicKey: 'pk-abc123', name: 'Alice' };
-        const guard = createIdentityGuard({ identity: mockIdentityRef });
+        const guard = createIdentityGuard({ identity: mockIdentityRef, isLoading: mockIsLoadingRef });
 
         await guard(boardRoute as any, {} as any, makeNext() as any);
 
@@ -96,10 +104,20 @@ describe('identityGuard', () => {
     });
 
     it('allows anonymous user through public routes', async () => {
-        const guard = createIdentityGuard({ identity: mockIdentityRef });
+        const guard = createIdentityGuard({ identity: mockIdentityRef, isLoading: mockIsLoadingRef });
 
         await guard(publicRoute as any, {} as any, makeNext() as any);
 
+        expect(nextCalls[0]).toBeUndefined();
+    });
+
+    it('allows anonymous user to navigate to profile route from index', async () => {
+        const guard = createIdentityGuard({ identity: mockIdentityRef, isLoading: mockIsLoadingRef });
+
+        // Simulating navigation to profile which now does not require auth
+        await guard(profileRoute as any, publicRoute as any, makeNext() as any);
+
+        // next() called with no args = proceed
         expect(nextCalls[0]).toBeUndefined();
     });
 });
