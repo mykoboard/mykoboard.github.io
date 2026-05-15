@@ -84,14 +84,15 @@ export default function PlanningPoker({
                     // Host commits that the player has voted to the ledger
                     onAddLedger?.({
                         type: 'COMMIT',
-                        payload: { playerId: fromId }
+                        payload: { publicKey: fromId }
                     });
                 }
             } catch (e) { }
         };
 
         connections.forEach((c: SimpleConnection) => {
-            const listener = (data: string) => handleMessage(data, c.publicKey);
+            const connectionKey = (c as any).remotePublicKey || c.publicKey;
+            const listener = (data: string) => handleMessage(data, connectionKey);
             c.addMessageListener(listener);
             (c as any)._pokerListener = listener;
         });
@@ -117,7 +118,7 @@ export default function PlanningPoker({
             hostVotesRef.current[localPlayer.publicKey] = value;
             onAddLedger?.({
                 type: 'COMMIT',
-                payload: { playerId: localPlayer.publicKey }
+                payload: { publicKey: localPlayer.publicKey }
             });
         } else {
             hostVotesRef.current[localPlayer.publicKey] = value;
