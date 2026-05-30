@@ -1,0 +1,11 @@
+{
+    "name": "@mykoboard/networking",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "./src/index.ts",
+    "types": "./src/index.ts",
+    "publishConfig": {
+        "@mykoboard:registry": "https://npm.pkg.github.com"
+    },
+    "dependencies": {}
+}

@@ -1,4 +1,14 @@
-import { describe, expect, it, beforeEach, spyOn } from 'bun:test';
+import { describe, expect, it, beforeEach, spyOn, mock } from 'bun:test';
+
+mock.module('vue', () => {
+    const originalVue = import.meta.require('vue');
+    return {
+        ...originalVue,
+        onMounted: () => {},
+        onUnmounted: () => {}
+    };
+});
+
 import { useSignaling } from '@/composables/useSignaling';
 import { withSetup } from '../test-utils';
 import { MockSignalingPort } from '@/application/ports/mocks/MockSignalingPort';

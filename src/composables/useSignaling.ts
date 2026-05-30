@@ -41,7 +41,6 @@ export function useSignaling({
     const identityRepo = inject(Keys.IdentityRepoKey)!;
     const knownIdentityRepo = inject(Keys.KnownIdentityRepoKey)!;
     const signalingPort = inject(Keys.SignalingPortKey)!;
-    const createPeerConnection = inject(Keys.PeerConnectionFactoryKey)!;
 
     const isServerConnecting = ref(false);
     const connectionBoardId = ref<string>('');
@@ -100,47 +99,7 @@ export function useSignaling({
                             }
                         }
 
-                        if (msg.type === 'offer') {
-                            const targetId = msg.boardId || connectionBoardId.value;
-                            if (!targetId) { logger.error('No valid target board UUID for offer'); return; }
-
-                            const actor = getBoardActor(targetId, ident.name, false);
-                            const connection = createPeerConnection(() => { 
-                                if (connection.remotePublicKey) {
-                                    actor.send({ 
-                                        type: 'UPDATE_PARTICIPANT', 
-                                        participant: {
-                                            publicKey: connection.remotePublicKey,
-                                            name: connection.remotePlayerName || 'Guest',
-                                            status: (connection.status as any),
-                                            isHost: connection.isHostConnection
-                                        } 
-                                    });
-                                }
-                            });
-                            
-                            connection.onMessage((data: string) => {
-                                try {
-                                    const message = JSON.parse(data);
-                                    if (message.namespace === 'game') handleGameNamespace(message, connection);
-                                    else if (message.namespace === 'player') handlePlayerNamespace(message, connection);
-                                } catch (e) { logger.error('Failed to parse message:', e); }
-                            });
-
-                            connection.onClose(() => actor.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id, publicKey: connection.remotePublicKey }));
-                            
-                            if (msg.publicKey) connection.remotePublicKey = msg.publicKey;
-                            if (msg.peerName) connection.remotePlayerName = msg.peerName;
-                            
-                            connection.acceptOffer(msg.offer, ident.name, ident.publicKey).then(() => {
-                                const checkAnswer = setInterval(() => {
-                                    if (connection.serializedSignal && signalingPort.isConnected) {
-                                        clearInterval(checkAnswer);
-                                        signalingPort.guestAnswer(msg.from!, ident.publicKey, connection.serializedSignal);
-                                    }
-                                }, 100);
-                            }).catch((err: any) => logger.error('Failed to accept offer:', err));
-                        }
+                        // Offer and Answer handling is now natively managed by NetworkManager via the SignalingAdapterWrapper
 
                         if (msg.type === 'answer') {
                             const event = new CustomEvent('signaling:answer', { detail: msg });

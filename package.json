@@ -25,6 +25,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@mykoboard/integration": "workspace:*",
+    "@mykoboard/networking": "workspace:*",
     "@radix-ui/react-slot": "^1.1.2",
     "@xstate/react": "^6.1.0",
     "@xstate/vue": "^5.0.0",

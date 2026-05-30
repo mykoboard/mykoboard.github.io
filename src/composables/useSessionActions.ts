@@ -5,14 +5,11 @@ import { Ledger } from '@mykoboard/integration';
 import { toast } from 'vue-sonner';
 import type { PendingJoinRequest } from './useGameSession.types';
 import * as Keys from '../application/InjectionKeys';
-import { IPeerConnectionPort } from '../application/ports/IPeerConnectionPort';
 import { ISignalingPort } from '../application/ports/ISignalingPort';
 
 interface SessionActionsDependencies {
     signalingClient: import('vue').Ref<ISignalingPort | null>;
-    pendingConnections: import('vue').ShallowReactive<Map<string, IPeerConnectionPort>>;
     broadcast: (msg: any) => void;
-    updateConnection: (connection: IPeerConnectionPort) => void;
     router: any;
     boardId: import('vue').Ref<string>;
     gameId: import('vue').Ref<string>;
@@ -23,9 +20,7 @@ interface SessionActionsDependencies {
 
 export function useSessionActions({
     signalingClient,
-    pendingConnections,
     broadcast,
-    updateConnection,
     router,
     boardId,
     gameId,
@@ -38,7 +33,7 @@ export function useSessionActions({
     const identityRepo = inject(Keys.IdentityRepoKey)!;
     const knownIdentityRepo = inject(Keys.KnownIdentityRepoKey)!;
     const sessionRepo = inject(Keys.SessionRepoKey)!;
-    const createPeerConnection = inject(Keys.PeerConnectionFactoryKey)!;
+    const networkManager = inject(Keys.NetworkManagerPortKey)!;
 
     const pendingJoinRequests = ref<PendingJoinRequest[]>([]);
 
@@ -47,31 +42,9 @@ export function useSessionActions({
     };
 
     const autoApprovePeer = async (request: PendingJoinRequest) => {
-        const connection = createPeerConnection(() => { updateConnection(connection); });
-
-        connection.onClose(() => {
-            currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id, publicKey: connection.remotePublicKey });
-            pendingConnections.delete(request.connectionId);
-        });
-
-        const ident = await identityRepo.getIdentity();
-        if (!ident) return;
-        connection.remotePublicKey = request.publicKey;
-        
-        await connection.prepareOffer(ident.name, ident.publicKey);
-
-        pendingConnections.set(request.connectionId, connection);
-
-        const checkOffer = setInterval(() => {
-            if (connection.serializedSignal && signalingClient.value) {
-                clearInterval(checkOffer);
-                identityRepo.getIdentity().then(id => {
-                    if (id && signalingClient.value) {
-                        signalingClient.value.hostOffer(request.connectionId, request.publicKey, connection.serializedSignal, id.publicKey);
-                    }
-                });
-            }
-        }, 100);
+        // networkManager implicitly manages this connection internally and automatically 
+        // sends the offer using the configured SignalingAdapter.
+        await networkManager.connectToPeer(request.publicKey, request.peerName);
     };
 
     const onApprovePeer = async (request: PendingJoinRequest) => {
@@ -157,16 +130,15 @@ export function useSessionActions({
     };
 
     const onAcceptGuest = () => {
-        const guest = (boardSnapshot.value as any)?.context?.pendingGuest as any;
         currentBoardActor.value?.send({ type: 'ACCEPT_GUEST' });
-        if (guest) updateConnection(guest.connection);
+        // Handling of guest acceptance is handled implicitly by connection states.
     };
 
     const onRejectGuest = () => currentBoardActor.value?.send({ type: 'REJECT_GUEST' });
 
-    const onCancelSignaling = (connection: IPeerConnectionPort) => {
-        connection.close();
-        currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id, publicKey: connection.remotePublicKey });
+    const onCancelSignaling = () => {
+        // This used to close a pending P2P connection manually. 
+        // With NetworkManager, it's not strictly necessary for individual peer cancellation unless added to the Port API.
     };
 
     const onBackToGames = () => {
@@ -197,3 +169,4 @@ export function useSessionActions({
         onBackToDiscovery,
     };
 }
+

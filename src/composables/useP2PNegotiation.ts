@@ -1,51 +1,69 @@
 import { ref, inject } from 'vue';
 import { logger } from '../lib/logger';
 import * as Keys from '../application/InjectionKeys';
-import { IPeerConnectionPort, PeerConnectionStatus } from '../application/ports/IPeerConnectionPort';
-import { Signal } from '../lib/webrtc';
+import { Connection, Signal } from '@mykoboard/networking';
 
 interface P2PNegotiationDependencies {
-    pendingConnections: import('vue').ShallowReactive<Map<string, IPeerConnectionPort>>;
     hostSignalingMode: import('vue').Ref<'server' | 'manual' | null>;
-    updateConnection: (connection: IPeerConnectionPort) => void;
     currentBoardActor: import('vue').Ref<any>;
 }
 
 export function useP2PNegotiation({
-    pendingConnections,
     hostSignalingMode,
-    updateConnection,
     currentBoardActor,
 }: P2PNegotiationDependencies) {
     const manualGuestConnectionId = ref<string | null>(null);
 
     // Inject Hexagonal Ports
     const identityRepo = inject(Keys.IdentityRepoKey)!;
-    const createPeerConnection = inject(Keys.PeerConnectionFactoryKey)!;
+    
+    // Instead of shallowReactive Map, we hold references to the active manual connections here
+    // In a full refactor, this would route back into NetworkManager, but for manual mode we can manage it locally.
+    const manualConnections = ref<Connection[]>([]);
+
+    const updateConnection = (conn: Connection) => {
+        const actor = currentBoardActor.value;
+        if (actor && conn.remotePublicKey) {
+            actor.send({ 
+                type: 'UPDATE_PARTICIPANT', 
+                participant: {
+                    publicKey: conn.remotePublicKey,
+                    name: conn.remotePlayerName || 'Guest',
+                    status: conn.status,
+                    isHost: conn.isHostConnection
+                }
+            });
+        }
+    };
 
     const onAddManualConnection = async () => {
         const ident = await identityRepo.getIdentity();
         if (!ident) return;
-        const connection = createPeerConnection((_c) => { updateConnection(connection); });
+        
+        const connection = new Connection();
+        connection.isHostConnection = true;
 
+        connection.addEventListener('statuschange', () => updateConnection(connection));
+        
+        await connection.prepareOfferSignal(ident.name || 'Anonymous', ident.publicKey);
 
-
-        await connection.prepareOffer(ident.name || 'Anonymous', ident.publicKey);
-
-        connection.onClose(() => {
-            currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id, publicKey: connection.remotePublicKey });
+        // Note: we can't easily listen to onClose natively via a single event unless we map statuschange
+        connection.addEventListener('statuschange', () => {
+            if (connection.status === 'closed' || connection.status === 'failed') {
+                currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id, publicKey: connection.remotePublicKey });
+            }
         });
 
-        pendingConnections.set(connection.id, connection);
+        manualConnections.value.push(connection);
         updateConnection(connection);
     };
 
     const onCreateGuestManualConnection = async (initialOffer?: string) => {
         if (manualGuestConnectionId.value) {
-            const existing = pendingConnections.get(manualGuestConnectionId.value);
-            if (existing && existing.status !== PeerConnectionStatus.closed) {
+            const existing = manualConnections.value.find(c => c.id === manualGuestConnectionId.value);
+            if (existing && existing.status !== 'closed') {
                 logger.sig('Guest manual connection already exists, skipping', manualGuestConnectionId.value);
-                if (initialOffer && existing.status === PeerConnectionStatus.readyToAccept) {
+                if (initialOffer && existing.status === 'new') { // 'readyToAccept' concept maps to new/started
                     logger.sig('Applying initialOffer to existing connection');
                     updateOffer(existing, initialOffer);
                 }
@@ -57,18 +75,19 @@ export function useP2PNegotiation({
         hostSignalingMode.value = 'manual';
         const ident = await identityRepo.getIdentity();
         if (!ident) return;
-        const connection = createPeerConnection((_c) => {
-            updateConnection(connection);
-        });
-
+        
+        const connection = new Connection();
+        connection.addEventListener('statuschange', () => updateConnection(connection));
 
         manualGuestConnectionId.value = connection.id;
-        pendingConnections.set(connection.id, connection);
+        manualConnections.value.push(connection);
 
-        connection.onClose(() => {
-            logger.sig(`Manual Guest Connection closed: ${connection.id}`);
-            if (manualGuestConnectionId.value === connection.id) manualGuestConnectionId.value = null;
-            currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id, publicKey: connection.remotePublicKey });
+        connection.addEventListener('statuschange', () => {
+            if (connection.status === 'closed' || connection.status === 'failed') {
+                logger.sig(`Manual Guest Connection closed: ${connection.id}`);
+                if (manualGuestConnectionId.value === connection.id) manualGuestConnectionId.value = null;
+                currentBoardActor.value?.send({ type: 'PEER_DISCONNECTED', connectionId: connection.id, publicKey: connection.remotePublicKey });
+            }
         });
 
         updateConnection(connection);
@@ -76,7 +95,7 @@ export function useP2PNegotiation({
         if (initialOffer) setTimeout(() => { updateOffer(connection, initialOffer); }, 0);
     };
 
-    const updateOffer = async (connection: IPeerConnectionPort, offer: string) => {
+    const updateOffer = async (connection: Connection, offer: string) => {
         try {
             const signal = await Signal.decompress(offer);
             const ident = await identityRepo.getIdentity();
@@ -90,12 +109,11 @@ export function useP2PNegotiation({
         }
     };
 
-    const updateAnswer = async (connection: IPeerConnectionPort, answer: string) => {
+    const updateAnswer = async (connection: Connection, answer: string) => {
         try {
             const signal = await Signal.decompress(answer);
             if (signal.publicKey) connection.remotePublicKey = signal.publicKey;
-            // Also attempt to get peerName if available in webrtc signals (depends on implementation)
-            await connection.acceptAnswer(signal);
+            await connection.acceptAnswer(answer); // Signal natively accepts string now
             updateConnection(connection);
         } catch (e) {
             logger.error('Failed to update answer:', e);
@@ -107,5 +125,14 @@ export function useP2PNegotiation({
         await onAddManualConnection();
     };
 
-    return { manualGuestConnectionId, onAddManualConnection, onCreateGuestManualConnection, updateOffer, updateAnswer, initializeManualSignaling };
+    return { 
+        manualConnections, // exposed so UI can read connections directly
+        manualGuestConnectionId, 
+        onAddManualConnection, 
+        onCreateGuestManualConnection, 
+        updateOffer, 
+        updateAnswer, 
+        initializeManualSignaling 
+    };
 }
+

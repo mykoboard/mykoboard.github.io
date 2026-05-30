@@ -12,7 +12,7 @@ import LobbyPlayerList from '../components/board/LobbyPlayerList.vue'
 import IdentityRequiredModal from '../components/IdentityRequiredModal.vue'
 import type { PlayerInfo } from '@mykoboard/integration'
 import * as Keys from '../application/InjectionKeys'
-import { PeerConnectionStatus } from '../application/ports/IPeerConnectionPort'
+import { PeerStatus } from '@mykoboard/networking'
 
 const route = useRoute()
 const router = useRouter()
@@ -121,10 +121,10 @@ const topology = computed(() => {
         })
     } else {
         connectedPeers.value.forEach(conn => {
-            if (conn.status === PeerConnectionStatus.connected && conn.remotePublicKey) {
+            if (conn.status === PeerStatus.connected && conn.publicKey) {
                 const localPlayer = playerInfos.value.find(p => p.isLocal)
                 if (localPlayer && localPlayer.publicKey) {
-                    const pair = [localPlayer.publicKey, conn.remotePublicKey].sort()
+                    const pair = [localPlayer.publicKey, conn.publicKey].sort()
                     const key = pair.join(':')
                     if (!seen.has(key)) {
                         edges.push({ from: pair[0], to: pair[1] })

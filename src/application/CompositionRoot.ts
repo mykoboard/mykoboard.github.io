@@ -1,26 +1,36 @@
 import { createActor } from 'xstate';
 import { boardMachine } from '../machines/boardMachine';
 import { logger } from '../lib/logger';
-import { Connection } from '../lib/webrtc';
 
 // Infrastructure Adapters
 import { SecureWalletAdapter } from '../infrastructure/identity/SecureWalletAdapter';
 import { IndexedDbSessionRepo } from '../infrastructure/persistence/IndexedDbSessionRepo';
 import { IndexedDbKnownIdentityRepo } from '../infrastructure/persistence/IndexedDbKnownIdentityRepo';
 import { AwsSignalingAdapter } from '../infrastructure/signaling/AwsSignalingAdapter';
-import { WebRtcConnectionAdapter } from '../infrastructure/webrtc/WebRtcConnectionAdapter';
+import { SignalingAdapterWrapper } from '../infrastructure/network/SignalingAdapterWrapper';
+import { NetworkManagerAdapter } from '../infrastructure/network/NetworkManagerAdapter';
+import { NetworkManager } from '@mykoboard/networking';
 
 // Singleton registry for domain actors (Board Machines)
 const boardActors = new Map<string, any>();
+const signalingPort = new AwsSignalingAdapter();
 
 export const compositionRoot = {
     identityRepo: SecureWalletAdapter.getInstance(),
     sessionRepo: new IndexedDbSessionRepo(),
     knownIdentityRepo: new IndexedDbKnownIdentityRepo(),
-    signalingPort: new AwsSignalingAdapter(),
+    signalingPort,
     
-    createPeerConnection: (onSignalUpdate: (c: Connection) => void) => 
-        new WebRtcConnectionAdapter(onSignalUpdate),
+    createNetworkManager: (isInitiator: boolean) => {
+        const ident = SecureWalletAdapter.getInstance().identity.value;
+        const nm = new NetworkManager(
+            new SignalingAdapterWrapper(signalingPort),
+            ident?.name || 'Anonymous',
+            ident?.publicKey || '',
+            isInitiator
+        );
+        return new NetworkManagerAdapter(nm);
+    },
 
     getBoardActor: (boardId: string, playerName: string, isInitiator: boolean = false, maxPlayers: number = 2) => {
         if (!boardActors.has(boardId)) {

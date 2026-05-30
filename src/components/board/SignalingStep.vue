@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { UserPlus, LogIn, CheckCircle2, Clipboard, AlertCircle } from 'lucide-vue-next'
-import { IPeerConnectionPort, PeerConnectionStatus } from '../../application/ports/IPeerConnectionPort'
+import { Connection, PeerStatus } from '@mykoboard/networking'
 import Input from '../ui/Input.vue'
 
 const props = defineProps<{
-  connection: IPeerConnectionPort
+  connection: Connection
   offerUrlBase?: string
-  onOfferChange: (connection: IPeerConnectionPort, value: string) => void
-  onAnswerChange: (connection: IPeerConnectionPort, value: string) => void
-  onCancel?: (connection: IPeerConnectionPort) => void
+  onOfferChange: (connection: Connection, value: string) => void
+  onAnswerChange: (connection: Connection, value: string) => void
+  onCancel?: (connection: Connection) => void
 }>()
 
 const copied = ref(false)
@@ -31,7 +31,7 @@ const copyToClipboard = (text: string) => {
 const displaySignal = computed(() => {
     if (!props.connection.serializedSignal) return ''
     const raw = props.connection.serializedSignal
-    if (props.offerUrlBase && props.connection.status === PeerConnectionStatus.started) {
+    if (props.offerUrlBase && props.connection.status === PeerStatus.started) {
         return `${props.offerUrlBase}?mode=manual&offer=${encodeURIComponent(raw)}`
     }
     return raw
@@ -46,12 +46,12 @@ const isGathering = computed(() => {
 const persistentSignal = ref('')
 const wasEverAnswered = ref(false)
 
-watch(() => props.connection.serializedSignal, (newSignal: string) => {
+watch(() => props.connection.serializedSignal, (newSignal: string | undefined) => {
     if (newSignal) persistentSignal.value = newSignal
 }, { immediate: true })
 
-watch(() => props.connection.status, (newStatus: PeerConnectionStatus) => {
-    if (newStatus === PeerConnectionStatus.answered) wasEverAnswered.value = true
+watch(() => props.connection.status, (newStatus: PeerStatus) => {
+    if (newStatus === PeerStatus.answered) wasEverAnswered.value = true
 }, { immediate: true })
 
 </script>
@@ -60,7 +60,7 @@ watch(() => props.connection.status, (newStatus: PeerConnectionStatus) => {
   <div class="space-y-4 animate-fade-in-up">
     <!-- NEW -->
     <div
-      v-if="connection.status === PeerConnectionStatus.new"
+      v-if="connection.status === PeerStatus.new"
       class="glass-dark p-6 rounded-2xl border border-white/5 shadow-glass-dark flex items-center justify-center space-x-4"
     >
       <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
@@ -71,7 +71,7 @@ watch(() => props.connection.status, (newStatus: PeerConnectionStatus) => {
 
     <!-- READY TO ACCEPT -->
     <div
-      v-if="connection.status === PeerConnectionStatus.readyToAccept"
+      v-if="connection.status === PeerStatus.readyToAccept"
       class="glass-dark p-6 rounded-2xl border border-white/5 shadow-glass-dark"
     >
       <h3 class="text-sm font-black text-white uppercase tracking-[0.2em] mb-4 flex items-center gap-3">
@@ -90,7 +90,7 @@ watch(() => props.connection.status, (newStatus: PeerConnectionStatus) => {
 
     <!-- STARTED (Generating Offer) -->
     <div
-      v-if="connection.status === PeerConnectionStatus.started"
+      v-if="connection.status === PeerStatus.started"
       class="glass-dark p-6 rounded-2xl border border-white/5 shadow-glass-dark group hover:border-primary/20 transition-all duration-500"
     >
       <h3 class="text-[10px] font-black uppercase tracking-[0.2em] mb-4 flex items-center gap-2 text-primary">
@@ -159,12 +159,12 @@ watch(() => props.connection.status, (newStatus: PeerConnectionStatus) => {
 
     <!-- ANSWERED or CLOSED with a captured signal -->
     <div
-      v-if="connection.status === PeerConnectionStatus.answered || (connection.status === PeerConnectionStatus.closed && wasEverAnswered && persistentSignal)"
+      v-if="connection.status === PeerStatus.answered || (connection.status === PeerStatus.closed && wasEverAnswered && persistentSignal)"
       class="glass-dark p-6 rounded-2xl border border-white/5 shadow-glass-dark group hover:border-primary/20 transition-all duration-500"
     >
       <h3 class="text-[10px] font-black uppercase tracking-[0.2em] mb-4 flex items-center gap-2 text-primary">
         <CheckCircle2 class="w-4 h-4" />
-        {{ connection.status === PeerConnectionStatus.closed ? 'Signal Vector Captured' : 'Signal Response Synthesized' }}
+        {{ connection.status === PeerStatus.closed ? 'Signal Vector Captured' : 'Signal Response Synthesized' }}
       </h3>
       <div class="space-y-3">
         <div 
@@ -210,10 +210,10 @@ watch(() => props.connection.status, (newStatus: PeerConnectionStatus) => {
           </div>
         </div>
         <p class="text-[10px] text-primary font-black uppercase tracking-widest">
-          {{ connection.status === PeerConnectionStatus.closed ? 'Copy this payload to bridge the link.' : 'Transmit this payload back to peer to complete handshake.' }}
+          {{ connection.status === PeerStatus.closed ? 'Copy this payload to bridge the link.' : 'Transmit this payload back to peer to complete handshake.' }}
         </p>
         <div
-          v-if="connection.status === PeerConnectionStatus.closed"
+          v-if="connection.status === PeerStatus.closed"
           class="flex items-center gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg"
         >
           <AlertCircle class="w-3 h-3 text-amber-500" />

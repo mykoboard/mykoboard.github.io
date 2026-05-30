@@ -21,7 +21,7 @@ app.provide(Keys.IdentityRepoKey, compositionRoot.identityRepo)
 app.provide(Keys.SessionRepoKey, compositionRoot.sessionRepo)
 app.provide(Keys.KnownIdentityRepoKey, compositionRoot.knownIdentityRepo)
 app.provide(Keys.SignalingPortKey, compositionRoot.signalingPort)
-app.provide(Keys.PeerConnectionFactoryKey, compositionRoot.createPeerConnection)
+app.provide(Keys.NetworkManagerFactoryKey, compositionRoot.createNetworkManager)
 app.provide(Keys.BoardActorFactoryKey, compositionRoot.getBoardActor)
 
 app.use(router)

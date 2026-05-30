@@ -7,6 +7,7 @@
       "dependencies": {
         "@hookform/resolvers": "^5.2.2",
         "@mykoboard/integration": "workspace:*",
+        "@mykoboard/networking": "workspace:*",
         "@radix-ui/react-slot": "^1.1.2",
         "@xstate/react": "^6.1.0",
         "@xstate/vue": "^5.0.0",
@@ -85,6 +86,10 @@
         "typescript": "^5.9.3",
         "vite": "^7.3.0",
       },
+    },
+    "packages/networking": {
+      "name": "@mykoboard/networking",
+      "version": "0.1.0",
     },
     "packages/planning-poker": {
       "name": "@mykoboard/planning-poker",
@@ -251,6 +256,8 @@
     "@mykoboard/integration": ["@mykoboard/integration@workspace:packages/integration"],
 
     "@mykoboard/ludo": ["@mykoboard/ludo@workspace:packages/ludo"],
+
+    "@mykoboard/networking": ["@mykoboard/networking@workspace:packages/networking"],
 
     "@mykoboard/planning-poker": ["@mykoboard/planning-poker@workspace:packages/planning-poker"],
 

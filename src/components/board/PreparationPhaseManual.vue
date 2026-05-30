@@ -14,18 +14,18 @@ import {
   AlertDialogAction 
 } from 'radix-vue'
 import SignalingStep from './SignalingStep.vue'
-import { IPeerConnectionPort } from '../../application/ports/IPeerConnectionPort'
+import { Connection } from '@mykoboard/networking'
 
 const props = defineProps<{
     state: any;
     isInitiator: boolean;
-    pendingSignaling: IPeerConnectionPort[];
+    pendingSignaling: Connection[];
     onStartGame: () => void;
-    onUpdateOffer: (connection: IPeerConnectionPort, offer: string) => void;
-    onUpdateAnswer: (connection: IPeerConnectionPort, answer: string) => void;
+    onUpdateOffer: (connection: Connection, offer: string) => void;
+    onUpdateAnswer: (connection: Connection, answer: string) => void;
     onCloseSession: () => void;
     onBackToLobby: () => void;
-    onCancelSignaling: (connection: IPeerConnectionPort) => void;
+    onCancelSignaling: (connection: Connection) => void;
     onAddManualConnection?: () => void;
     playerCount: number;
     maxPlayers: number;

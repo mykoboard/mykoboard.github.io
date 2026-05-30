@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from 'vue'
 import ReactComponentWrapper from '../ReactComponentWrapper.vue'
-import type { IPeerConnectionPort } from '../../application/ports/IPeerConnectionPort'
+import type { Peer } from '@mykoboard/networking'
 import type { PlayerInfo } from '@mykoboard/integration'
 
 const props = defineProps<{
     gameComponent: any;
-    connectedPeers: IPeerConnectionPort[];
+    connectedPeers: Peer[];
     playerInfos: PlayerInfo[];
     isInitiator: boolean;
     ledger: any[];

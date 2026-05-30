@@ -13,7 +13,7 @@ import {
   AlertDialogAction 
 } from 'radix-vue'
 import { logger } from '../../lib/logger'
-import { IPeerConnectionPort } from '../../application/ports/IPeerConnectionPort'
+import { Connection } from '@mykoboard/networking'
 
 interface PendingJoinRequest {
     connectionId: string;
@@ -28,13 +28,13 @@ const props = defineProps<{
     isInitiator: boolean;
     isServerConnecting: boolean;
     signalingClient: any;
-    pendingSignaling: IPeerConnectionPort[];
+    pendingSignaling: Connection[];
     pendingJoinRequests?: PendingJoinRequest[];
     isKnownIdentity?: (publicKey: string) => Promise<boolean>;
     onStartGame: () => void;
     onHostAGame: () => void;
-    onUpdateOffer: (connection: IPeerConnectionPort, offer: string) => void;
-    onUpdateAnswer: (connection: IPeerConnectionPort, answer: string) => void;
+    onUpdateOffer: (connection: Connection, offer: string) => void;
+    onUpdateAnswer: (connection: Connection, answer: string) => void;
     onCloseSession: () => void;
     onBackToLobby: () => void;
     onAcceptGuest: () => void;
@@ -43,7 +43,7 @@ const props = defineProps<{
     onRejectPeer?: (request: PendingJoinRequest) => void;
     onSaveIdentity?: (request: PendingJoinRequest) => Promise<void>;
     onRemovePlayer: (id: string) => void;
-    onCancelSignaling: (connection: IPeerConnectionPort) => void;
+    onCancelSignaling: (connection: Connection) => void;
     onAddManualConnection?: () => void;
     playerCount: number;
     maxPlayers: number;

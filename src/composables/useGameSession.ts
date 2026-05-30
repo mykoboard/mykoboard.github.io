@@ -6,7 +6,6 @@ import { useP2PNegotiation } from './useP2PNegotiation';
 import { useSessionActions } from './useSessionActions';
 import { compositionRoot } from '../application/CompositionRoot';
 import { ISignalingPort } from '../application/ports/ISignalingPort';
-import { logger } from '../lib/logger';
 
 const { identity, isLoading } = compositionRoot.identityRepo;
 const { activeSessions } = compositionRoot.sessionRepo;
@@ -51,9 +50,7 @@ export function useGameSession() {
     const signalingClientRef = { value: null as ISignalingPort | null };
     const sessionActions = useSessionActions({
         signalingClient: signalingClientRef as any,
-        pendingConnections,
         broadcast,
-        updateConnection,
         router,
         boardId,
         gameId,
@@ -107,10 +104,7 @@ export function useGameSession() {
 
     // --- Manual P2P negotiation: needs board context ---
     const p2pNegotiation = useP2PNegotiation({
-        playerInfos,
-        pendingConnections,
         hostSignalingMode,
-        updateConnection,
         currentBoardActor
     });
     const {
@@ -121,32 +115,11 @@ export function useGameSession() {
         initializeManualSignaling
     } = p2pNegotiation;
 
-    // --- Wire signaling answer event into pendingConnections ---
-    const handleSignalingAnswer = async (e: Event) => {
-        const msg = (e as CustomEvent).detail;
-        const conn = pendingConnections.get(msg.from!);
-        if (conn && msg.answer) {
-            if (msg.publicKey) conn.remotePublicKey = msg.publicKey;
-            if (msg.peerName) conn.remotePlayerName = msg.peerName;
-
-            try {
-                await conn.acceptAnswer(msg.answer);
-                pendingConnections.delete(msg.from!);
-            }
-            catch (err) { logger.error('Failed to accept answer:', err); }
-        }
-    };
-
+    // Event listeners are no longer needed for signaling:answer since NetworkManager manages this.
     onMounted(() => {
-        if (typeof window !== 'undefined') {
-            window.addEventListener('signaling:answer', handleSignalingAnswer);
-        }
     });
 
     onUnmounted(() => {
-        if (typeof window !== 'undefined') {
-            window.removeEventListener('signaling:answer', handleSignalingAnswer);
-        }
     });
 
     return {
