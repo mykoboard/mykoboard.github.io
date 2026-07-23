@@ -46,19 +46,6 @@ const updatePositions = () => {
     }
   }
 }
-const cachedPositions: Record<string, { x: number; y: number }> = {}
-
-const updatePositions = () => {
-  if (!containerRef.value) return
-  const containerRect = containerRef.value.getBoundingClientRect()
-  for (const [id, el] of Object.entries(itemRefs.value)) {
-    const elRect = el.getBoundingClientRect()
-    cachedPositions[id] = {
-      x: elRect.right - 80 - containerRect.left,
-      y: elRect.top + elRect.height / 2 - containerRect.top
-    }
-  }
-}
 
 // Check if players are known identities
 const checkKnownIdentities = async () => {
