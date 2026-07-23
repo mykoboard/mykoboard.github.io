@@ -31,6 +31,32 @@ let ctx: CanvasRenderingContext2D | null = null
 let animationId: number | null = null
 const particles: { x: number; y: number; vx: number; vy: number; size: number }[] = []
 const dataPulses: { from: string; to: string; progress: number; speed: number }[] = []
+const cachedPositions: Record<string, { x: number; y: number }> = {}
+
+const updatePositions = () => {
+  if (!containerRef.value) return
+  const containerRect = containerRef.value.getBoundingClientRect()
+  for (const [id, el] of Object.entries(itemRefs.value)) {
+    const elRect = el.getBoundingClientRect()
+    cachedPositions[id] = {
+      x: elRect.right - 80 - containerRect.left,
+      y: elRect.top + elRect.height / 2 - containerRect.top
+    }
+  }
+}
+const cachedPositions: Record<string, { x: number; y: number }> = {}
+
+const updatePositions = () => {
+  if (!containerRef.value) return
+  const containerRect = containerRef.value.getBoundingClientRect()
+  for (const [id, el] of Object.entries(itemRefs.value)) {
+    const elRect = el.getBoundingClientRect()
+    cachedPositions[id] = {
+      x: elRect.right - 80 - containerRect.left,
+      y: elRect.top + elRect.height / 2 - containerRect.top
+    }
+  }
+}
 
 // Check if players are known identities
 const checkKnownIdentities = async () => {
@@ -83,6 +109,8 @@ const initMesh = () => {
     })
   }
 
+  updatePositions()
+  updatePositions()
   animate()
 }
 
@@ -94,14 +122,7 @@ const resizeCanvas = () => {
 }
 
 const getPlayerPos = (id: string) => {
-  if (!containerRef.value || !itemRefs.value[id]) return null
-  const containerRect = containerRef.value.getBoundingClientRect()
-  const elRect = itemRefs.value[id].getBoundingClientRect()
-  return {
-    // Anchor to the right side area to stay away from text and labels
-    x: elRect.right - 80 - containerRect.left,
-    y: elRect.top + elRect.height / 2 - containerRect.top
-  }
+  return cachedPositions[id] || null
 }
 
 const animate = () => {
@@ -256,6 +277,7 @@ onMounted(() => {
   if (containerRef.value) {
     resizeObserver = new ResizeObserver(() => {
       resizeCanvas()
+      updatePositions()
     })
     resizeObserver.observe(containerRef.value)
   }
@@ -268,6 +290,11 @@ onUnmounted(() => {
 
 watch(() => props.players, () => {
   checkKnownIdentities()
+  nextTick(updatePositions)
+}, { deep: true })
+
+watch(() => props.connections, () => {
+  nextTick(updatePositions)
 }, { deep: true })
 </script>
 
