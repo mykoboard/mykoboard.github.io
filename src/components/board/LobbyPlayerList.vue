@@ -419,7 +419,7 @@ watch(() => props.connections, () => {
               <div class="absolute -bottom-1 -right-1">
                 <div class="relative flex h-4 w-4">
                   <span 
-                    v-if="player.isConnected"
+                    v-if="player.isConnected && player.publicKey === currentTurnPlayerId"
                     class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-40"
                   />
                   <span 
