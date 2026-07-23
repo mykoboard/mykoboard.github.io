@@ -32,6 +32,8 @@ let animationId: number | null = null
 const particles: { x: number; y: number; vx: number; vy: number; size: number }[] = []
 const dataPulses: { from: string; to: string; progress: number; speed: number }[] = []
 const cachedPositions: Record<string, { x: number; y: number }> = {}
+let lastFrameTime = 0
+const FRAME_INTERVAL = 1000 / 30 // 30fps — plenty for ambient particles & connection lines
 
 const updatePositions = () => {
   if (!containerRef.value) return
@@ -125,9 +127,14 @@ const getPlayerPos = (id: string) => {
   return cachedPositions[id] || null
 }
 
-const animate = () => {
+const animate = (time: number = 0) => {
+  animationId = requestAnimationFrame(animate)
   if (!ctx || !canvasRef.value) return
-  
+
+  // Throttle to ~30fps — ambient particles don't need 280fps
+  if (time - lastFrameTime < FRAME_INTERVAL) return
+  lastFrameTime = time
+
   ctx.clearRect(0, 0, canvasRef.value.width, canvasRef.value.height)
   
   // 1. Draw Ambient Particles (Barely visible drift)
@@ -262,7 +269,7 @@ const animate = () => {
     ctx.shadowBlur = 0
   }
   
-  animationId = requestAnimationFrame(animate)
+  // rAF is scheduled at the top of animate() for throttling
 }
 
 // Resize observer to keep canvas sized correctly
